@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-12",
+  "date": "2026-10-13",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -1992,10 +1992,21 @@
         "Copyright 2005 Mike McCormack",
         "Copyright 2007 Rolf Kalbermatter"
       ]
+    },
+    {
+      "patch": "patches/wine-ge/stale-present-rect.patch",
+      "source_file": "dlls/win32u/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "17360ceb5f3b4062b19e526c61bf6d9d20999d15fa4bc751f4e70a2c10fdf3bb",
+      "copyright_notices": [
+        "Copyright 1993, 1994 Alexandre Julliard"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 175,
+    "LGPL-2.1-or-later": 176,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2011,6 +2022,7 @@
     "patches/wine-ge/command-line-append.patch": "0fad254f781c1fdd4488db7d83fb21efb7cb9ac62e3b2b7a185f2aaf7bdfbc7f",
     "patches/wine-ge/vkd3d-partial-varyings.patch": "9a423b4152b8d098d16e748acbd0f02f31ba6b747aeb7fc794249f71974c91ce",
     "patches/wine-ge/dbghelp-dwarf-divisor.patch": "79574884f42a6ceb901afa8b2637965806ee53e4273f2897a936b9497ff28834",
-    "patches/wine-ge/sechost-device-notify-handle.patch": "3a3be241c1c9772ef4e42aed1ab7dfb3d1a8ab903f9b4d569dd9170367961ad1"
+    "patches/wine-ge/sechost-device-notify-handle.patch": "3a3be241c1c9772ef4e42aed1ab7dfb3d1a8ab903f9b4d569dd9170367961ad1",
+    "patches/wine-ge/stale-present-rect.patch": "b528b2ce6421cb091a00b6b32c5467cd986575db0af9aa8467a4612e8824b761"
   }
 }

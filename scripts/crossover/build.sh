@@ -9,7 +9,7 @@ port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
 notice_args=(--patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch")
-for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch; do
+for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch; do
   patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
   if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
     git -C "$source_dir" apply "$patch_file"

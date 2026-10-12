@@ -1,0 +1,39 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-13
+Scope: Drop a stale exclusive-fullscreen present rect when the application resizes the window itself instead of letting the swapchain restore it.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -4027,6 +4027,31 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+ 
+     calc_ncsize( winpos, &old_rects, &new_rects, valid_rects, parent_x, parent_y );
+ 
++    /* An application that runs exclusive fullscreen on its own can leave a stale
++     * present rect behind: it resizes the window back to a windowed rect with
++     * SetWindowPos instead of letting the swapchain restore the window state, and
++     * restoring is the only path that clears the present rect.  While a stale
++     * rect is set, get_present_rect() keeps reporting the monitor, so the window
++     * surface stays monitor-sized and the driver presents it into a window that
++     * is no longer that big.  When this call actually changes the window
++     * geometry and the result no longer covers the monitor, the rect is stale. */
++    if ((winpos->flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE))
++    {
++        WND *win = get_win_ptr( winpos->hwnd );
++
++        if (win && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
++        {
++            MONITORINFO monitor_info = monitor_info_from_rect( new_rects.window, get_thread_dpi() );
++
++            if (!IsRectEmpty( &win->present_rect ) && !is_fullscreen( &monitor_info, &new_rects.window ))
++            {
++                TRACE( "window %p left exclusive fullscreen, dropping stale present rect\n", winpos->hwnd );
++                SetRectEmpty( &win->present_rect );
++            }
++            release_win_ptr( win );
++        }
++    }
++
+     surface = get_window_surface( winpos->hwnd, winpos->flags, FALSE, &new_rects, &surface_rect );
+     if (!apply_window_pos( winpos->hwnd, winpos->hwndInsertAfter, winpos->flags, surface,
+                            &new_rects, valid_rects ))
