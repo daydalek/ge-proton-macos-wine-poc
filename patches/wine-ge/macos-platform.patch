@@ -1,0 +1,318 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: GE media integration and macOS build/playback adaptations.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -38,7 +38,9 @@
+ #include <sys/mman.h>
+ #include <sys/wait.h>
+ #include <unistd.h>
+-#include <malloc.h>
++#ifdef __linux__
++# include <malloc.h>
++#endif
+ #include <dlfcn.h>
+ #ifdef HAVE_PWD_H
+ # include <pwd.h>
+@@ -2454,7 +2456,9 @@
+     set_thread_teb( teb );
+ #endif
+ 
++#ifdef __linux__
+     mallopt( M_PERTURB, 0xff );
++#endif
+     init_startup_info();
+     *(ULONG_PTR *)&peb->CloudFileFlags = get_image_address();
+     set_load_order_app_name( main_wargv[0] );
+@@ -2463,7 +2467,9 @@
+     load_ntdll();
+     load_wow64_ntdll( main_image_info.Machine );
+     load_apiset_dll();
++#ifdef __linux__
+     mallopt( M_PERTURB, 0 );
++#endif
+     server_init_process_done();
+ }
+ 
+--- a/dlls/ntdll/unix/fsync.c
++++ b/dlls/ntdll/unix/fsync.c
+@@ -141,15 +141,25 @@
+ static inline int futex_wait_multiple( const struct futex_waitv *futexes,
+         int count, const struct timespec64 *end, clockid_t clock_id )
+ {
++#ifdef __linux__
+    if (end)
+         return syscall( __NR_futex_waitv, futexes, count, 0, end, clock_id );
+    else
+         return syscall( __NR_futex_waitv, futexes, count, 0, NULL, 0 );
++#else
++    errno = ENOSYS;
++    return -1;
++#endif
+ }
+ 
+ static inline int futex_wake( int *addr, int val )
+ {
++#ifdef __linux__
+     return syscall( __NR_futex, addr, 1, val, NULL, 0, 0 );
++#else
++    errno = ENOSYS;
++    return -1;
++#endif
+ }
+ 
+ struct fsync
+@@ -455,8 +465,12 @@
+     struct stat st;
+ 
+ 
++#ifndef __linux__
++    fsync_enabled = 0;
++    return;
++#endif
+     fsync_enabled = 1;
+-    syscall( __NR_futex_waitv, NULL, 0, 0, NULL, 0 );
++    futex_wait_multiple( NULL, 0, NULL, CLOCK_MONOTONIC );
+     if (errno == ENOSYS || errno == EPERM)
+     {
+         ERR("Server is running with WINEFSYNC but this process can't use __NR_futex_waitv.\n");
+--- a/server/fsync.c
++++ b/server/fsync.c
+@@ -310,7 +310,12 @@
+ 
+ static inline int futex_wake( int *addr, int val )
+ {
++#ifdef __linux__
+     return syscall( __NR_futex, addr, 1, val, NULL, 0, 0 );
++#else
++    errno = ENOSYS;
++    return -1;
++#endif
+ }
+ 
+ /* shm layout for events or event-like objects. */
+--- a/dlls/ntdll/unix/ntsync_tmp.h
++++ b/dlls/ntdll/unix/ntsync_tmp.h
+@@ -8,6 +8,7 @@
+ #ifndef __LINUX_NTSYNC_H
+ #define __LINUX_NTSYNC_H
+ 
++#ifdef __linux__
+ #include <linux/types.h>
+ 
+ struct ntsync_sem_args {
+@@ -56,4 +57,6 @@
+ #define NTSYNC_IOC_MUTEX_READ		_IOR ('N', 0x8c, struct ntsync_mutex_args)
+ #define NTSYNC_IOC_EVENT_READ		_IOR ('N', 0x8d, struct ntsync_event_args)
+ 
++#endif /* __linux__ */
++
+ #endif
+--- a/server/ntsync_tmp.h
++++ b/server/ntsync_tmp.h
+@@ -8,6 +8,7 @@
+ #ifndef __LINUX_NTSYNC_H
+ #define __LINUX_NTSYNC_H
+ 
++#ifdef __linux__
+ #include <linux/types.h>
+ 
+ struct ntsync_sem_args {
+@@ -56,4 +57,6 @@
+ #define NTSYNC_IOC_MUTEX_READ		_IOR ('N', 0x8c, struct ntsync_mutex_args)
+ #define NTSYNC_IOC_EVENT_READ		_IOR ('N', 0x8d, struct ntsync_event_args)
+ 
++#endif /* __linux__ */
++
+ #endif
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2279,7 +2279,7 @@
+                    "movq %rdi,%rsp\n\t"
+                    "movq %rsi,%rax\n\t"
+                    "movq %rdx,%r13\n\t"
+-                   "jmp %rcx")
++                   "jmp *%rcx")
+ 
+ 
+ static void dump_syscall_fault( CONTEXT *context, DWORD exc_code )
+@@ -3197,7 +3197,9 @@
+ 
+ void set_thread_teb( TEB *teb )
+ {
++#ifdef __linux__
+     arch_prctl( ARCH_SET_GS, teb );
++#endif
+ }
+ 
+ /***********************************************************************
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -1948,7 +1948,10 @@
+ 
+ static struct opengl_drawable *get_window_unused_drawable( HWND hwnd, int format )
+ {
+-    BOOL raw = needs_framebuffer_surface( hwnd );
++    BOOL raw = FALSE;
++#ifdef SONAME_LIBEGL
++    raw = needs_framebuffer_surface( hwnd );
++#endif
+     struct opengl_drawable *drawable = NULL;
+     WND *win;
+ 
+@@ -1964,11 +1967,13 @@
+         opengl_drawable_release( drawable );
+         drawable = NULL;
+     }
++#ifdef SONAME_LIBEGL
+     if (drawable && (drawable->funcs == &framebuffer_surface_funcs) != raw)
+     {
+         opengl_drawable_release( drawable );
+         drawable = NULL;
+     }
++#endif
+ 
+     /* No compatible window drawable found, try creating a new one. This is not what native
+      * is doing, it allows multiple contexts to be current on separate threads on the same
+@@ -1981,12 +1986,14 @@
+         if (drawable && drawable->client) add_window_client_surface( hwnd, drawable->client );
+     }
+ 
++#ifdef SONAME_LIBEGL
+     if (drawable && drawable->funcs != &framebuffer_surface_funcs && raw)
+     {
+         struct opengl_drawable *surface = framebuffer_surface_create( format, drawable->client, drawable );
+         opengl_drawable_release( drawable );
+         drawable = surface;
+     }
++#endif
+ 
+     TRACE( "hwnd %p, drawable %s\n", hwnd, debugstr_opengl_drawable( drawable ) );
+     return drawable;
+@@ -2184,11 +2191,13 @@
+         opengl_drawable_release( drawable );
+         drawable = NULL;
+     }
++#ifdef SONAME_LIBEGL
+     if (drawable && (drawable->funcs == &framebuffer_surface_funcs) != needs_framebuffer_surface( hwnd ))
+     {
+         opengl_drawable_release( drawable );
+         drawable = NULL;
+     }
++#endif
+     if (format && (drawable || (drawable = get_window_unused_drawable( hwnd, format ))))
+     {
+         set_window_opengl_drawable( hwnd, drawable, TRUE );
+@@ -2244,7 +2253,11 @@
+ 
+ static BOOL needs_framebuffer_update( HWND hwnd, struct opengl_drawable *drawable )
+ {
++#ifdef SONAME_LIBEGL
+     return drawable && (drawable->funcs == &framebuffer_surface_funcs) != needs_framebuffer_surface( hwnd );
++#else
++    return FALSE;
++#endif
+ }
+ 
+ /* return an updated drawable, recreating one if the window drawables have been invalidated (mostly wineandroid) */
+@@ -2314,8 +2327,12 @@
+         if (old_read != old_draw) opengl_drawable_set_context( old_draw, NULL );
+     }
+ 
++    draw = new_draw;
++    read = new_read;
++#ifdef SONAME_LIBEGL
+     if ((draw = new_draw) && new_draw->funcs == &framebuffer_surface_funcs) draw = framebuffer_from_opengl_drawable( new_draw )->target;
+     if ((read = new_read) && new_read->funcs == &framebuffer_surface_funcs) read = framebuffer_from_opengl_drawable( new_read )->target;
++#endif
+ 
+     if (!ret && (ret = driver_funcs->p_make_current( draw, read, context->driver_private )))
+     {
+@@ -2409,8 +2426,12 @@
+ 
+     TRACE( "context %p\n", context );
+ 
++    draw = context->draw;
++    read = context->read;
++#ifdef SONAME_LIBEGL
+     if ((draw = context->draw) && draw->funcs == &framebuffer_surface_funcs) draw = framebuffer_from_opengl_drawable( draw )->target;
+     if ((read = context->read) && read->funcs == &framebuffer_surface_funcs) read = framebuffer_from_opengl_drawable( read )->target;
++#endif
+ 
+     driver_funcs->p_make_current( draw, read, context->driver_private );
+ }
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -646,15 +646,24 @@
+ 
+ static void *signaller_worker( void *arg )
+ {
+-    int unix_tid = gettid();
++    unsigned long long unix_tid = 0;
++#ifdef __APPLE__
++    uint64_t thread_id = 0;
++#endif
+     struct vulkan_device *device = arg;
+     struct semaphore *sem;
+     VkSemaphoreWaitInfo wait_info = { 0 };
+     uint32_t wait_alloc_count = 0;
+     VkResult res;
+ 
++#ifdef __linux__
++    unix_tid = gettid();
++#elif defined(__APPLE__)
++    pthread_threadid_np( NULL, &thread_id );
++    unix_tid = thread_id;
++#endif
+     if (debug_level)
+-        fprintf( stderr, "[%d] msg:winevulkan:signaller_worker started.\n", unix_tid );
++        fprintf( stderr, "[%llu] msg:winevulkan:signaller_worker started.\n", unix_tid );
+ 
+     wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+     wait_info.flags = VK_SEMAPHORE_WAIT_ANY_BIT;
+@@ -708,7 +717,7 @@
+     free( (void *)wait_info.pSemaphores );
+     free( (void *)wait_info.pValues );
+     if (debug_level)
+-        fprintf( stderr, "[%d] msg:winevulkan:signaller_worker exiting.\n", unix_tid );
++        fprintf( stderr, "[%llu] msg:winevulkan:signaller_worker exiting.\n", unix_tid );
+ 
+     return NULL;
+ }
+--- a/dlls/winedmo/media-converter/media-converter.h
++++ b/dlls/winedmo/media-converter/media-converter.h
+@@ -21,6 +21,7 @@
+ 
+ #define _FILE_OFFSET_BITS 64
+ 
++#include <pthread.h>
+ #include <string.h>
+ #include <utime.h>
+ #include <stdarg.h>
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -766,6 +766,7 @@
+ 
+ #endif /* End architecture specific feature detection for CPUs */
+ 
++#ifdef __linux__
+ static void fill_performance_core_info(void);
+ static BOOL sysfs_parse_bitmap(const char *filename, ULONG_PTR *mask);
+ 
+@@ -975,6 +976,14 @@
+     cpu_override.mapping.cpu_count = 0;
+     ERR("Invalid WINE_CPU_TOPOLOGY string %s (%s).\n", debugstr_a(env_override), debugstr_a(s));
+ }
++
++#else
++
++void fill_cpu_override(void)
++{
++}
++
++#endif /* __linux__ */
+ 
+ struct cpu_topology_override *get_cpu_topology_override(void)
+ {

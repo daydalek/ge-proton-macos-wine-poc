@@ -1,0 +1,11 @@
+Project-authored scripts, probes and documentation are distributed
+under the GNU Lesser General Public License, version 2.1 or (at your option)
+any later version (SPDX-License-Identifier: LGPL-2.1-or-later).
+
+The complete license text is in COPYING.LIB.
+Modifications to upstream files retain their applicable upstream licenses.
+Third-party source files and patches retain their original copyright notices
+and licenses. See UPSTREAMS.md and licenses/ for source attribution and
+component-specific terms.
+
+This software is provided without any warranty, as described in COPYING.LIB.

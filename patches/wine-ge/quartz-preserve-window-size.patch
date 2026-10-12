@@ -1,0 +1,104 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: Preserve application-selected video window sizes across filter reconnections.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/quartz/quartz_private.h
++++ b/dlls/quartz/quartz_private.h
+@@ -85,6 +85,7 @@
+ 
+     RECT src, dst;
+     BOOL default_dst;
++    BOOL explicit_size;
+ 
+     BOOL AutoShow;
+     HWND hwnd;
+--- a/dlls/quartz/window.c
++++ b/dlls/quartz/window.c
+@@ -419,6 +419,7 @@
+             SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE))
+         return E_FAIL;
+ 
++    window->explicit_size = TRUE;
+     return S_OK;
+ }
+ 
+@@ -475,6 +476,7 @@
+             height, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE))
+         return E_FAIL;
+ 
++    window->explicit_size = TRUE;
+     return S_OK;
+ }
+ 
+@@ -615,6 +617,7 @@
+ 
+     if (!SetWindowPos(window->hwnd, NULL, left, top, width, height, SWP_NOACTIVATE | SWP_NOZORDER))
+         return E_FAIL;
++    window->explicit_size = TRUE;
+     return S_OK;
+ }
+ 
+--- a/dlls/quartz/vmr7.c
++++ b/dlls/quartz/vmr7.c
+@@ -506,10 +506,14 @@
+     SetRect(&rect, 0, 0, bitmap_header->biWidth, bitmap_header->biHeight);
+     filter->window.src = rect;
+ 
+-    AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
+-            GetWindowLongW(window, GWL_EXSTYLE));
+-    SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+-            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    /* Preserve dimensions explicitly set by the application across reconnects. */
++    if (!filter->window.explicit_size)
++    {
++        AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
++                GetWindowLongW(window, GWL_EXSTYLE));
++        SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
++                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    }
+     GetClientRect(window, &filter->window.dst);
+ 
+     if (filter->mode
+--- a/dlls/quartz/vmr9.c
++++ b/dlls/quartz/vmr9.c
+@@ -487,10 +487,14 @@
+     SetRect(&rect, 0, 0, bitmap_header->biWidth, bitmap_header->biHeight);
+     filter->window.src = rect;
+ 
+-    AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
+-            GetWindowLongW(window, GWL_EXSTYLE));
+-    SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+-            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    /* Preserve dimensions explicitly set by the application across reconnects. */
++    if (!filter->window.explicit_size)
++    {
++        AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
++                GetWindowLongW(window, GWL_EXSTYLE));
++        SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
++                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    }
+     GetClientRect(window, &filter->window.dst);
+ 
+     if (filter->mode
+--- a/dlls/quartz/videorenderer.c
++++ b/dlls/quartz/videorenderer.c
+@@ -190,10 +190,14 @@
+     SetRect(&rect, 0, 0, filter->VideoWidth, filter->VideoHeight);
+     filter->window.src = rect;
+ 
+-    AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
+-            GetWindowLongW(window, GWL_EXSTYLE));
+-    SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+-            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    /* Preserve dimensions explicitly set by the application across reconnects. */
++    if (!filter->window.explicit_size)
++    {
++        AdjustWindowRectEx(&rect, GetWindowLongW(window, GWL_STYLE), FALSE,
++                GetWindowLongW(window, GWL_EXSTYLE));
++        SetWindowPos(window, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
++                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++    }
+     GetClientRect(window, &filter->window.dst);
+ 
+     return S_OK;

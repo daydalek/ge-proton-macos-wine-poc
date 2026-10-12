@@ -1,0 +1,25 @@
+work/
+outputs/wine-poc/
+outputs/*.tar
+outputs/*.tar.gz
+.DS_Store
+__pycache__/
+
+tools/probes/*.exe
+outputs/poc-kit/*.exe
+outputs/poc-kit/crossover-port/build-logs/
+outputs/
+docs/
+
+# Local implementation notes, build records, and game acceptance data.
+plans/
+reports/
+logs/
+/configs/build-configuration.json
+/configs/haruoto-cn-window-size-fix.json
+/configs/probe-and-sample-manifest.json
+/configs/rosetta-thunk-fix.json
+/configs/vmr7-fix-build-configuration.json
+/configs/wma-decoder-fix.json
+/configs/wow64-demuxer-cleanup-fix.json
+/scripts/test-haruoto.sh

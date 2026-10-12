@@ -1,0 +1,1939 @@
+{
+  "date": "2026-10-12",
+  "scope": "Every file referenced by the six distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
+  "files": [
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": ".gitignore",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "168dc816a7cafefce5d4885700b5c0d9439527f1501f34042b301108c9da2bd5",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "MAINTAINERS",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "fde00a8e3c5e516b9ef485eaa454d132c8182274e50bb31db6c4ee8a62b0ec15",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "configure",
+      "license": "LicenseRef-Autoconf-generated-permissive",
+      "evidence": "generated configure notice",
+      "source_origin": "prepared source",
+      "source_sha256": "1622f0674eea5064a9be7b298e311c82e04fd444c4fce18a697a72fd72e76a01",
+      "copyright_notices": [
+        "# Copyright (C) 1992-1996, 1998-2017, 2020-2023 Free Software Foundation,"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "configure.ac",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "c9764c0a7aff911376b0d68f05b86eed606f440a5430e83b01e16437e2866cc1",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/amstream/ddrawstream.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "ae73790a9a962ecf3d1dbba3ce6b368b0cb90f4066abc63da9a67b62c7a12c2a",
+      "copyright_notices": [
+        "Copyright 2005, 2008, 2012 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ddraw/ddraw.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f12eb0ee412628ed1b1eccd03141762ead967d9a1aceb0f75d19d22471f08fe2",
+      "copyright_notices": [
+        "Copyright 1997-2000 Marcus Meissner",
+        "Copyright 1998-2000 Lionel Ulmer",
+        "Copyright 2000-2001 TransGaming Technologies Inc.",
+        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2008 Denver Gingerich",
+        "Copyright 2007-2008, 2011, 2013 Stefan Dösinger for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ddraw/ddraw_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "73ec0f94cfceef8fd48fa97a8a67770ae3e206c12f43ec4ce8c3b95efa3728fe",
+      "copyright_notices": [
+        "Copyright 2006 Stefan Dösinger"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ddraw/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e45eb70e273750257edf90eae7a10caa19701a04ed0f42d4fc39254451780267",
+      "copyright_notices": [
+        "Copyright 1997-1999 Marcus Meissner",
+        "Copyright 1998 Lionel Ulmer",
+        "Copyright 2000-2001 TransGaming Technologies Inc.",
+        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2008 Denver Gingerich"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ddraw/surface.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "30b035ebb09ab8b66706091a036c7193c2144b5a583a4dddedae7381005c1578",
+      "copyright_notices": [
+        "Copyright (c) 1997-2000 Marcus Meissner",
+        "Copyright (c) 1998-2000 Lionel Ulmer",
+        "Copyright (c) 2000-2001 TransGaming Technologies Inc.",
+        "Copyright (c) 2006 Stefan Dösinger",
+        "Copyright (c) 2011 Ričardas Barkauskas for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmime/audiopath.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "0bee7b52fb5d11e004c4c35a5162691c4b40874464b706bb034b3d70595ea8fe",
+      "copyright_notices": [
+        "Copyright (C) 2003-2004 Rok Mandeljc"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmime/dmime_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1f74fa10efbcad29ab69819c9b7e47d71fcd8bc0155f234cdbb3e8af537cedee",
+      "copyright_notices": [
+        "Copyright (C) 2003-2004 Rok Mandeljc"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmime/performance.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5a31377d43f8b7e62653df2fe66f587e5f8ad7aa0dc5c56db9c1d7683e8b0807",
+      "copyright_notices": [
+        "Copyright (C) 2003-2004 Rok Mandeljc",
+        "Copyright (C) 2003-2004 Raphael Junqueira"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmime/tests/dmime.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6cdde4b02b0eea1b07d28915d87ab323644f7cbf53eb6f20da23461a12d93aac",
+      "copyright_notices": [
+        "Copyright 2012, 2014 Michael Stefaniuc"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmsynth/synth.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "0799548b563c55a8397b4fe2e548dafbf01cb64d6b361512fa1ab592b53b2b0d",
+      "copyright_notices": [
+        "Copyright (C) 2003-2004 Rok Mandeljc",
+        "Copyright (C) 2012 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dmsynth/synthsink.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b94f0e1a4dacdaee6bb114340dbbe88a8e2e488e42fd5618642620254bb3a853",
+      "copyright_notices": [
+        "Copyright (C) 2003-2004 Rok Mandeljc",
+        "Copyright (C) 2012 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/dsound/buffer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "a79dad3485e8b50ada8a9150f6f7a9e64874890ada5ad6d4811ca5183d9dbf97",
+      "copyright_notices": [
+        "Copyright 1998 Marcus Meissner",
+        "Copyright 1998 Rob Riggs",
+        "Copyright 2000-2002 TransGaming Technologies, Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/evr/evr.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "8fd6acc177e8bb3cd89e1e8bf2a766bdb904659285251e79e42cb50e3db1e4d6",
+      "copyright_notices": [
+        "Copyright 2017 Fabian Maurer"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/evr/mixer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "70800fbdfb6208d8a31c2395b2d476c5ca048db9937bae508265253e0a95891c",
+      "copyright_notices": [
+        "Copyright 2020 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/evr/presenter.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "ebc38eb6b2f3fe8bb1caa90cbaad0fbcd423292224b0dada8b38db528c5278c7",
+      "copyright_notices": [
+        "Copyright 2020 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/evr/sample.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "4580136cf21e12f08c74aab3ba52dec03a0a3354e4b5371c9e92248fc56adb59",
+      "copyright_notices": [
+        "Copyright 2020 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ir50_32/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "0aeb3fc8096d2eb17675e9cf50667951453f82285de920356c6b03fa9d17b0f3",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ir50_32/ir50.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "ab2e86349ae579f08367d5c0626b8df802a6bfe0612b72c3ab7786f5b60a785f",
+      "copyright_notices": [
+        "Copyright 2023 Shaun Ren for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/ir50_32/ir50_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "513715d3d208cf7483f7a750eb6ff877fc800e29a4a68e6837a97c4ff4d815af",
+      "copyright_notices": [
+        "Copyright 2023 Shaun Ren for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/iyuv_32/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "30c898a1928e2275616526721a352072fcfd3bb53b3aeea7a10e9166e355529e",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/iyuv_32/iyuv.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f7c96968b42bce4a776474b1c2f5de2adc0d3aa74363e382fa254069abe89ed6",
+      "copyright_notices": [
+        "Copyright 2026 Brendan McGrath for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/iyuv_32/iyuv_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "d79fd2efe773e8da4fc753a8c244b6ad4db20be2a4903ca0adf86d6d9d1f92f6",
+      "copyright_notices": [
+        "Copyright 2026 Brendan McGrath for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/clock.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "bca1ed66aa5f6372f9c960c9dde117ff0e398c870b7ad9cdc5913157d98714fd",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/evr.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "01c744e9aa0fa3f78c4ac4c89657d8d9df68c7a0c398f721b5b5e20c9bf48a65",
+      "copyright_notices": [
+        "Copyright 2020 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "60fbf6a017c98d86bf39e8f6fdf4afe5b3816c432752400318fe2c02c5a302e6",
+      "copyright_notices": [
+        "Copyright (C) 2015 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/mf_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6197ccd3bc5475fe90f69c3fce08703c2507fbbddeac720e656fe1129e64f829",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/samplegrabber.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "836ac3dd39e94edf75241799d3263ad49bc19a49848709c6648f35c701a67268",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/session.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "92c203fdabb6f231b95dc744bf5a4d5daeb3dfc9e3dc2a206ca93c3cd8d3dc52",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/tests/mf.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1dcdd9468cb3f8e6861756f8b0d3229557654e9e0997ba02fb48d8f13a8c2b03",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/tests/transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "270ef832f7655831ccb5227a5cf0c43e9e77e78957c51697f814e6c161aee1b6",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov",
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/topology.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e2dda5b3aad3c184d7c5d95f74be5a1cf231b62a7b65f9f0cb662085b6845b85",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mf/topology_loader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "89b69f82e3db6ccfc98f1324699a813bae5495d115114e5bdd33ea277c181e18",
+      "copyright_notices": [
+        "Copyright 2017 Nikolay Sivov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfmediaengine/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e8ff25061c9f7dc5a0dbc2cf8d30c662966e0bbbaa9edecc6ac07e2bf09048f2",
+      "copyright_notices": [
+        "Copyright 2019 Jactry Zeng for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfmediaengine/mediaengine_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "2c86e618c4297d34d87ad54e8be7780bfd047c3c101df744e06b649087315198",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfmediaengine/video_frame_sink.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c7185d3c793e91f89e85dfc346824d9647a95c1ccf401c043cb1a28fa8c0cc7b",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfplat/buffer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "3766bd67c713b23ea6f0633b407ac96a5806a42c4a1d6d391982bb7f77228609",
+      "copyright_notices": [
+        "Copyright 2018 Alistair Leslie-Hughes"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfplat/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1a0ef0fd5a85ba42f1ec2680a9a7c4486aea8609e9eca728572c169e56d1324f",
+      "copyright_notices": [
+        "Copyright 2014 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfplat/tests/mfplat.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "0e49c1d109b139a6372f1e00e35ff46ba6da84851c955189a76919c6c80d6ff2",
+      "copyright_notices": [
+        "Copyright 2015 Michael Müller"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfreadwrite/reader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "3584246c129014f16b97b0dc6e789354576e00b9245cbfb9c4126c939ecc301f",
+      "copyright_notices": [
+        "Copyright 2014 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/mfsrcsnk/media_source.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c74fefa1bd0e2b5952e3298fbd0ef522a972c3bc245e100dc2dbb9cb2d342377",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/msauddecmft/msauddecmft.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "26283118cc5268b486c541ba1d27b4934684aa596acd5b83823aaf0ac434d5d9",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/msmpeg2vdec/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "f979d2f873f9dba5f3f018aad83d41581f524f0862031e93ee24912c59f75c74",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/msmpeg2vdec/msmpeg2vdec.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e58721fdd603b588e91f04cc964a65b925025370e3a6471a4a649ca4e7d38074",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/msmpeg2vdec/msmpeg2vdec.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "8da76ccaeada4195f2955aa99b6022cb682700de616bad84b8ba9441f6eb0919",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/qasf/asfreader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "09578130cd044d110c69c6eac6b1d20044c6bba3ff6c6f084114d695f79e77ec",
+      "copyright_notices": [
+        "Copyright 2020 Jactry Zeng for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/qasf/dmowrapper.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e7cf75fc3335e4bdf9f725a260ebc93dd08849e27cc1e2b78b144d0da778e2c9",
+      "copyright_notices": [
+        "Copyright (C) 2019 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/qasf/tests/asfreader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "01450e1e0850c703adba9f47ce78fa77f6d4c20752f9b53a6c55d7a073b7f820",
+      "copyright_notices": [
+        "Copyright 2019 Zebediah Figura",
+        "Copyright 2020 Jactry Zeng for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "1595e2edb7d50deb409f6cadaea7c017c7026963c67a679c6d60f89015f71724",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/acmwrapper.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5b537803353520ef6e3e9a5fabd4dad4b7287a39a73772417bf851a7a94828de",
+      "copyright_notices": [
+        "Copyright 2005 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/colour.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "7e35be6bdacc0e895c088b33fc8233142990d5578951e07bc57f1872e0d0740e",
+      "copyright_notices": [
+        "Copyright 2026 GloriousEggroll"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/dsoundrender.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e612db5994dcad2787a9aff4cf0e2295c2620f51346978f609cd2fc875a2144b",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/filesource.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f554fc7a8ff308ed7a885b1cff64d27b2a0dbe7a0f63acb6eb85aa4a0a16b0ac",
+      "copyright_notices": [
+        "Copyright 2003 Robert Shearman"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/filtergraph.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b34b4d2228181c8c5be3efd3cb388237b5337bde2aeecdfe05ac9dd262ca2d5d",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer",
+        "Copyright 2004 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e18e04a47073ac7549af69515d0359e8edb30d0ebcee2f8a683063351b045638",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/quartz_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1640c22060db0990cc88197b6adc2e1d0e0236fa5885d743830cd5e70cc6d300",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/quartz_strmif.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5372c8720de8395b78e783bf13aae0086f362e1f73ae26c216c377ba1c909ca8",
+      "copyright_notices": [
+        "Copyright 2009 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/tests/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "44f00f1f9e4a0d23b16ae735a0e9eb633d602b81a5cac1a7b695cd3040fcd1d5",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/tests/colour.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "05d4b22459161a15751d3711423cb4cef14b8927e87bc2d9609a27adac5a4fa3",
+      "copyright_notices": [
+        "Copyright 2026 GloriousEggroll"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/tests/filesource.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "3a44cc415119b2ec110d163c440a9fa94236e1ae48f130e762264fe9f1720c5e",
+      "copyright_notices": [
+        "Copyright 2016 Sebastian Lackner",
+        "Copyright 2018 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/tests/mpegvideo.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "12577a1314364b37582275d668851f19f40772ffcf675527aea0d27b2124909f",
+      "copyright_notices": [
+        "Copyright 2022 Anton Baskanov",
+        "Copyright 2018 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/vmr7.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6e2ea904f713daf6348348dd85803ab460caa3ca05c345c2540f958ed9dd3d7a",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa",
+        "Copyright 2008 Maarten Lankhorst",
+        "Copyright 2012 Aric Stewart"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/vmr7_presenter.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5f43416d1bfba00a3d2705f78ec90d972ede87a5d5206c07ebb2a1c9a26deae9",
+      "copyright_notices": [
+        "Copyright 2023 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/vmr9.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "fef6e3a7745d55d748668fa847226b240ddb693f1e65f13d7a3b188c29f1fc79",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa",
+        "Copyright 2008 Maarten Lankhorst",
+        "Copyright 2012 Aric Stewart"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/quartz/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "2416e58db726016834d8dc0eee537f426877ccc8e9b8e4f639ebe356a21ee694",
+      "copyright_notices": [
+        "Copyright 2012 Aric Stewart, CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/rsx/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "da2cf97e1d18572574417daff43aaff5eb302335f292a3b5a2b5b16330b31d55",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/rsx/rsx.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "068210c7ad18c8dd716d9a2cd82115fbf0309870c51a35b32c5f7d1d1f5c3554",
+      "copyright_notices": [
+        "Copyright 2026 Geoffrey McRae"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/rsx/rsx.spec",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "c543bbfc42bfacc4f912385318569d1d5fca5e01e7e18607e86f6d6133d44df4",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/rsx/rsx_classes.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "01f63aebe4006c7bd36dd146f836f5b36bcaf7bc1695d8b2f0738187d78aae7d",
+      "copyright_notices": [
+        "Copyright 2026 Geoffrey McRae"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/rtworkq/queue.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "4fd52584814f94f5afc7578620eb70c4dd06d5e07696866c385a77f6fe106329",
+      "copyright_notices": [
+        "Copyright 2019-2020 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/vidreszr/vidreszr.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e597c8fbc923926aac24327ea70e97e723455c32825ad5b9d335b46119fbd7d6",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/win32u/vulkan.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "df84e5b7ad5bf8fc5feca3c94c017b6819d43806f2147fdbf1956e6a4328d130",
+      "copyright_notices": [
+        "Copyright (c) 2017 Roderick Colenbrander"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "a4767307a716ede5efdca470cdb262bb617e4da6a89a4bc2e8b7e66e9e357e80",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/audio_decoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "9f383085161f050ef69196d61b69e69799a3efc25995caf82f5d3b63227c6e8f",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/color_convert.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5001d12f2a821202aa6cf2014ee6e379047a89f5eb9802bb80d39ec4b6f4d00d",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/libavcodec/pcm_byte_order_reverse_bsf.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "9533abf74da15315b931bbb6212b9d97e834c3c91273e7b429a666d2f92c07ed",
+      "copyright_notices": [
+        "Copyright (c) 2025 Conor McCarthy for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "fdcedfb635b867bc4c8795ee55fd03026bcdbd3cd342a7798f099bed7171134d",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer",
+        "Copyright 2010 Aric Stewart, CodeWeavers",
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media-converter/fossilize.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "efcb37d00c86be527cd087da2c222ce526ad89054117dbb8626f379d6b6ac8f0",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers",
+        "Copyright (c) 2018-2019 Hans-Kristian Arntzen"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media-converter/lib.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b5ad6ec37fcafa58cbfe32e8961e452fafccd8ded18e4dc440b3bc31440f6a15",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media-converter/media-converter.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "20d749f62d7dce55ad750108232e2a114831f7595186c3f38d7f7e0b00a1f28d",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media-converter/murmur3.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "a85cde040465d5e9ae52ae7f233414dcc81abca93efb056e4f019c28da6cdf87",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media_format.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5599d86e06da439ac099bd60894b1480aef6d023771303eb581f86e5e028a8aa",
+      "copyright_notices": [
+        "Copyright 2020-2021 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media_sink.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "316cbb0a24fd6f69294f7b3a036447411f8ba9d489cb5c3b8a9283b3d3a27d9e",
+      "copyright_notices": [
+        "Copyright 2023 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/media_source.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "203f979c78b4dae0bdb451dafe18f16e509092be0f0a49c25fb998fb256e9dee",
+      "copyright_notices": [
+        "Copyright 2020 Derek Lesho",
+        "Copyright 2020 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/mfplat.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "805fd7039235fc2423d8959868af14386573f287e893a68218d328811a0c813a",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers",
+        "Copyright 2020 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "66afa1953894e8f40ad5b7af55dae54f9fe81ceb0994a7c2735ac9d8f5da6a87",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/quartz_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "0053e7286b824c99cdffa9a4ae975e0c44b76e2e88f860528719cadec6615b1b",
+      "copyright_notices": [
+        "Copyright 2022 Anton Baskanov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/resampler.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1f7db2432bb562ce3812c97b9e8a4a8235ec7ca3fcdce517fdfea870aa5c6788",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/rsrc.rc",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "59189610df59ba870263a2c1b4dba783ab1d72124aab55306f19f10c9162b317",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_demuxer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "d6568d9c29989eca44be60b692766b05a59e1adca3b8635c220d63fe0bce661a",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_demuxer_mediaconv.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b73e802871bca57906aa3528d031ac534ad430c42a8329905f21a2c835a2c4fc",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_media_type.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "501c25daa1ac79c0226bb33729f36089b95e16a9ebe1eea1f08aa28c5db08ca6",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_muxer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "00d7b8cb87dc128ac81a9bf0c6cbce0e35b85e534d0143d76168bcede9aefbda",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "3f81fc01541ea9910fd5fd43f731685359da7ddd3913b0d6587e11f587fffb61",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unix_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e1a518b04123076e2935a56f2508636d57376946f4294936759c210edfc92378",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unixlib.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "00979f5f527a4509a8e3cb8d855dd1f69ec77992f4e50240263a01af63bdab1d",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/unixlib.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f342e2ac9a54f44a641f57267bc404da77bf275046b542e3dfc55ea1252cd296",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/video_decoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c9ade44faf48f265fc8b03a6e5141e17064cceb2ec99e41035be2407abceeb8c",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers",
+        "Copyright 2023 Shaun Ren for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/video_encoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6f081737df867690fd0628bea1e340f7af5b9ff8c1a436a30c251a5276413d08",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/video_processor.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "364e9dc15a5f3c8df867d07ea6d9248374c96eac0bfaa1392c03ad834e939897",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo.rgs",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "5d69ad7a176bda51c5e74396a3f7011284804318761ae26ad9444cd182b6ef39",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo.spec",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "65348d02e009cc18be872e0ec8c246e0a46c572e7b7d3e128f39ca18d150054b",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo_classes.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "cc555efddd1fb84abcd03f06ff2fc7ed488489dbbf848953fe326a832b3887ec",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov",
+        "Copyright 2019 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo_guids.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c41625e0088ad888ccc9bc1188f0df72a2e0eebc62c13f661c67f496f5d1114d",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "08bb354f55d766858c94e83ef954ada2f645b666c280fb808a053aac3c1db913",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/winedmo_quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f7c19c8edf7ee5e75ed7ceb6e78b223f2b351505b787354e5b93a914a2564ffe",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/wm_reader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "86f818fa67e92ceb0ec13d92358b5c01c9831ff618e34746ab450d2bc5308a8c",
+      "copyright_notices": [
+        "Copyright 2012 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winedmo/wma_decoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "cc86a0ff6829c16beaa1c6d6945742e8c59fda21e728aac7a7c25caccfb0d3f0",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "ea009e2689604f8824e49ed37a32f3494f2a0a398598d326ed4f19a357cd11ad",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/color_convert.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "20c34c15c5d5d87623fcefdd152c1e28b9fe46776ed2f441c3b5cdfd5bb8a370",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/gst_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "a1e5e754eceb5f5211ae3e8ec7efbd5f8b3af023392492a27ff222fab2657778",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/media_sink.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "bb096d3d060711815e26bfa47ed3885c04840bd0dc1b8c4c65c8f540b65567cc",
+      "copyright_notices": [
+        "Copyright 2023 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/mfplat.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "83290b7cd7e5d53fa4cc60c169f18f0141c4e4e0ec6827f9690f57e634cde95c",
+      "copyright_notices": [
+        "Copyright 2019 Nikolay Sivov for CodeWeavers",
+        "Copyright 2020 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "16515382ea02b72bef3c852ae0122785ac54be124a25f5b36a2e18bb98193b22",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/quartz_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "0945eba449cc0a83d7ce750f835afeba46278c5ec1ae2a06b18c6b3d9e899d60",
+      "copyright_notices": [
+        "Copyright 2022 Anton Baskanov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/resampler.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "87090e97326d09fede7c8fec5ba2e8e0c9f61adb4ed1d8a90ca52aef324acafd",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/rsrc.rc",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "de07105aeaacec9b53b2f6571a282fb11d2530a293449ac4fa3de019f78228e1",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/unix_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "876371bc5727bb4b1f6c7221f87669fbefbe170b09d359bd8015bdfa3f0885c4",
+      "copyright_notices": [
+        "Copyright 2020-2021 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/unixlib.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "a86c482bec84c12516baa42d7929ccfe09ff434b737503e6bce3da77dcf526b2",
+      "copyright_notices": [
+        "Copyright 2020-2021 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/unixlib.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "1d9021968854276645840da428d9b2ba9207a186b07af320757dafd70d2b964d",
+      "copyright_notices": [
+        "Copyright 2020-2021 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/video_encoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "3b6ef0d08e0287e6699e1dc1f5c8f2a0d217ea94f5b4af824c2df856bf7b2f68",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_allocator.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "57f2e43dd6cc1551d8d9c164a1d2add6966fd0958734b223cabbbc51b6c07e48",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_format.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "60b0544e8772a53c3480974d8187d70a453b96a8f643ebc20c2a2ac16fcc8f6f",
+      "copyright_notices": [
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_media_type.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "16f8044456e2996affec858a632aa9c893b7d4528674320849b10249dd38fa49",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_muxer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "a4619889a34f27d537857883be3815a83d124c336fedec378b4966aa3c50d829",
+      "copyright_notices": [
+        "Copyright 2023 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_sample.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "5b258ea31e582f305f572f48372996244af9d801dfd711a45f78e6145952fac5",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wg_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "9eda0999fdb191b4afb5aebd5d60e9e65b561b7a89be47659154a81f5a89a526",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/winegstreamer.rgs",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "b79df72c6d245e6c354991344ad91254436dd93263ebeeb1f9559313c55cd004",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/winegstreamer.spec",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "432e10471d0068ceafb79f8572f313411c047f81dd1f70af3c8bcbe17a2bb915",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winegstreamer/wma_decoder.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "official baseline (removed file)",
+      "source_sha256": "92e6a8a1a3fb08aa26b5bb6332ed2846817e233e4b35ba2c9fd82f9bcb05b49a",
+      "copyright_notices": [
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winepulse.drv/pulse.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "10463cca39207d9f3b31521135d8a31ece6986df90d7786ae9aa37652e0e69f8",
+      "copyright_notices": [
+        "Copyright 2011-2012 Maarten Lankhorst",
+        "Copyright 2010-2011 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2011 Andrew Eikum for CodeWeavers",
+        "Copyright 2022 Huw Davies"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/winmm/waveform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "1653c991a8da1274bdadeeb2534711c062ddc737b5e20a4e9df2fcc54a2c0dd1",
+      "copyright_notices": [
+        "Copyright 1993      Martin Ayotte"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmadmod/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "9829bb42de3e9759d2c9af83c47f452346cd518fcbfed36245ba87aed29284e1",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmadmod/wmadmod.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "a4c1013a1eb4574e4b5dd99591c1355fd7949cca80017a902539d7700484efb1",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmvcore/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "635a899f73f502c39e6f843cb78bd0d24421a7a91e0bebb7d00b9ba4d6b1ce9b",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmvcore/async_reader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "950f919c860d1ee7617cc0d6808bb11e484b96399551c1497c0b72d18d92085e",
+      "copyright_notices": [
+        "Copyright 2012 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmvcore/wmvcore_main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "10a98f0a439585b2b5ac71927e4fba0a40fe0e425908ac4ae4d1cc3d290086b6",
+      "copyright_notices": [
+        "Copyright 2012 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wmvcore/wmvcore_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "4e044142bfa813a08a23c6de82fcb2d68fd6d7222a3efc1207975632096c6d15",
+      "copyright_notices": [
+        "Copyright 2015 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "dlls/wtsapi32/wtsapi32.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "4e1492d32060939af6e84ceb6ba66a03fb6191f855a211a78a8efa4fa72cc72b",
+      "copyright_notices": [
+        "Copyright 2005 Ulrich Czekalla"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "include/mediaobj.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "040f144eb83cc0dcadd1bf357b1407b02c765e4129d4b032a097382ea6160d95",
+      "copyright_notices": [
+        "Copyright (C) 2002 Alexandre Julliard",
+        "Copyright (C) 2004 Vincent Béron"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "include/mfmediaengine.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6a3841e2832eaf9ba4df99d79fd34e60116842b23620fdf1f3d00a37e35e16b3",
+      "copyright_notices": [
+        "Copyright 2019 Jactry Zeng for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "include/nserror.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "446810b827bb4561a56823872533a8f0816dba5002e13f64dead47c6b12d9e53",
+      "copyright_notices": [
+        "Copyright (C) 2017 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "include/wine/mfinternal.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "6728646f9eb6de82586f3a724ecacd8be89f735c10ae3c9d89065f7e99010abd",
+      "copyright_notices": [
+        "Copyright 2022 Nikolay Sivov for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "include/wine/winedmo.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "732ce371fbe76146986a4e79b1a4d8a16c15c65d5b3b8337b45f5c59e21e9659",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "libs/strmbase/pin.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c1b45eafecf00b0c2cd279e2f4bcca3cfd32db2ad1fbb298205577bd8441e8d1",
+      "copyright_notices": [
+        "Copyright 2003 Robert Shearman",
+        "Copyright 2010 Aric Stewart, CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "libs/strmbase/renderer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "808af04bf8d3bf38c75e4a027502e0ce17a64f807c970242db7f9f73dbe6f5d8",
+      "copyright_notices": [
+        "Copyright 2012 Aric Stewart, CodeWeavers",
+        "Copyright (C) 2005-2007 Wim Taymans <wim.taymans@gmail.com>"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "loader/preloader_mac.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5d14b262fd2fe0314ee53f0bc6d9a713b8ed9ce70fc55faf09372694b8360016",
+      "copyright_notices": [
+        "Copyright (C) 1995,96,97,98,99,2000,2001,2002 Free Software Foundation, Inc.",
+        "Copyright (C) 2004 Mike McCormack for CodeWeavers",
+        "Copyright (C) 2004 Alexandre Julliard",
+        "Copyright (C) 2017 Michael Müller",
+        "Copyright (C) 2017 Sebastian Lackner"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "loader/wine.inf.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "753a54203c14c4291c97436d8e922619faf4b52ee0e3fe1722441760520a3789",
+      "copyright_notices": [
+        ";; Copyright (C) 2004 Chris Morgan",
+        ";; Copyright (C) 2004 Brian Vincent",
+        ";; Copyright (C) 2004 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/crossover-26.3-media.patch",
+      "source_file": "tools/gitlab/image.docker",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "de6b1a6ff388fa3b07ba3b613d0e953be8cce15bbb3bfe87a6951e974f7731df",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/ntdll/unix/fsync.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "95e714e2784ac186d4b334900239378fd0b0073c0b6178664d68602e24f4b28b",
+      "copyright_notices": [
+        "Copyright (C) 2018 Zebediah Figura",
+        "Copyright (C) 2025 Paul Gofman for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/ntdll/unix/loader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "e65decb317af38c6ae93f65a5bcb2447480dd1d7e3a583065e59a8566ce7540a",
+      "copyright_notices": [
+        "Copyright (C) 2020 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/ntdll/unix/ntsync_tmp.h",
+      "license": "GPL-2.0-only WITH Linux-syscall-note",
+      "evidence": "SPDX file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c3e1abd07782a7e5db5aaf77613ecf59055b0b3da068734b02bf0ee635eb9639",
+      "copyright_notices": [
+        "Copyright (C) 2021-2022 Elizabeth Figura <zfigura@codeweavers.com>"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/ntdll/unix/signal_x86_64.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b037ccdc77c7c2320bb7285e2aaff8fc81f6ea13abeaf263b4cabae6669c6cf4",
+      "copyright_notices": [
+        "Copyright 1999, 2005 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/ntdll/unix/system.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "9212f5bfc9b626d5d828b730591fbd9a18fdc04c9d9f2ef081f164f7b1ba9871",
+      "copyright_notices": [
+        "Copyright 1996-1998 Marcus Meissner"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/win32u/opengl.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f6c26eaa0f0c797380507033d1b734fe2f675768ef34c810dedcfdf4c50a6b0f",
+      "copyright_notices": [
+        "Copyright 2012 Alexandre Julliard",
+        "Copyright 2025 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/win32u/vulkan.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "2b32b45b83fcdc7770d6dc19bce3e233af024bd8e1c808fa63ec98d4231a7f99",
+      "copyright_notices": [
+        "Copyright (c) 2017 Roderick Colenbrander"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "dlls/winedmo/media-converter/media-converter.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "20d749f62d7dce55ad750108232e2a114831f7595186c3f38d7f7e0b00a1f28d",
+      "copyright_notices": [
+        "Copyright 2024 Ziqing Hui for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "server/fsync.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "9cb51dbfffdbf3476ac8d1873aa215774689a89d0f429680dbfb441955ca0360",
+      "copyright_notices": [
+        "Copyright (C) 2018 Zebediah Figura",
+        "Copyright (C) 2025 Paul Gofman for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-platform.patch",
+      "source_file": "server/ntsync_tmp.h",
+      "license": "GPL-2.0-only WITH Linux-syscall-note",
+      "evidence": "SPDX file header",
+      "source_origin": "prepared source",
+      "source_sha256": "c3e1abd07782a7e5db5aaf77613ecf59055b0b3da068734b02bf0ee635eb9639",
+      "copyright_notices": [
+        "Copyright (C) 2021-2022 Elizabeth Figura <zfigura@codeweavers.com>"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-vmr7-window.patch",
+      "source_file": "dlls/ddraw/main.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "2b1821a938b52cd8b97fb27ce090c8f0603a4d90b4abcf14227b16989631635f",
+      "copyright_notices": [
+        "Copyright 1997-1999 Marcus Meissner",
+        "Copyright 1998 Lionel Ulmer",
+        "Copyright 2000-2001 TransGaming Technologies Inc.",
+        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2008 Denver Gingerich"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-vmr7-window.patch",
+      "source_file": "dlls/quartz/vmr7_presenter.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "5f43416d1bfba00a3d2705f78ec90d972ede87a5d5206c07ebb2a1c9a26deae9",
+      "copyright_notices": [
+        "Copyright 2023 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-child-window-position.patch",
+      "source_file": "dlls/quartz/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "f599268fa57322069979b57f3651831bb0b45da2dae2815169f6d8a9f7635bf1",
+      "copyright_notices": [
+        "Copyright 2012 Aric Stewart, CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/rosetta-wow64-thunks.patch",
+      "source_file": "dlls/wow64cpu/cpu.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "92e2d223404b7d4020412593b2b807bfb6bd860b02d1d72f4587d6e3e74c183c",
+      "copyright_notices": [
+        "Copyright 2021 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/wow64-demuxer-cleanup.patch",
+      "source_file": "dlls/winedmo/unixlib.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "00979f5f527a4509a8e3cb8d855dd1f69ec77992f4e50240263a01af63bdab1d",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-preserve-window-size.patch",
+      "source_file": "dlls/quartz/quartz_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared GE media source before window-size modification",
+      "source_sha256": "1640c22060db0990cc88197b6adc2e1d0e0236fa5885d743830cd5e70cc6d300",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-preserve-window-size.patch",
+      "source_file": "dlls/quartz/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared GE media source before window-size modification",
+      "source_sha256": "f599268fa57322069979b57f3651831bb0b45da2dae2815169f6d8a9f7635bf1",
+      "copyright_notices": [
+        "Copyright 2012 Aric Stewart, CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-preserve-window-size.patch",
+      "source_file": "dlls/quartz/vmr9.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared GE media source before window-size modification",
+      "source_sha256": "fef6e3a7745d55d748668fa847226b240ddb693f1e65f13d7a3b188c29f1fc79",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa",
+        "Copyright 2008 Maarten Lankhorst",
+        "Copyright 2012 Aric Stewart"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-preserve-window-size.patch",
+      "source_file": "dlls/quartz/videorenderer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared GE media source before window-size modification",
+      "source_sha256": "ae9fb53350d1258bb7a3497b9bdec8ab3579e31d9b4cf4d71cf16aacaa20492d",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/quartz-preserve-window-size.patch",
+      "source_file": "dlls/quartz/vmr7.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared GE media source before window-size modification",
+      "source_sha256": "6e2ea904f713daf6348348dd85803ab460caa3ca05c345c2540f958ed9dd3d7a",
+      "copyright_notices": [
+        "Copyright 2004 Christian Costa",
+        "Copyright 2008 Maarten Lankhorst",
+        "Copyright 2012 Aric Stewart"
+      ]
+    }
+  ],
+  "counts": {
+    "LGPL-2.1-or-later": 169,
+    "LicenseRef-Autoconf-generated-permissive": 1,
+    "GPL-2.0-only WITH Linux-syscall-note": 2
+  },
+  "patch_sha256": {
+    "patches/crossover/crossover-26.3-media.patch": "0fd1d9ece2bf589f8959ffd0dd5322c084fdd1a87e256797039a5156c90f648d",
+    "patches/wine-ge/macos-platform.patch": "3a9915bee10f8f2afe3bce8d7b992a984d58d43f4f14e4f00321a62b005bd459",
+    "patches/wine-ge/macos-vmr7-window.patch": "8102ca5bdcc11d89761ad820ca2b364be2f2f8becf4b863431a147fc2f5f7d0c",
+    "patches/wine-ge/quartz-child-window-position.patch": "07b3acb47b34b13752b1ef9a001da43f4af9803dcb3379c16034d7618ba49df4",
+    "patches/wine-ge/rosetta-wow64-thunks.patch": "344d00e462e1ad43d73df3790f052b4cb1a12a57f66f1393f6b2d433b36e6d16",
+    "patches/wine-ge/wow64-demuxer-cleanup.patch": "326c3b75038b157fd74001ead4476b23fd2b7d6333cc8937ca376172be2474fe",
+    "patches/wine-ge/quartz-preserve-window-size.patch": "001dfa80d612a9dd7f6ff10f48b914d6343622c25f479b0dc5cdd8193a452d7f"
+  }
+}

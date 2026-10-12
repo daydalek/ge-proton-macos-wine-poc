@@ -1,0 +1,7 @@
+{
+  "cross_over_version": "26.3.0",
+  "wine_base_version": "11.0",
+  "source_url": "https://media.codeweavers.com/pub/crossover/source/crossover-sources-26.3.0.tar.gz",
+  "source_sha256": "ac99c8ca4b3848f3e81784135f023df266b61c2345726ea55a50b3e030dd6872",
+  "ge_source_commit": "c191f35dcebbeccfacd3b4c6f6eea026e588c1c2"
+}

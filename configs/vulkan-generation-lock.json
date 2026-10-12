@@ -1,0 +1,12 @@
+[
+  {
+    "file": "video-1.4.357.xml",
+    "sha256": "d018b914014c06605e367a3b929670511e6f6de2f225c405a8b5e2d912408b76",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/v1.4.357/xml/video.xml"
+  },
+  {
+    "file": "vk-1.4.357.xml",
+    "sha256": "264d0d7350e37d70c82407fb430d085040fc01a9a961d43dec8c2d6ed1dfd183",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/v1.4.357/xml/vk.xml"
+  }
+]

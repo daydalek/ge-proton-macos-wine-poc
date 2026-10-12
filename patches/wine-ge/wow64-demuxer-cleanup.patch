@@ -1,0 +1,16 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: GE media integration and macOS build/playback adaptations.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/winedmo/unixlib.c
++++ b/dlls/winedmo/unixlib.c
+@@ -225,7 +225,7 @@
+         struct winedmo_demuxer demuxer;
+         PTR32 context;
+     } *params32 = arg;
+-    struct demuxer_create_params params;
++    struct demuxer_destroy_params params;
+     NTSTATUS status;
+ 
+     params.demuxer = params32->demuxer;

@@ -1,0 +1,32 @@
+[
+  {
+    "archive": "llvm-mingw.tar.xz",
+    "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-macos-universal.tar.xz",
+    "sha256": "2cab02a2e964bd4aae981150a45985d07c657cfa8d244959eb9e2dcc5eedd7b1"
+  },
+  {
+    "archive": "m4.tar.xz",
+    "url": "https://ftp.gnu.org/gnu/m4/m4-1.4.20.tar.xz",
+    "sha256": "e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b"
+  },
+  {
+    "archive": "bison.tar.xz",
+    "url": "https://ftp.gnu.org/gnu/bison/bison-3.8.2.tar.xz",
+    "sha256": "9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2"
+  },
+  {
+    "archive": "autoconf.tar.xz",
+    "url": "https://ftp.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz",
+    "sha256": "ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a"
+  },
+  {
+    "archive": "ffmpeg.tar.gz",
+    "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/9047fa1b084f76b1b4d065af2d743df1b40dfb56",
+    "sha256": "d77341a08192916d4e7a3c5ba2481097b42747be8d61a03d897a537e4973702a"
+  },
+  {
+    "archive": "freetype.tar.gz",
+    "url": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-13-3",
+    "sha256": "bc5c898e4756d373e0d991bab053036c5eb2aa7c0d5c67e8662ddc6da40c4103"
+  }
+]

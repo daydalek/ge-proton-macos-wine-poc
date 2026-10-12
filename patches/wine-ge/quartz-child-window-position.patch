@@ -1,0 +1,25 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: GE media integration and macOS build/playback adaptations.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/quartz/window.c
++++ b/dlls/quartz/window.c
+@@ -386,6 +386,8 @@
+     TRACE("window %p, left %ld.\n", window, left);
+ 
+     GetWindowRect(window->hwnd, &rect);
++    if (GetWindowLongPtrW(window->hwnd, GWL_STYLE) & WS_CHILD)
++        MapWindowPoints(NULL, GetParent(window->hwnd), (POINT *)&rect, 2);
+     if (!SetWindowPos(window->hwnd, NULL, left, rect.top, 0, 0,
+             SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE))
+         return E_FAIL;
+@@ -440,6 +442,8 @@
+     TRACE("window %p, top %ld.\n", window, top);
+ 
+     GetWindowRect(window->hwnd, &rect);
++    if (GetWindowLongPtrW(window->hwnd, GWL_STYLE) & WS_CHILD)
++        MapWindowPoints(NULL, GetParent(window->hwnd), (POINT *)&rect, 2);
+     if (!SetWindowPos(window->hwnd, NULL, rect.left, top, 0, 0,
+             SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE))
+         return E_FAIL;

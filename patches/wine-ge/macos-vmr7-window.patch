@@ -1,0 +1,100 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: GE media integration and macOS build/playback adaptations.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/quartz/vmr7_presenter.c
++++ b/dlls/quartz/vmr7_presenter.c
+@@ -128,6 +128,31 @@
+     if (info->dwFlags & VMRSample_SrcDstRectsValid)
+         FIXME("Ignoring src/dst rects.\n");
+ 
++    /* macdrv presents each window through its client surface. A DirectDraw
++     * primary-surface blit does not update the VMR window client surface. */
++    if (GetModuleHandleW(L"winemac.drv"))
++    {
++        HDC source_dc, target_dc;
++        DDSURFACEDESC2 desc = {.dwSize = sizeof(desc)};
++
++        if (SUCCEEDED(hr = IDirectDrawSurface7_GetSurfaceDesc(info->lpSurf, &desc))
++                && SUCCEEDED(hr = IDirectDrawSurface7_GetDC(info->lpSurf, &source_dc)))
++        {
++            BOOL copied;
++            GetClientRect(presenter->window, &rect);
++            target_dc = GetDC(presenter->window);
++            copied = target_dc && StretchBlt(target_dc, 0, 0,
++                    rect.right - rect.left, rect.bottom - rect.top,
++                    source_dc, 0, 0, desc.dwWidth, desc.dwHeight, SRCCOPY);
++            if (target_dc) ReleaseDC(presenter->window, target_dc);
++            IDirectDrawSurface7_ReleaseDC(info->lpSurf, source_dc);
++            TRACE("macdrv window presentation copied %d, size %lux%lu.\n",
++                    copied, desc.dwWidth, desc.dwHeight);
++            if (copied) return S_OK;
++        }
++        WARN("macdrv window presentation failed, hr %#lx.\n", hr);
++    }
++
+     if (presenter->yuv_to_rgb)
+     {
+         DDSURFACEDESC2 surface_desc = {.dwSize = sizeof(surface_desc)};
+@@ -222,6 +247,7 @@
+     surface_desc.ddpfPixelFormat.dwSize = sizeof(surface_desc.ddpfPixelFormat);
+     surface_desc.ddsCaps.dwCaps = DDSCAPS_FLIP | DDSCAPS_COMPLEX | DDSCAPS_OFFSCREENPLAIN;
+     surface_desc.dwBackBufferCount = *count;
++    if (GetModuleHandleW(L"winemac.drv")) surface_desc.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
+ 
+     presenter->yuv_to_rgb = info->lpHdr->biCompression == mmioFOURCC('N','V','1','2')
+             || info->lpHdr->biCompression == mmioFOURCC('Y','V','1','2');
+@@ -437,6 +463,12 @@
+     HRESULT hr;
+ 
+     TRACE("iface %p, window %p.\n", iface, window);
++
++    if (GetModuleHandleW(L"winemac.drv"))
++    {
++        presenter->window = window;
++        return S_OK;
++    }
+ 
+     if (FAILED(hr = IDirectDraw7_CreateClipper(presenter->ddraw, 0, &clipper, NULL)))
+         ERR("Failed to create clipper, hr %#lx.\n", hr);
+@@ -540,7 +572,8 @@
+     object->IVMRWindowlessControl_iface.lpVtbl = &windowless_control_vtbl;
+     object->refcount = 1;
+ 
+-    if (FAILED(hr = DirectDrawCreateEx(NULL, (void **)&object->ddraw, &IID_IDirectDraw7, NULL)))
++    if (FAILED(hr = DirectDrawCreateEx(GetModuleHandleW(L"winemac.drv") ? (GUID *)DDCREATE_EMULATIONONLY : NULL,
++            (void **)&object->ddraw, &IID_IDirectDraw7, NULL)))
+     {
+         ERR("Failed to create ddraw object, hr %#lx.\n", hr);
+         free(object);
+@@ -550,6 +583,19 @@
+     if (FAILED(hr = IDirectDraw7_SetCooperativeLevel(object->ddraw, NULL, DDSCL_NORMAL)))
+         ERR("Failed to set cooperative level, hr %#lx.\n", hr);
+ 
++    if (GetModuleHandleW(L"winemac.drv"))
++    {
++        primary_desc.dwFlags |= DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
++        primary_desc.dwWidth = primary_desc.dwHeight = 1;
++        primary_desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
++        primary_desc.ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT);
++        primary_desc.ddpfPixelFormat.dwFlags = DDPF_RGB;
++        primary_desc.ddpfPixelFormat.dwRGBBitCount = 32;
++        primary_desc.ddpfPixelFormat.dwRBitMask = 0x00ff0000;
++        primary_desc.ddpfPixelFormat.dwGBitMask = 0x0000ff00;
++        primary_desc.ddpfPixelFormat.dwBBitMask = 0x000000ff;
++    }
++
+     if (FAILED(hr = IDirectDraw7_CreateSurface(object->ddraw, &primary_desc, &object->primary, NULL)))
+         ERR("Failed to create primary surface, hr %#lx.\n", hr);
+ 
+--- a/dlls/ddraw/main.c
++++ b/dlls/ddraw/main.c
+@@ -305,6 +305,7 @@
+     if (guid == (GUID *) DDCREATE_EMULATIONONLY)
+     {
+         device_type = WINED3D_DEVICE_TYPE_REF;
++        if (GetModuleHandleW(L"winemac.drv")) flags |= WINED3D_NO3D;
+     }
+     else if (guid == (GUID *) DDCREATE_HARDWAREONLY)
+     {

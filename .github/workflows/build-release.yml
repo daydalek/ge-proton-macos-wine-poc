@@ -1,0 +1,95 @@
+name: Build and release Apple Silicon package
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: |
+          python3 scripts/release-check.py --public-history
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for file in Path('scripts').rglob('*.py'):
+              ast.parse(file.read_text(), filename=str(file))
+          PY
+          while IFS= read -r file; do bash -n "$file"; done < <(find scripts tools -name '*.sh')
+
+  build:
+    needs: source-check
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ fromJSON(vars.MACOS_BUILD_RUNNER_JSON || '"xcode-27"') }}
+    timeout-minutes: 240
+    env:
+      POC_MACOSX_DEPLOYMENT_TARGET: '27.0'
+      POC_JOBS: '4'
+      POC_RELEASE_DIR: ${{ github.workspace }}/outputs/release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare hosted runner dependencies
+        if: runner.environment == 'github-hosted'
+        run: |
+          command -v cmake >/dev/null || brew install cmake
+          command -v pkg-config >/dev/null || brew install pkgconf
+          if ! /usr/bin/arch -x86_64 /usr/bin/true; then
+            sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+          fi
+      - name: Build macOS 27 Apple Silicon package
+        env:
+          POC_WORK_DIR: ${{ runner.temp }}/wine-build-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash scripts/ci/build-release.sh
+      - name: Upload distributable archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos27-apple-silicon-rosetta
+          path: outputs/release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos27-apple-silicon-rosetta
+          path: release
+      - name: Verify and publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          sha256sum -c SHA256SUMS
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release already exists; keep published assets unchanged."
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --prerelease \
+              --title "$RELEASE_TAG — macOS 27+ Apple Silicon (Rosetta)" \
+              --notes-file RELEASE-NOTES.md ./*.tar.gz SHA256SUMS release-manifest.json RELEASE-NOTES.md
+          fi

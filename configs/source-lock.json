@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-11",
+  "sources": [
+    {
+      "archive": "ge11-7.tar.gz",
+      "url": "https://codeload.github.com/GloriousEggroll/proton-ge-custom/tar.gz/refs/tags/GE-Proton11-7",
+      "revision": "c191f35dcebbeccfacd3b4c6f6eea026e588c1c2",
+      "sha256": "49e1ebb15ac5345eb67bf1f32bc42a01e25d0da7cf334c37a7449d3c79e60d3a"
+    },
+    {
+      "archive": "valve-wine.tar.gz",
+      "url": "https://codeload.github.com/ValveSoftware/wine/tar.gz/46b29104e3741fe23bf5e2547196a253aab88c89",
+      "revision": "46b29104e3741fe23bf5e2547196a253aab88c89",
+      "sha256": "7962bca6cb05628a56cc03008ea7af6cee7245f5b98a828452465e2775e18340"
+    },
+    {
+      "archive": "wine11.tar.gz",
+      "url": "https://codeload.github.com/wine-mirror/wine/tar.gz/refs/tags/wine-11.0",
+      "revision": "wine-11.0",
+      "sha256": "f09e8153aa46a581d2b56a5b1363b04832070b9409d9244a68cf482b243ff14a"
+    }
+  ],
+  "ffmpeg": {
+    "repo": "https://github.com/FFmpeg/FFmpeg",
+    "revision": "9047fa1b084f76b1b4d065af2d743df1b40dfb56"
+  },
+  "ge_tag_object": "4d2eb7396b175821d2a4beed97e3d36da3012bde",
+  "video_patch_count": 64
+}
