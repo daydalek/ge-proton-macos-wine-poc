@@ -18,4 +18,7 @@ for target in i686 x86_64; do
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/reconnect-probe.c" -o "$kit/reconnect-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid
+    "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
+      "$kit/mpeg-audio-format-probe.c" -o "$kit/mpeg-audio-format-probe-$bits.exe" \
+      -lole32 -loleaut32 -lstrmiids -luuid
 done

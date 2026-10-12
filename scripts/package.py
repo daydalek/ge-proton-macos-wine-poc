@@ -24,7 +24,8 @@ parser.add_argument('--check-inputs', action='store_true', help='Check packaging
 args = parser.parse_args()
 package = args.output.resolve()
 inputs = {}
-for stem in ('media-probe', 'child-window-probe', 'exception-probe'):
+for stem in ('media-probe', 'child-window-probe', 'exception-probe',
+             'reconnect-probe', 'mpeg-audio-format-probe'):
     for suffix in ('.c', '-x86.exe', '-x64.exe'):
         inputs[stem + suffix] = probes / (stem + suffix)
 for file in sorted(samples.glob('test-*')):
@@ -70,7 +71,8 @@ for name, source in inputs.items():
 manifest = [{'file': name, 'bytes': source.stat().st_size,
              'sha256': hashlib.sha256(source.read_bytes()).hexdigest()}
             for name, source in inputs.items()
-            if name.startswith('samples/') or name.startswith(('media-probe', 'child-window-probe', 'exception-probe'))]
+            if name.startswith('samples/') or name.startswith(('media-probe', 'child-window-probe', 'exception-probe',
+             'reconnect-probe', 'mpeg-audio-format-probe'))]
 (package / 'probe-and-sample-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 for script in ('run.sh', 'probe.sh'):
     (package / script).chmod(0o755)

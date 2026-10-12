@@ -1,0 +1,51 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-12
+Scope: Provide MPEG1WAVEFORMAT metadata and preserve MP1/MP2 audio timestamps for DirectShow.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/winedmo/unix_media_type.c
++++ b/dlls/winedmo/unix_media_type.c
+@@ -166,9 +166,10 @@
+     UINT format_tag, wave_format_size = sizeof(WAVEFORMATEX);
+     UINT64 channel_mask;
+     int channels;
++    NTSTATUS status;
+ 
+     if (params->codec_id == AV_CODEC_ID_AAC) return heaac_wave_format_from_codec_params( params, format, format_size );
+-    if (params->codec_id == AV_CODEC_ID_MP1) wave_format_size = sizeof(MPEG1WAVEFORMAT);
++    if (params->codec_id == AV_CODEC_ID_MP1 || params->codec_id == AV_CODEC_ID_MP2) wave_format_size = sizeof(MPEG1WAVEFORMAT);
+     if (params->codec_id == AV_CODEC_ID_MP3) wave_format_size = sizeof(MPEGLAYER3WAVEFORMAT);
+     if (params->codec_id == AV_CODEC_ID_WMAV1) wave_format_size = sizeof(MSAUDIO1WAVEFORMAT);
+     if (params->codec_id == AV_CODEC_ID_WMAV2) wave_format_size = sizeof(WMAUDIO2WAVEFORMAT);
+@@ -205,7 +206,17 @@
+                                                          &subtype, channel_mask );
+     }
+ 
+-    return wave_format_ex_from_codec_params( params, format, format_size, wave_format_size, format_tag );
++    status = wave_format_ex_from_codec_params( params, format, format_size, wave_format_size, format_tag );
++    if (!status && (params->codec_id == AV_CODEC_ID_MP1 || params->codec_id == AV_CODEC_ID_MP2))
++    {
++        MPEG1WAVEFORMAT *mpeg = format;
++
++        mpeg->fwHeadLayer = params->codec_id == AV_CODEC_ID_MP1 ? ACM_MPEG_LAYER1 : ACM_MPEG_LAYER2;
++        mpeg->dwHeadBitrate = params->bit_rate;
++        mpeg->fwHeadMode = channels == 1 ? ACM_MPEG_SINGLECHANNEL : ACM_MPEG_STEREO;
++        if (params->sample_rate >= 32000) mpeg->fwHeadFlags = ACM_MPEG_ID_MPEG1;
++    }
++    return status;
+ }
+ 
+ static GUID subtype_from_pixel_format( enum AVPixelFormat fmt )
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -1511,7 +1511,10 @@
+          * (legacy PROVIDES_SAMPLES query) get STATUS_BUFFER_TOO_SMALL with the full
+          * size; all other callers receive up to capacity bytes with INCOMPLETE set when
+          * more data remains. */
++        /* MPEG audio and video share the container timeline. Keep the audio
++         * start offset so DirectShow schedules both streams against the same clock. */
+         if (!t->audio_started && base_pts != INT64_MIN
++                && t->avctx->codec_id != AV_CODEC_ID_MP1 && t->avctx->codec_id != AV_CODEC_ID_MP2
+                 && (t->avctx->codec_id != AV_CODEC_ID_AAC || !t->split_aac_output))
+             t->audio_output_pts_adjust = base_pts;
+         if (base_pts != INT64_MIN && t->audio_output_pts_adjust != INT64_MIN)

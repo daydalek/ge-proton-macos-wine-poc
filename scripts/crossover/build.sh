@@ -8,13 +8,17 @@ case "$mode" in full|media) ;; *) echo 'Usage: build.sh [full|media]' >&2; exit 
 port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
-patch_file="$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch"
-if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
-  git -C "$source_dir" apply "$patch_file"
-else
-  git -C "$source_dir" apply --reverse --check "$patch_file"
-fi
-python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" --patch "$patch_file"
+notice_args=()
+for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch; do
+  patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
+  if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
+    git -C "$source_dir" apply "$patch_file"
+  else
+    git -C "$source_dir" apply --reverse --check "$patch_file"
+  fi
+  notice_args+=(--patch "$patch_file")
+done
+python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" "${notice_args[@]}"
 
 poc_setup_wine_build_env
 poc_require_rosetta

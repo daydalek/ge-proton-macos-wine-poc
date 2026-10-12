@@ -22,7 +22,8 @@ git add .
 commit 'Import official CrossOver 26.3.0 source'
 git apply "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch"
 git apply "$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch"
-python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" --patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch" --patch "$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch"
+git apply "$POC_PROJECT/patches/wine-ge/mpeg-audio-wave-format.patch"
+python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" --patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch" --patch "$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch" --patch "$POC_PROJECT/patches/wine-ge/mpeg-audio-wave-format.patch"
 git add .
 commit 'Port GE multimedia rework and macOS playback fixes'
 echo "Prepared CrossOver source: $source_dir"
