@@ -2,13 +2,17 @@
 
 把 **GE-Proton** 的多媒体解码与播放重构方案，移植到 **Apple Silicon (macOS / Rosetta 2)** 上的实验性 PoC 与补丁套件。
 
+本项目基于 Wine、Valve Wine 与 CrossOver Wine 开源核心，移植 [GE-Proton11-7](https://github.com/GloriousEggroll/proton-ge-custom/tree/GE-Proton11-7) 的 64 个多媒体重构补丁。多媒体实现的核心重构工作来自 GloriousEggroll 及相关上游贡献者。
+
+本项目的新增工作集中于 Apple Silicon／macOS 的构建适配、视频窗口呈现、坐标与尺寸修复，以及 WoW64 兼容性适配；完整来源、作者与许可证见 [UPSTREAMS.md](UPSTREAMS.md)。
+
 主要解决 macOS 原生 Wine 环境下常见的音视频痛点：
 - 缺失 GStreamer 多媒体管道导致游戏无法解码视频
 - Quartz 视频回放崩溃与 DirectShow 32 位子窗口错位
 - VMR7 渲染黑屏 / 透明窗口问题
 - Rosetta 2 环境下的 WoW64 Thunk 异常与 Demuxer 析构崩溃
 
-支持 **Valve Wine (GE-Proton 11-7)** 与 **CrossOver 26.3** 两个源码基线。
+支持 **Valve Wine (GE-Proton 11-7)** 与 **CrossOver Wine 26.3** 两个源码基线。
 
 ---
 
@@ -18,7 +22,7 @@
 ge-proton-macos-wine-poc/
 ├── patches/                            # 核心移植补丁
 │   ├── wine-ge/                       # 原生 Wine / GE-Proton 适配补丁 (平台支持、VMR7、Quartz、WoW64 等)
-│   └── crossover/                     # CrossOver 26.3 多媒体移植补丁
+│   └── crossover/                     # CrossOver Wine 26.3 多媒体移植补丁
 ├── scripts/                            # 自动化构建与测试脚本
 │   ├── build-deps.sh                  # 编译 x86_64 依赖 (FFmpeg, FreeType, autoconf 等)
 │   ├── prepare.py                     # 拉取/准备源码并应用补丁
@@ -26,7 +30,7 @@ ge-proton-macos-wine-poc/
 │   ├── run-wine.sh / run-packaged.sh  # 运行 Wine 环境 / 游戏
 │   ├── package.py                     # 打包为独立分发套件
 │   ├── static-check.py                # 产物依赖与最低系统版本检查
-│   └── crossover/                     # CrossOver 专项构建脚本 (prepare-source.sh, build.sh)
+│   └── crossover/                     # CrossOver Wine 专项构建脚本 (prepare-source.sh, build.sh)
 ├── tools/
 │   ├── probes/                        # 交叉编译测试探针 (DirectShow 播放、子窗口、SEH 异常)
 │   └── samples/                       # 音视频测试样片 (WMV2, MPEG-1, PCM)
@@ -71,16 +75,16 @@ bash scripts/run-wine.sh media /path/to/game.exe
 
 ---
 
-### 方案 B：移植到 CrossOver 26.3 源码
+### 方案 B：移植到 CrossOver Wine 26.3 源码
 
-若已有或想基于官方 CrossOver 26.3 源码构建：
+若已有或想基于官方 CrossOver Wine 26.3 源码构建：
 
 ```bash
 # 1. 确保已执行过 scripts/build-deps.sh
-# 2. 下载并解压 CrossOver 源码，打入 GE 媒体补丁
+# 2. 下载并解压 CrossOver Wine 源码，打入 GE 媒体补丁
 bash scripts/crossover/prepare-source.sh
 
-# 3. 编译 CrossOver 核心
+# 3. 编译 CrossOver Wine 核心
 bash scripts/crossover/build.sh full
 
 # (可选) 仅重新编译 12 个多媒体相关模块
