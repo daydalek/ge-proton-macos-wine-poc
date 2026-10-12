@@ -1,5 +1,7 @@
 # GE-Proton macOS Wine PoC
 
+简体中文 | [English](README.en.md)
+
 把 **GE-Proton** 的多媒体解码与播放重构方案，移植到 **Apple Silicon (macOS / Rosetta 2)** 上的实验性 PoC 与补丁套件。
 
 本项目基于 Wine、Valve Wine 与 CrossOver Wine 开源核心，移植 [GE-Proton11-7](https://github.com/GloriousEggroll/proton-ge-custom/tree/GE-Proton11-7) 的 64 个多媒体重构补丁。多媒体实现的核心重构工作来自 GloriousEggroll 及相关上游贡献者。
