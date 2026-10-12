@@ -143,7 +143,7 @@ export POC_WORK_DIR="$PWD/work"
 
 ## CI 构建与发布
 
-GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心。分支 push 和手动运行执行完整构建并上传产物；PR 执行源码与语法检查；推送 `v*` 标签在构建成功后自动创建预发布 Release。
+GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心。分支 push 和 PR 执行源码与语法检查；手动运行执行完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
 
 每次发布提供运行包、对应源码、许可证、构建来源和 SHA256 校验摘要。源码和依赖从锁定归档开始，在独立工作目录重建。完整远端构建与目标设备播放验收状态以实际结果为准。
 

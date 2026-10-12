@@ -147,7 +147,7 @@ export POC_WORK_DIR="$PWD/work"
 
 ## CI builds and releases
 
-GitHub Actions uses the hosted `xcode-27` preview runner by default to build the x86_64 Wine core for macOS 27+ Apple Silicon with Rosetta 2. Branch pushes and manual runs build the complete package and upload artifacts. Pull requests run source and syntax checks. Pushing a `v*` tag creates a GitHub prerelease after a successful build.
+GitHub Actions uses the hosted `xcode-27` preview runner by default to build the x86_64 Wine core for macOS 27+ Apple Silicon with Rosetta 2. Branch pushes and pull requests run source and syntax checks. Manual runs build the complete package and upload artifacts. Pushing a `v*` tag creates a GitHub prerelease after a successful build.
 
 Each release provides a runtime package, corresponding sources, licenses, build provenance, and SHA256 checksums. Sources and dependencies are rebuilt from locked archives in an isolated work directory. Full remote build and target-device playback acceptance depend on the actual results.
 

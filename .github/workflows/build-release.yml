@@ -34,7 +34,7 @@ jobs:
 
   build:
     needs: source-check
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ fromJSON(vars.MACOS_BUILD_RUNNER_JSON || '"xcode-27"') }}
     timeout-minutes: 240
     env:
