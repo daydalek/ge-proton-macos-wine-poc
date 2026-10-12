@@ -1,6 +1,6 @@
 Project modification notice: GE-Proton macOS Wine PoC
 Modification date: 2026-10-12
-Scope: Provide MPEG1WAVEFORMAT metadata and preserve MP1/MP2 audio timestamps for DirectShow.
+Scope: Provide MPEG1WAVEFORMAT metadata and preserve MPEG audio timestamps for DirectShow.
 Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
 
 --- a/dlls/winedmo/unix_media_type.c
@@ -38,7 +38,7 @@ Original authors and per-file licenses remain applicable; see UPSTREAMS.md and c
  static GUID subtype_from_pixel_format( enum AVPixelFormat fmt )
 --- a/dlls/winedmo/unix_transform.c
 +++ b/dlls/winedmo/unix_transform.c
-@@ -1511,7 +1511,10 @@
+@@ -1511,7 +1511,11 @@
           * (legacy PROVIDES_SAMPLES query) get STATUS_BUFFER_TOO_SMALL with the full
           * size; all other callers receive up to capacity bytes with INCOMPLETE set when
           * more data remains. */
@@ -46,6 +46,7 @@ Original authors and per-file licenses remain applicable; see UPSTREAMS.md and c
 +         * start offset so DirectShow schedules both streams against the same clock. */
          if (!t->audio_started && base_pts != INT64_MIN
 +                && t->avctx->codec_id != AV_CODEC_ID_MP1 && t->avctx->codec_id != AV_CODEC_ID_MP2
++                && t->avctx->codec_id != AV_CODEC_ID_MP3
                  && (t->avctx->codec_id != AV_CODEC_ID_AAC || !t->split_aac_output))
              t->audio_output_pts_adjust = base_pts;
          if (base_pts != INT64_MIN && t->audio_output_pts_adjust != INT64_MIN)

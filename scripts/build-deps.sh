@@ -55,8 +55,8 @@ poc_note "Building $POC_FFMPEG_DIR"
    --enable-avcodec --enable-avformat --enable-avutil --enable-swscale \
    --enable-swresample --enable-avfilter --enable-indev=lavfi \
    --enable-filter=testsrc2,color,format,aresample,sine,scale \
-   --enable-demuxer=asf,mpegps,mpegvideo,avi,mov,wav \
-   --enable-decoder=wmv1,wmv2,wmv3,vc1,wmav1,wmav2,wmapro,mpeg1video,mpeg2video,mp2,pcm_s16le,h264,wrapped_avframe \
+   --enable-demuxer=asf,mpegps,mpegvideo,avi,mov,wav,mp3 \
+   --enable-decoder=wmv1,wmv2,wmv3,vc1,wmav1,wmav2,wmapro,mpeg1video,mpeg2video,mp1,mp2,mp3,pcm_s16le,h264,wrapped_avframe \
    --enable-parser=mpegvideo,mpegaudio,h264,vc1 \
    --enable-encoder=wmv1,wmv2,wmav2,mpeg1video,mp2,pcm_s16le \
    --enable-muxer=asf,mpeg1system,vob,wav,avi --enable-protocol=file \

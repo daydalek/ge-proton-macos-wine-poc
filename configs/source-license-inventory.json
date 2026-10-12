@@ -1958,6 +1958,6 @@
     "patches/wine-ge/rosetta-wow64-thunks.patch": "344d00e462e1ad43d73df3790f052b4cb1a12a57f66f1393f6b2d433b36e6d16",
     "patches/wine-ge/wow64-demuxer-cleanup.patch": "326c3b75038b157fd74001ead4476b23fd2b7d6333cc8937ca376172be2474fe",
     "patches/wine-ge/quartz-preserve-window-size.patch": "001dfa80d612a9dd7f6ff10f48b914d6343622c25f479b0dc5cdd8193a452d7f",
-    "patches/wine-ge/mpeg-audio-wave-format.patch": "afdaa1ea07ab25c8585b3b3004b482dce17ca1799da9652a4cae25a50ad72683"
+    "patches/wine-ge/mpeg-audio-wave-format.patch": "070e8b999e78772b001bb46ad40a16507be32ba02f86686c0b713e360bc7caad"
   }
 }
