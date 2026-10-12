@@ -32,7 +32,7 @@ for filename in ('source-lock.json', 'dependency-lock.json'):
     data = json.loads((project / 'configs' / filename).read_text())
     locks.extend(data['sources'] if isinstance(data, dict) else data)
 # Toolchain binaries are fetched by the recipes, while source libraries accompany the runtime.
-archives = [item for item in locks if item['archive'] in ('wine11.tar.gz', 'valve-wine.tar.gz', 'ge11-7.tar.gz', 'ffmpeg.tar.gz', 'freetype.tar.gz')]
+archives = [item for item in locks if item['archive'] in ('wine11.tar.gz', 'valve-wine.tar.gz', 'ge11-7.tar.gz', 'ffmpeg.tar.gz', 'freetype.tar.gz', 'vulkan-headers.tar.gz', 'MoltenVK-macos.tar')]
 for item in archives:
     assert sha256_file(WORK / item['archive']) == item['sha256'], item['archive']
 for directory in source_dirs:

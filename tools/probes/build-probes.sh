@@ -21,4 +21,12 @@ for target in i686 x86_64; do
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/mpeg-audio-format-probe.c" -o "$kit/mpeg-audio-format-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
+      -I"$POC_DEPS/include" "$kit/vulkan-probe.c" -o "$kit/vulkan-probe-$bits.exe" -luser32
+    "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
+      "$kit/command-line-probe.c" -o "$kit/command-line-probe-$bits.exe" -ladvapi32
+    "$toolchain/$target-w64-mingw32-clang" -Wall -O2 "$kit/device-notify-probe.c" -o "$kit/device-notify-probe-$bits.exe" -luser32
+    "$toolchain/$target-w64-mingw32-clang" -Wall -g -O2 "$kit/dbghelp-probe.c" -o "$kit/dbghelp-probe-$bits.exe" -ldbghelp
+    "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode "$kit/dwarf-divisor-probe.c" -o "$kit/dwarf-divisor-probe-$bits.exe" -ldbghelp
+    "$toolchain/$target-w64-mingw32-clang" -shared -nostdlib -Wl,--entry,fixture "$kit/dwarf-divisor-fixture.S" -o "$kit/dwarf-divisor-fixture-$bits.dll"
 done

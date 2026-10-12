@@ -1,0 +1,37 @@
+Subject: sechost: validate device notification handles under the list lock
+License: LGPL-2.1-or-later
+
+--- a/dlls/sechost/service.c
++++ b/dlls/sechost/service.c
+@@ -2182,17 +2182,21 @@
+  */
+ BOOL WINAPI I_ScUnregisterDeviceNotification( HDEVNOTIFY handle )
+ {
+-    struct device_notify *notify = handle;
++    struct device_notify *notify;
+ 
+     TRACE("%p\n", handle);
+ 
+-    if (!handle)
+-        return FALSE;
+-
+     EnterCriticalSection( &service_cs );
+-    list_remove( &notify->entry );
+-    LeaveCriticalSection(&service_cs);
+-    free( notify->path );
+-    free( notify );
+-    return TRUE;
+-}
++    LIST_FOR_EACH_ENTRY( notify, &device_notify_list, struct device_notify, entry )
++    {
++        if (notify != handle) continue;
++        list_remove( &notify->entry );
++        LeaveCriticalSection( &service_cs );
++        free( notify->path );
++        free( notify );
++        return TRUE;
++    }
++    LeaveCriticalSection( &service_cs );
++    SetLastError( ERROR_INVALID_HANDLE );
++    return FALSE;
++}

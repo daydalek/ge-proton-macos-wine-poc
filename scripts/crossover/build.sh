@@ -8,8 +8,8 @@ case "$mode" in full|media) ;; *) echo 'Usage: build.sh [full|media]' >&2; exit 
 port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
-notice_args=()
-for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch; do
+notice_args=(--patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch")
+for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch; do
   patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
   if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
     git -C "$source_dir" apply "$patch_file"
@@ -26,8 +26,8 @@ poc_note "Building CrossOver core ($mode, macOS >= $MACOSX_DEPLOYMENT_TARGET, $P
 mkdir -p "$port/build" "$port/stage"
 cd "$port/build"
 "$source_dir/configure" --host=x86_64-apple-darwin --enable-archs=i386,x86_64 \
-  --with-mingw=llvm-mingw --with-ffmpeg --with-coreaudio --with-freetype \
-  --without-x --without-wayland --without-pulse --without-alsa --without-vulkan \
+  --with-mingw=llvm-mingw --with-ffmpeg --with-coreaudio --with-freetype --with-vulkan \
+  --without-x --without-wayland --without-pulse --without-alsa \
   --disable-tests --prefix="$port/stage" > "$port/configure.log" 2>&1
 case "$mode" in
   media)

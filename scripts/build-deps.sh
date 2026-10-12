@@ -65,4 +65,5 @@ poc_note "Building $POC_FFMPEG_DIR"
    > "$root/logs/ffmpeg-configure.log" 2>&1
  make -j"$POC_JOBS" > "$root/logs/ffmpeg-build.log" 2>&1
  make install > "$root/logs/ffmpeg-install.log" 2>&1)
+bash "$POC_PROJECT/scripts/build-vulkan-deps.sh"
 echo "Local dependencies installed: $deps"

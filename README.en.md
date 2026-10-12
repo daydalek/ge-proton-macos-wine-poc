@@ -149,7 +149,7 @@ export POC_WORK_DIR="$PWD/work"
 
 GitHub Actions uses the hosted `xcode-27` preview runner by default to build the x86_64 Wine core for macOS 27+ Apple Silicon with Rosetta 2. Branch pushes and pull requests run source and syntax checks. Manual runs build the complete package and upload artifacts. Pushing a `v*` tag creates a GitHub prerelease after a successful build.
 
-Each release provides a runtime package, corresponding sources, licenses, build provenance, and SHA256 checksums. Sources and dependencies are rebuilt from locked archives in an isolated work directory. Full remote build and target-device playback acceptance depend on the actual results.
+Each release provides a runtime package, corresponding sources, licenses, build provenance, and SHA256 checksums. Wine and build dependencies are built from locked archives in an isolated work directory; MoltenVK uses a verified official macOS binary archive. Both Wine cores enable Vulkan, and the runtime includes x86_64 MoltenVK. Full remote build and target-device playback acceptance depend on the actual results.
 
 Run the workflow manually from Actions and inspect the artifacts before creating a version tag:
 

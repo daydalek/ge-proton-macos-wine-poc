@@ -24,6 +24,8 @@ unset STEAM_COMPAT_TRANSCODED_MEDIA_PATH STEAM_COMPAT_DATA_PATH
 unset MEDIACONV_VIDEO_DUMP_FILE MEDIACONV_VIDEO_TRANSCODED_FILE MEDIACONV_BLANK_VIDEO_FILE
 export WINEDLLOVERRIDES='winemenubuilder.exe=d'
 unset DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_INSERT_LIBRARIES LD_LIBRARY_PATH
+# Wine opens MoltenVK by its SONAME; resolve it inside this runtime package.
+export DYLD_FALLBACK_LIBRARY_PATH="$root/deps/lib:/usr/lib"
 export WINEDEBUG="${POC_WINEDEBUG:-+timestamp,+pid,+tid,+loaddll,+quartz,+dmo,+wmvcore}"
 log="$data/logs/$variant/$(date +%Y%m%d-%H%M%S)-$$.log"
 echo "Prefix: $WINEPREFIX"

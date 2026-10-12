@@ -23,3 +23,4 @@ logs/
 /configs/wma-decoder-fix.json
 /configs/wow64-demuxer-cleanup-fix.json
 /scripts/test-haruoto.sh
+tools/probes/dwarf-divisor-fixture-*.dll

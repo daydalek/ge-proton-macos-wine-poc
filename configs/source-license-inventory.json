@@ -1,6 +1,6 @@
 {
   "date": "2026-10-12",
-  "scope": "Every file referenced by the six distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
+  "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
       "patch": "patches/crossover/crossover-26.3-media.patch",
@@ -1943,10 +1943,59 @@
         "Copyright 2024 GloriousEggroll",
         "Copyright 2022 Rémi Bernon for CodeWeavers"
       ]
+    },
+    {
+      "patch": "patches/wine-ge/command-line-append.patch",
+      "source_file": "dlls/kernelbase/process.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared pinned GE source before this modification",
+      "source_sha256": "9b6abc805a745cc802c2a9338d627f9c268ae517803ac726ef3c7ccd7fb7dad9",
+      "copyright_notices": [
+        "Copyright 1996, 1998 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/vkd3d-partial-varyings.patch",
+      "source_file": "libs/vkd3d/libs/vkd3d-shader/ir.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared pinned GE source before this modification",
+      "source_sha256": "ba68439a6327010e788494ab89682ec6c9f68f2f1fa34a36d7412d798bafbd3f",
+      "copyright_notices": [
+        "Copyright 2023 Conor McCarthy for CodeWeavers",
+        "Copyright 2023-2024 Elizabeth Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/dbghelp-dwarf-divisor.patch",
+      "source_file": "dlls/dbghelp/dwarf.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared pinned GE source before this modification",
+      "source_sha256": "c3f52e4d0946d96d031faaba6f22353382fdb4ca2055350bcc6a46df4472b5fc",
+      "copyright_notices": [
+        "Copyright (C) 2005, Raphael Junqueira",
+        "Copyright (C) 2006-2011, Eric Pouech",
+        "Copyright (C) 2010, Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/sechost-device-notify-handle.patch",
+      "source_file": "dlls/sechost/service.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared pinned GE source before this modification",
+      "source_sha256": "0d4c708d534996561445e6c5d672817eb364064f629a7807d07d382d23acedfc",
+      "copyright_notices": [
+        "Copyright 1995 Sven Verdoolaege",
+        "Copyright 2005 Mike McCormack",
+        "Copyright 2007 Rolf Kalbermatter"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 171,
+    "LGPL-2.1-or-later": 175,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -1958,6 +2007,10 @@
     "patches/wine-ge/rosetta-wow64-thunks.patch": "344d00e462e1ad43d73df3790f052b4cb1a12a57f66f1393f6b2d433b36e6d16",
     "patches/wine-ge/wow64-demuxer-cleanup.patch": "326c3b75038b157fd74001ead4476b23fd2b7d6333cc8937ca376172be2474fe",
     "patches/wine-ge/quartz-preserve-window-size.patch": "001dfa80d612a9dd7f6ff10f48b914d6343622c25f479b0dc5cdd8193a452d7f",
-    "patches/wine-ge/mpeg-audio-wave-format.patch": "070e8b999e78772b001bb46ad40a16507be32ba02f86686c0b713e360bc7caad"
+    "patches/wine-ge/mpeg-audio-wave-format.patch": "070e8b999e78772b001bb46ad40a16507be32ba02f86686c0b713e360bc7caad",
+    "patches/wine-ge/command-line-append.patch": "0fad254f781c1fdd4488db7d83fb21efb7cb9ac62e3b2b7a185f2aaf7bdfbc7f",
+    "patches/wine-ge/vkd3d-partial-varyings.patch": "9a423b4152b8d098d16e748acbd0f02f31ba6b747aeb7fc794249f71974c91ce",
+    "patches/wine-ge/dbghelp-dwarf-divisor.patch": "79574884f42a6ceb901afa8b2637965806ee53e4273f2897a936b9497ff28834",
+    "patches/wine-ge/sechost-device-notify-handle.patch": "3a3be241c1c9772ef4e42aed1ab7dfb3d1a8ab903f9b4d569dd9170367961ad1"
   }
 }

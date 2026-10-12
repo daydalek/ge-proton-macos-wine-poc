@@ -1,0 +1,107 @@
+Subject: vkd3d-shader: initialize partially written varyings
+From: Henri Verbeet <hverbeet@locutus.nl>
+Upstream: https://gitlab.winehq.org/wine/vkd3d/-/merge_requests/2063
+Upstream-commit: 2d2b02426363c8fb3bb02388a1d945ec2e4b7353
+Adaptation: use the pinned Wine branch operand helper names.
+License: LGPL-2.1-or-later
+
+diff --git a/libs/vkd3d/libs/vkd3d-shader/ir.c b/libs/vkd3d/libs/vkd3d-shader/ir.c
+index 40a9a2684..10d783d59 100644
+--- a/libs/vkd3d/libs/vkd3d-shader/ir.c
++++ b/libs/vkd3d/libs/vkd3d-shader/ir.c
+@@ -4024,9 +4024,7 @@ static void remove_unread_output_components(const struct shader_signature *signa
+ static enum vkd3d_result vsir_program_remap_output_signature(struct vsir_program *program,
+         struct vsir_transformation_context *ctx)
+ {
+-    const struct vkd3d_shader_location location = {.source_name = ctx->compile_info->source_name};
+     struct vsir_program_iterator it = vsir_program_iterator(&program->instructions);
+-    struct vkd3d_shader_message_context *message_context = ctx->message_context;
+     const struct vkd3d_shader_compile_info *compile_info = ctx->compile_info;
+     bool allows_subset_masks = target_allows_subset_masks(compile_info);
+     struct shader_signature *signature = &program->output_signature;
+@@ -4037,6 +4035,7 @@ static enum vkd3d_result vsir_program_remap_output_signature(struct vsir_program
+     unsigned int subset_varying_count = 0;
+     struct vkd3d_shader_instruction *ins;
+     unsigned int new_register_count = 0;
++    unsigned int partial = 0;
+     unsigned int i;
+ 
+     if (!(varying_map = vkd3d_find_struct(compile_info->next, VARYING_MAP_INFO)))
+@@ -4056,22 +4055,15 @@ static enum vkd3d_result vsir_program_remap_output_signature(struct vsir_program
+             TRACE("Mapping signature index %u (mask %#x) to target location %u (mask %#x).\n",
+                     i, e->mask, map->input_register_index, map->input_mask);
+ 
+-            if ((input_mask & e->mask) == input_mask)
++            ++subset_varying_count;
++            if (input_mask & ~e->mask)
+             {
+-                ++subset_varying_count;
+-                if (!allows_subset_masks)
+-                {
+-                    e->mask = input_mask;
+-                    e->used_mask &= input_mask;
+-                }
++                ++partial;
+             }
+-            else if (input_mask && input_mask != e->mask)
++            else if (!allows_subset_masks)
+             {
+-                vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_VSIR_NOT_IMPLEMENTED,
+-                        "Aborting due to not yet implemented feature: "
+-                        "Input mask %#x reads components not written in output mask %#x.",
+-                        input_mask, e->mask);
+-                return VKD3D_ERROR_NOT_IMPLEMENTED;
++                e->mask = input_mask;
++                e->used_mask &= input_mask;
+             }
+         }
+         else
+@@ -4139,21 +4131,44 @@ static enum vkd3d_result vsir_program_remap_output_signature(struct vsir_program
+     /* Write each uninitialized varying before each ret. */
+     for (ins = vsir_program_iterator_head(&it); ins; ins = vsir_program_iterator_next(&it))
+     {
++        const struct vkd3d_shader_varying_map *map;
+         struct vkd3d_shader_location loc;
++        unsigned int init_mask;
+ 
+         if (ins->opcode != VSIR_OP_RET)
+             continue;
+ 
+         loc = ins->location;
+-        if (!(ins = vsir_program_iterator_insert_before_and_move(&it, uninit_varying_count)))
++        if (!(ins = vsir_program_iterator_insert_before_and_move(&it, uninit_varying_count + partial)))
+             return VKD3D_ERROR_OUT_OF_MEMORY;
+ 
+-        for (unsigned int j = signature->element_count - uninit_varying_count; j < signature->element_count; ++j)
++        for (i = 0; i < signature->element_count; ++i)
+         {
+-            e = &signature->elements[j];
++            e = &signature->elements[i];
++
++            if (i < signature->element_count - uninit_varying_count)
++            {
++                if (!(map = find_varying_map(varying_map, i)))
++                    continue;
++
++                if (!(init_mask = map->input_mask & ~e->mask))
++                    continue;
++
++                if (!allows_subset_masks)
++                {
++                    e->mask = map->input_mask;
++                    e->used_mask &= map->input_mask;
++                }
++                e->mask |= init_mask;
++                e->used_mask |= init_mask;
++            }
++            else
++            {
++                init_mask = e->mask;
++            }
+ 
+             vsir_instruction_init_with_params(program, ins, &loc, VSIR_OP_MOV, 1, 1);
+-            dst_param_init_output(&ins->dst[0], VSIR_DATA_F32, e->register_index, e->mask);
++            dst_param_init_output(&ins->dst[0], VSIR_DATA_F32, e->register_index, init_mask);
+             vsir_src_param_init(&ins->src[0], VKD3DSPR_IMMCONST, VSIR_DATA_F32, 0);
+             ins->src[0].reg.dimension = VSIR_DIMENSION_VEC4;
+             ins->src[0].swizzle = VKD3D_SHADER_NO_SWIZZLE;

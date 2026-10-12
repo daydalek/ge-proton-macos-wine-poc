@@ -21,3 +21,45 @@ WINE_POC_DATA="$HOME/wine-media-test" ./run.sh media "/absolute/path/to/game.exe
 发布包采用 ad-hoc 签名。构建静态检查覆盖文件架构、依赖、签名和部署目标；游戏播放验收需要在目标设备进行。
 
 本项目代码采用 LGPL-2.1-or-later；第三方源码沿用原许可证。见包内 `LICENSE`、`COPYING.LIB`、`UPSTREAMS.md` 和 `licenses/`。对应源码与构建配方随同版本的 sources 归档提供。
+
+Vulkan diagnostics (x86_64 Wine under Rosetta with bundled MoltenVK):
+
+```sh
+./run.sh media "$PWD/vulkan-probe-x64.exe"
+./run.sh media "$PWD/vulkan-probe-x86.exe"
+./run.sh media "$PWD/vulkan-probe-x64.exe" --surface
+```
+
+The surface probe creates a temporary window and checks Win32 surface formats. Game and Steam rendering require separate acceptance.
+
+For a Chromium host that needs application-specific arguments, the media core
+supports a `REG_SZ` value named `CommandLineAppend` under
+`HKCU\Software\Wine\AppDefaults\<executable-name>`. It appends the value to
+child process command lines for that executable. The setting is opt-in.
+
+For Steam CEF compatibility in this isolated prefix:
+
+```sh
+./run.sh media "$PWD/media/bin/../lib/wine/x86_64-windows/reg.exe" add 'HKCU\Software\Wine\AppDefaults\steamwebhelper.exe' /v CommandLineAppend /t REG_SZ /d '--no-sandbox --in-process-gpu --disable-gpu' /f
+```
+
+This selects CEF software rendering in the browser process and disables its
+Windows sandbox, matching the tested compatibility mode. Use it in a dedicated
+Steam prefix. Remove the setting with `reg.exe delete` and `/v CommandLineAppend`.
+A child-process regression probe checks quoting, Unicode and configuration bounds:
+
+```sh
+./run.sh media "$PWD/command-line-probe-x64.exe"
+./run.sh media "$PWD/command-line-probe-x86.exe"
+```
+
+Device-notification and debug-symbol regression probes:
+
+```sh
+./run.sh media "$PWD/device-notify-probe-x64.exe"
+./run.sh media "$PWD/device-notify-probe-x86.exe"
+./run.sh media "$PWD/dbghelp-probe-x64.exe"
+./run.sh media "$PWD/dbghelp-probe-x86.exe"
+./run.sh media "$PWD/dwarf-divisor-probe-x64.exe" "Z:$PWD/dwarf-divisor-fixture-x64.dll"
+./run.sh media "$PWD/dwarf-divisor-probe-x86.exe" "Z:$PWD/dwarf-divisor-fixture-x86.dll"
+```

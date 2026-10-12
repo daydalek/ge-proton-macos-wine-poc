@@ -28,5 +28,15 @@
     "archive": "freetype.tar.gz",
     "url": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-13-3",
     "sha256": "bc5c898e4756d373e0d991bab053036c5eb2aa7c0d5c67e8662ddc6da40c4103"
+  },
+  {
+    "archive": "MoltenVK-macos.tar",
+    "url": "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar",
+    "sha256": "f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e"
+  },
+  {
+    "archive": "vulkan-headers.tar.gz",
+    "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/refs/tags/v1.4.357",
+    "sha256": "7dc0dbcf1d49dd3d7da3761c251c6097dfbaac475321a4a8a99269d3d5abecdc"
   }
 ]

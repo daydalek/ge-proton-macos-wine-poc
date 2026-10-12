@@ -25,9 +25,11 @@ args = parser.parse_args()
 package = args.output.resolve()
 inputs = {}
 for stem in ('media-probe', 'child-window-probe', 'exception-probe',
-             'reconnect-probe', 'mpeg-audio-format-probe'):
+             'reconnect-probe', 'mpeg-audio-format-probe', 'vulkan-probe', 'command-line-probe', 'device-notify-probe', 'dbghelp-probe', 'dwarf-divisor-probe'):
     for suffix in ('.c', '-x86.exe', '-x64.exe'):
         inputs[stem + suffix] = probes / (stem + suffix)
+for suffix in ('.S', '-x86.dll', '-x64.dll'):
+    inputs['dwarf-divisor-fixture' + suffix] = probes / ('dwarf-divisor-fixture' + suffix)
 for file in sorted(samples.glob('test-*')):
     if file.is_file():
         inputs['samples/' + file.name] = file
@@ -71,8 +73,8 @@ for name, source in inputs.items():
 manifest = [{'file': name, 'bytes': source.stat().st_size,
              'sha256': hashlib.sha256(source.read_bytes()).hexdigest()}
             for name, source in inputs.items()
-            if name.startswith('samples/') or name.startswith(('media-probe', 'child-window-probe', 'exception-probe',
-             'reconnect-probe', 'mpeg-audio-format-probe'))]
+            if name.startswith(('samples/', 'dwarf-divisor-fixture')) or name.startswith(('media-probe', 'child-window-probe', 'exception-probe',
+             'reconnect-probe', 'mpeg-audio-format-probe', 'vulkan-probe', 'command-line-probe', 'device-notify-probe', 'dbghelp-probe', 'dwarf-divisor-probe'))]
 (package / 'probe-and-sample-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 for script in ('run.sh', 'probe.sh'):
     (package / script).chmod(0o755)

@@ -1,0 +1,81 @@
+Subject: kernelbase: honor opt-in per-application CommandLineAppend
+License: LGPL-2.1-or-later
+
+--- a/dlls/kernelbase/process.c
++++ b/dlls/kernelbase/process.c
+@@ -27,2 +27,3 @@
+ #include "winbase.h"
++#include "winreg.h"
+ #include "winnls.h"
+@@ -133,6 +134,39 @@
+ }
+ 
+ 
++/* Optional, user-configured arguments for a child executable. */
++static WCHAR *get_app_command_line( const WCHAR *filename, const WCHAR *cmdline )
++{
++    static const WCHAR prefix[] = L"Software\\Wine\\AppDefaults\\";
++    const WCHAR *basename = filename, *p;
++    WCHAR key[ARRAY_SIZE(prefix) + MAX_PATH], *buffer;
++    SIZE_T length = wcslen( cmdline ), capacity;
++    DWORD size = 0;
++
++    for (p = filename; *p; ++p)
++        if (*p == '\\' || *p == '/') basename = p + 1;
++    if (!*basename || wcslen( basename ) >= MAX_PATH) return NULL;
++    wcscpy( key, prefix );
++    wcscat( key, basename );
++    if (RegGetValueW( HKEY_CURRENT_USER, key, L"CommandLineAppend", RRF_RT_REG_SZ, NULL, NULL, &size ))
++        return NULL;
++    if (size < 2 * sizeof(WCHAR) || size % sizeof(WCHAR) || length >= 32765) return NULL;
++    capacity = length + 1 + size / sizeof(WCHAR);
++    if (capacity > 32767) return NULL;
++    if (!(buffer = HeapAlloc( GetProcessHeap(), 0, capacity * sizeof(WCHAR) ))) return NULL;
++    memcpy( buffer, cmdline, length * sizeof(WCHAR) );
++    buffer[length] = ' ';
++    if (RegGetValueW( HKEY_CURRENT_USER, key, L"CommandLineAppend", RRF_RT_REG_SZ,
++                     NULL, buffer + length + 1, &size ) || !buffer[length + 1])
++    {
++        HeapFree( GetProcessHeap(), 0, buffer );
++        return NULL;
++    }
++    TRACE( "Appending configured arguments for %s.\n", debugstr_w(basename) );
++    return buffer;
++}
++
++
+ /***********************************************************************
+  *           create_process_params
+  */
+@@ -143,7 +177,7 @@
+     RTL_USER_PROCESS_PARAMETERS *params;
+     UNICODE_STRING imageW, curdirW, cmdlineW, titleW, desktopW, runtimeW, newdirW;
+     WCHAR imagepath[MAX_PATH];
+-    WCHAR *envW = env;
++    WCHAR *envW = env, *app_cmdline;
+ 
+     if (!GetLongPathNameW( filename, imagepath, MAX_PATH )) lstrcpynW( imagepath, filename, MAX_PATH );
+     if (!GetFullPathNameW( imagepath, MAX_PATH, imagepath, NULL )) lstrcpynW( imagepath, filename, MAX_PATH );
+@@ -170,7 +204,8 @@
+     }
+     RtlInitUnicodeString( &imageW, imagepath );
+     RtlInitUnicodeString( &curdirW, cur_dir );
+-    RtlInitUnicodeString( &cmdlineW, cmdline );
++    app_cmdline = get_app_command_line( filename, cmdline );
++    RtlInitUnicodeString( &cmdlineW, app_cmdline ? app_cmdline : cmdline );
+     RtlInitUnicodeString( &titleW, startup->lpTitle ? startup->lpTitle : imagepath );
+     RtlInitUnicodeString( &desktopW, startup->lpDesktop );
+     runtimeW.Buffer = (WCHAR *)startup->lpReserved2;
+@@ -179,10 +214,12 @@
+                                       &cmdlineW, envW, &titleW, &desktopW,
+                                       NULL, &runtimeW, PROCESS_PARAMS_FLAG_NORMALIZED ))
+     {
++        HeapFree( GetProcessHeap(), 0, app_cmdline );
+         RtlFreeUnicodeString( &newdirW );
+         if (envW != env) RtlFreeHeap( GetProcessHeap(), 0, envW );
+         return NULL;
+     }
++    HeapFree( GetProcessHeap(), 0, app_cmdline );
+     RtlFreeUnicodeString( &newdirW );
+ 
+     if (!(flags & CREATE_NEW_PROCESS_GROUP))

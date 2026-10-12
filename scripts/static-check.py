@@ -23,6 +23,11 @@ for file in root.rglob('*'):
     if file.is_symlink():
         assert file.resolve().is_relative_to(root.resolve()), ('External symlink', file)
         assert file.exists(), ('Broken symlink', file)
+moltenvk = root / 'deps/lib/libMoltenVK.dylib'
+assert moltenvk.is_file(), 'Missing MoltenVK runtime'
+description = subprocess.check_output(['/usr/bin/file', '-b', str(moltenvk)], text=True)
+assert 'Mach-O 64-bit' in description and 'x86_64' in description, description
+records.append({'file': str(moltenvk.relative_to(root)), 'type': description.strip()})
 pe_count = 0
 for variant in ('baseline', 'media'):
     for program in ('wine', 'wineserver'):
@@ -30,7 +35,7 @@ for variant in ('baseline', 'media'):
         description = subprocess.check_output(['/usr/bin/file', '-b', str(file)], text=True)
         assert 'Mach-O 64-bit executable x86_64' in description, (file, description)
         records.append({'file': str(file.relative_to(root)), 'type': description.strip()})
-    native_modules = ['ntdll.so', 'win32u.so', 'winemac.so', 'winecoreaudio.so']
+    native_modules = ['ntdll.so', 'win32u.so', 'winemac.so', 'winecoreaudio.so', 'winevulkan.so']
     if variant == 'media':
         native_modules.append('winedmo.so')
     for module in native_modules:
@@ -38,6 +43,7 @@ for variant in ('baseline', 'media'):
         description = subprocess.check_output(['/usr/bin/file', '-b', str(file)], text=True)
         assert 'Mach-O 64-bit' in description and 'x86_64' in description, (file, description)
         records.append({'file': str(file.relative_to(root)), 'type': description.strip()})
+    assert b'libMoltenVK.dylib' in (root / variant / 'lib/wine/x86_64-unix/win32u.so').read_bytes(), ('Vulkan backend not compiled', variant)
     for arch, machine in (('i386', 0x14c), ('x86_64', 0x8664)):
         folder = root / variant / 'lib/wine' / (arch + '-windows')
         for file in folder.iterdir():
@@ -59,7 +65,7 @@ for variant in ('baseline', 'media'):
                 size, position = struct.unpack_from('<II', data, table + index * 40 + 16)
                 assert size == 0 or position + size <= len(data), (file, index)
             pe_count += 1
-    modules = ['ntdll', 'kernel32', 'quartz', 'qasf', 'wmvcore']
+    modules = ['ntdll', 'kernel32', 'quartz', 'qasf', 'wmvcore', 'winevulkan']
     if variant == 'media':
         modules.append('winedmo')
     for arch, machine in (('i386', 0x14c), ('x86_64', 0x8664)):
