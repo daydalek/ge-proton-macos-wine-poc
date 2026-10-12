@@ -4,6 +4,8 @@ outputs/*.tar
 outputs/*.tar.gz
 .DS_Store
 __pycache__/
+.codebuddy/
+.workbuddy/
 
 tools/probes/*.exe
 outputs/poc-kit/*.exe
@@ -15,6 +17,9 @@ docs/
 plans/
 reports/
 logs/
+
+# Whisky host experiments: runtime swap script and its scratch data are local only.
+/scripts/whisky/
 /configs/build-configuration.json
 /configs/haruoto-cn-window-size-fix.json
 /configs/probe-and-sample-manifest.json
