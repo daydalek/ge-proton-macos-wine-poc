@@ -109,11 +109,16 @@ for item in audit:
     file = root / item['file']
     for line in item['dependencies'].splitlines()[1:]:
         dependency = line.strip().split(' (')[0]
+        identity = re.search(r'cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset', item['load_commands'])
+        if identity and dependency == identity.group(1):
+            continue
         if dependency.startswith('@rpath/'):
             rpaths = re.findall(r'cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset', item['load_commands'])
             candidates = []
             for rpath in rpaths:
-                if rpath.startswith('@loader_path/'):
+                if rpath == '@loader_path':
+                    candidates.append(file.parent / dependency[7:])
+                elif rpath.startswith('@loader_path/'):
                     candidates.append(file.parent / rpath[13:] / dependency[7:])
                 elif rpath.startswith('/'):
                     candidates.append(Path(rpath) / dependency[7:])

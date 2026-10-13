@@ -103,11 +103,13 @@ def main():
         commands = run('/usr/bin/otool', '-l', str(path))
         old_paths = re.findall(r'cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset', commands)
         rpath = '@loader_path/' + os.path.relpath(wine / 'lib', path.parent)
+        desired_paths = (rpath, '@loader_path')
         for old in old_paths:
-            if old != rpath:
+            if old not in desired_paths:
                 run('/usr/bin/install_name_tool', '-delete_rpath', old, str(path))
-        if rpath not in old_paths:
-            run('/usr/bin/install_name_tool', '-add_rpath', rpath, str(path))
+        for desired in desired_paths:
+            if desired not in old_paths:
+                run('/usr/bin/install_name_tool', '-add_rpath', desired, str(path))
         run('/usr/bin/codesign', '--force', '--sign', '-', str(path))
         run('/usr/bin/codesign', '--verify', str(path))
         commands = run('/usr/bin/otool', '-l', str(path))
