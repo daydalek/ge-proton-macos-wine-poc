@@ -21,3 +21,8 @@ package="$POC_WORK_DIR/package"
 python3 scripts/package.py --output "$package"
 python3 scripts/static-check.py --package "$package" --max-minimum-macos 27.0
 python3 scripts/ci/make-release.py --package "$package" --output "${POC_RELEASE_DIR:-$project/outputs/release}"
+
+# The runtime release counter is independent of the upstream Wine version/tag.
+: "${GITHUB_RUN_NUMBER:?Set GITHUB_RUN_NUMBER for monotonically increasing runtime versions}"
+RUNTIME_VERSION="11.0.$((GITHUB_RUN_NUMBER + 1))"
+python3 scripts/ci/build-libraries.py --version "$RUNTIME_VERSION" --output "${POC_RELEASE_DIR:-$project/outputs/release}"
