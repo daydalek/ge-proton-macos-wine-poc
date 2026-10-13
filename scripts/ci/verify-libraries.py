@@ -14,8 +14,8 @@ PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT / 'scripts/lib'))
 from poc_common import WORK, SETTINGS, sha256_file, extract_tar, download_verified
 
-URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/wine-macos27-apple-silicon-rosetta.tar.gz'
-DIGEST = 'd8e6ef1996b558e6eafb3395da751a02ed4bb3841f6a44f99c32933c1b73cf85'
+URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz'
+DIGEST = 'bb5f2f3d49e528e9200c02beb5b1e004c06ad00969a790285faa9ed46f900c60'
 
 
 def main():
@@ -27,11 +27,11 @@ def main():
         raise ValueError('Released core digest mismatch')
     unpack = WORK / 'released'
     extract_tar(archive, unpack)
-    package = unpack / 'wine-macos27-apple-silicon-rosetta'
+    package = unpack / 'Libraries'
     stage = WORK / 'poc/stage'
     stage.mkdir(parents=True)
-    shutil.copytree(package / 'media', stage / 'media', symlinks=True)
-    shutil.copytree(package / 'deps/lib', stage / 'deps-x64/lib', symlinks=True)
+    shutil.copytree(package / 'Wine', stage / 'media', symlinks=True)
+    (stage / 'deps-x64/lib').mkdir(parents=True)
     tools = WORK / 'poc/tools'
     tools.mkdir()
     lock = json.loads((PROJECT / 'configs/dependency-lock.json').read_text())
@@ -40,6 +40,13 @@ def main():
     extract_tar(tool_archive, tools)
     if not (tools / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin/llvm-objcopy').is_file():
         raise ValueError('Locked llvm-mingw toolchain layout mismatch')
+    probes = WORK / 'probes'
+    probes.mkdir()
+    for bits, target in (('x86', 'i686'), ('x64', 'x86_64')):
+        compiler = tools / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin' / (target + '-w64-mingw32-clang')
+        subprocess.run([str(compiler), '-O2', '-municode',
+                        str(PROJECT / 'tools/probes/command-line-probe.c'),
+                        '-o', str(probes / f'command-line-probe-{bits}.exe'), '-ladvapi32'], check=True)
     release = WORK / 'release'
     release.mkdir()
     (release / 'release-manifest.json').write_text(json.dumps({
@@ -64,7 +71,7 @@ def main():
     logs = WORK / 'diagnostics'
     logs.mkdir()
     commands = [('wineboot', ['wineboot', '-u'])] + [
-        (bits, [str(package / f'command-line-probe-{bits}.exe')]) for bits in ('x86', 'x64')]
+        (bits, [str(probes / f'command-line-probe-{bits}.exe')]) for bits in ('x86', 'x64')]
     try:
         for name, args in commands:
             print('Running Libraries smoke phase:', name, flush=True)

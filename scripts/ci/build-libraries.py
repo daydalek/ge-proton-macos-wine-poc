@@ -91,19 +91,27 @@ def main():
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/prepare-libraries.py'),
                     '--input', str(assembled / 'Libraries'), '--output', str(public),
                     '--objcopy', str(objcopy), '--private-name', os.environ.get('USER', 'runner')], check=True)
+    subprocess.run([sys.executable, str(PROJECT / 'scripts/static-check.py'),
+                    '--libraries', '--package', str(public / 'Libraries'),
+                    '--max-minimum-macos', '27.0'], check=True)
+    static = json.loads((public / 'Libraries/static-check.json').read_text())
+    shutil.move(public / 'Libraries/static-check.json', output / 'Libraries-static-check.json')
     for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist'):
         shutil.copy2(public / name, output / name)
     # Anonymous report belongs beside the package; detailed local logs stay out.
     shutil.copy2(public / 'privacy-audit.json', output / 'Libraries-privacy-audit.json')
     manifest = json.loads((output / 'release-manifest.json').read_text())
+    manifest['minimum_macos_actual'] = static['minimum_macos_actual']
+    manifest['static_checks'] = static
     manifest['whisky_runtime'] = {'version': args.version, 'core': 'media', 'archive': 'Libraries.tar.gz',
                                   'dxvk_version': '1.10.3', 'privacy_audit': 'Libraries-privacy-audit.json',
                                   'bootstrap_sha256': DXVK_BASE_SHA256}
     (output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     notes = output / 'RELEASE-NOTES.md'
     with notes.open('a') as f:
+        source_description = 'released media core' if 'validation_scope' in manifest else "this CI run's media build"
         f.write('\nWhisky-compatible runtime: Libraries.tar.gz and WhiskyWineVersion.plist.\n'
-                'The media core is from this build; DXVK-macOS 1.10.3 is digest-pinned.\n'
+                f'The Wine core is from {source_description}; DXVK-macOS 1.10.3 is digest-pinned.\n'
                 'Runtime version: ' + args.version + '.\n')
     update_checksums(output)
     print('Whisky Libraries assets ready:', output)

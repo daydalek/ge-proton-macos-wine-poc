@@ -1,4 +1,4 @@
-name: Build and release Apple Silicon package
+name: Build and release Whisky Libraries
 
 on:
   pull_request:
@@ -60,14 +60,14 @@ jobs:
           if ! /usr/bin/arch -x86_64 /usr/bin/true; then
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
           fi
-      - name: Build macOS 27 Apple Silicon package
+      - name: Build macOS 27 Whisky Libraries
         env:
           POC_WORK_DIR: ${{ runner.temp }}/wine-build-${{ github.run_id }}-${{ github.run_attempt }}
         run: bash scripts/ci/build-release.sh
       - name: Upload distributable archives
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: macos27-apple-silicon-rosetta
+          name: whisky-libraries
           path: outputs/release/*
           if-no-files-found: error
           compression-level: 0
@@ -116,7 +116,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: macos27-apple-silicon-rosetta
+          name: whisky-libraries
           path: release
       - name: Verify and publish prerelease
         env:
@@ -128,14 +128,14 @@ jobs:
           sha256sum -c SHA256SUMS
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release already exists; verify its required runtime assets before updating the channel."
-            gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '[.assets[] | select(.state == "uploaded") | .name] | contains(["Libraries.tar.gz", "WhiskyWineVersion.plist"])' | grep -qx true
+            gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '[.assets[] | select(.state == "uploaded") | .name] | contains(["Libraries.tar.gz", "Libraries-sources.tar.gz", "WhiskyWineVersion.plist", "SHA256SUMS", "Libraries-privacy-audit.json", "Libraries-static-check.json"])' | grep -qx true
             if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true ]; then
               gh release edit "$RELEASE_TAG" --draft=false --prerelease
             fi
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease \
               --title "$RELEASE_TAG — macOS 27+ Apple Silicon (Rosetta)" \
-              --notes-file RELEASE-NOTES.md ./*.tar.gz WhiskyWineVersion.plist SHA256SUMS release-manifest.json Libraries-privacy-audit.json RELEASE-NOTES.md
+              --notes-file RELEASE-NOTES.md Libraries.tar.gz Libraries-sources.tar.gz WhiskyWineVersion.plist SHA256SUMS release-manifest.json Libraries-privacy-audit.json Libraries-static-check.json RELEASE-NOTES.md
             gh release edit "$RELEASE_TAG" --draft=false --prerelease
           fi
       - name: Refresh the public Wine runtime channel

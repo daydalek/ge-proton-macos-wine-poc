@@ -53,7 +53,7 @@ class LibrariesTests(unittest.TestCase):
     def test_checksums_cover_runtime_plist_and_original_assets(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist', 'portable.tar.gz', 'sources.tar.gz'):
+            for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist', 'Libraries-static-check.json', 'Libraries-sources.tar.gz'):
                 (root / name).write_bytes(name.encode())
             (root / 'SHA256SUMS').write_text('stale')
             libraries.update_checksums(root)

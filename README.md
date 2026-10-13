@@ -145,7 +145,7 @@ export POC_WORK_DIR="$PWD/work"
 
 GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心。分支 push 和 PR 执行源码与语法检查；手动运行执行完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
 
-每次发布提供运行包、对应源码、许可证、构建来源和 SHA256 校验摘要。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。两套 Wine 核心启用 Vulkan，运行包包含 x86_64 MoltenVK。完整远端构建与目标设备播放验收状态以实际结果为准。
+每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。CI 编译 GE media 核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
 
 先从 Actions 手动执行一次构建，确认产物后创建版本标签：
 
@@ -166,7 +166,7 @@ The manifest records the runtime version, SHA-256, component versions and exact 
 The publisher accepts stable releases and prereleases carrying both `Libraries.tar.gz`
 and `WhiskyWineVersion.plist`. It verifies the archive digest, preserves newer runtime
 versions already in the channel, and requires a version bump for changed archives.
-Portable-package-only releases keep the current Whisky runtime channel in place.
+The channel selects releases with the complete Whisky runtime assets.
 
 The build/release workflow refreshes the channel after publishing. Release publication
 or edits also trigger the channel workflow. After adding runtime assets to an existing
@@ -176,26 +176,31 @@ runs only in CI; client downloads use public HTTPS endpoints.
 
 ### Independent Whisky Libraries build
 
-The CI release now includes a separate **Libraries.tar.gz** and **WhiskyWineVersion.plist**.
+The CI builds the **media** core and publishes **Libraries.tar.gz**, **Libraries-sources.tar.gz**
+and **WhiskyWineVersion.plist**. The runtime asset is the Whisky Libraries package.
 `Libraries/Wine` contains the current build's **media** core and its runtime dependencies;
 `Libraries/DXVK` supplies the digest-pinned DXVK-macOS 1.10.3 payload. The bootstrap archive
 is used only for DXVK. Current Wine binaries always come from this run's stage.
 
 The runtime version is `11.0.(GITHUB_RUN_NUMBER + 1)`, independent of the public release tag.
 The inner plist records installed components; the outer plist additionally records the
-exact archive SHA-256. `SHA256SUMS` covers the portable package, corresponding sources,
-Libraries package, both metadata reports, release notes and version plist.
+exact archive SHA-256. `SHA256SUMS` covers the Libraries package, corresponding sources,
+privacy and static-check reports, release manifest, release notes and version plist.
 
 Before packing, the publisher removes development headers/import archives and debug info,
 remaps personal build paths, preserves PE builtin markers, applies ad-hoc Mach-O signatures,
 checks symlinks and private-state filenames, scans payload bytes, and anonymizes tar headers.
-The package includes component license texts. Detailed build/test logs stay in the CI job.
+The package includes component license texts. Static checks inspect the final Libraries tree
+for module architectures, dependencies, signatures and macOS deployment requirements.
+Detailed build/test logs stay in the CI job.
 
 On a tag build, CI creates a draft release with all files, then publishes it after upload.
 The channel refresh uses that exact tag and verifies the uploaded archive digest against
 its version plist. Existing complete releases preserve their published assets; incomplete
 existing releases stop publication and require review. Manual CI runs retain their output
-as downloadable Actions artifacts.
+as downloadable Actions artifacts named `whisky-libraries`.
+The `libraries_only` manual check repackages the pinned released Libraries core and compiles
+x86/x64 launch probes using the locked toolchain.
 
 The current payload requires macOS 27+ Apple Silicon with Rosetta 2. DXMT and the licensed
 GPTK payload retain their separate runtime capability gates in Whisky.

@@ -14,13 +14,8 @@ command -v cmake >/dev/null
 command -v pkg-config >/dev/null || command -v pkgconf >/dev/null
 bash scripts/build-deps.sh
 python3 scripts/prepare.py
-bash scripts/build-wine.sh baseline
 bash scripts/build-wine.sh media
-bash tools/probes/build-probes.sh
-package="$POC_WORK_DIR/package"
-python3 scripts/package.py --output "$package"
-python3 scripts/static-check.py --package "$package" --max-minimum-macos 27.0
-python3 scripts/ci/make-release.py --package "$package" --output "${POC_RELEASE_DIR:-$project/outputs/release}"
+python3 scripts/ci/make-release.py --output "${POC_RELEASE_DIR:-$project/outputs/release}"
 
 # The runtime release counter is independent of the upstream Wine version/tag.
 : "${GITHUB_RUN_NUMBER:?Set GITHUB_RUN_NUMBER for monotonically increasing runtime versions}"
