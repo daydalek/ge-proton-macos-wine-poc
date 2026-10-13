@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>downloadURL</key>
+	<string>https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz</string>
+	<key>dxvkVersion</key>
+	<string>1.10.3</string>
+	<key>gptkCapable</key>
+	<false/>
+	<key>sha256</key>
+	<string>bb5f2f3d49e528e9200c02beb5b1e004c06ad00969a790285faa9ed46f900c60</string>
+	<key>version</key>
+	<dict>
+		<key>major</key>
+		<integer>11</integer>
+		<key>minor</key>
+		<integer>0</integer>
+		<key>patch</key>
+		<integer>1</integer>
+	</dict>
+</dict>
+</plist>
