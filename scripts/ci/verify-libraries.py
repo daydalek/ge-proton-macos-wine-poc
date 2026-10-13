@@ -12,7 +12,7 @@ import urllib.request
 
 PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT / 'scripts/lib'))
-from poc_common import WORK, sha256_file, extract_tar
+from poc_common import WORK, SETTINGS, sha256_file, extract_tar, download_verified
 
 URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/wine-macos27-apple-silicon-rosetta.tar.gz'
 DIGEST = 'd8e6ef1996b558e6eafb3395da751a02ed4bb3841f6a44f99c32933c1b73cf85'
@@ -34,15 +34,12 @@ def main():
     shutil.copytree(package / 'deps/lib', stage / 'deps-x64/lib', symlinks=True)
     tools = WORK / 'poc/tools'
     tools.mkdir()
-    # This smoke path accepts the hosted LLVM tool; the full build uses the locked toolchain.
-    objcopy = shutil.which('llvm-objcopy')
-    if not objcopy:
-        subprocess.run(['brew', 'install', 'llvm'], check=True)
-        prefix = subprocess.check_output(['brew', '--prefix', 'llvm'], text=True).strip()
-        objcopy = str(Path(prefix) / 'bin/llvm-objcopy')
-    from poc_common import SETTINGS
-    (tools / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin').mkdir(parents=True)
-    (tools / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin/llvm-objcopy').symlink_to(objcopy)
+    lock = json.loads((PROJECT / 'configs/dependency-lock.json').read_text())
+    llvm = next(item for item in lock if item['archive'] == 'llvm-mingw.tar.xz')
+    tool_archive = download_verified(llvm['url'], WORK / llvm['archive'], llvm['sha256'])
+    extract_tar(tool_archive, tools)
+    if not (tools / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin/llvm-objcopy').is_file():
+        raise ValueError('Locked llvm-mingw toolchain layout mismatch')
     release = WORK / 'release'
     release.mkdir()
     (release / 'release-manifest.json').write_text(json.dumps({
@@ -59,13 +56,29 @@ def main():
         raise ValueError('Whisky package digest mismatch')
     subprocess.run([str(core / 'bin/wine64'), '--version'], check=True)
     env = os.environ.copy()
-    env.update(WINEPREFIX=str(WORK / 'probe-prefix'), WINEDEBUG='-all',
+    env.update(WINEPREFIX=str(WORK / 'probe-prefix'), WINEDEBUG='+timestamp,+pid,+tid,+seh',
+               WINEDLLOVERRIDES='winemenubuilder.exe=d',
                WINELOADER=str(core / 'bin/wine64'), WINESERVER=str(core / 'bin/wineserver'),
                DYLD_FALLBACK_LIBRARY_PATH=str(core / 'lib') + ':/usr/lib')
-    for bits in ('x86', 'x64'):
-        subprocess.run([str(core / 'bin/wine64'), str(package / f'command-line-probe-{bits}.exe')],
-                       env=env, check=True, timeout=300)
-    subprocess.run([str(core / 'bin/wineserver'), '-k'], env=env)
+    # Keep bootstrap separate so a hosted prefix failure has an identifiable log.
+    logs = WORK / 'diagnostics'
+    logs.mkdir()
+    commands = [('wineboot', ['wineboot', '-u'])] + [
+        (bits, [str(package / f'command-line-probe-{bits}.exe')]) for bits in ('x86', 'x64')]
+    try:
+        for name, args in commands:
+            print('Running Libraries smoke phase:', name, flush=True)
+            log = logs / (name + '.log')
+            try:
+                with log.open('wb') as stream:
+                    subprocess.run([str(core / 'bin/wine64'), *args], env=env,
+                                   stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=300)
+            finally:
+                print(log.read_text(errors='replace')[-16000:], flush=True)
+    finally:
+        with (logs / 'processes.txt').open('w') as stream:
+            subprocess.run(['ps', '-axo', 'pid,ppid,state,etime,command'], stdout=stream)
+        subprocess.run([str(core / 'bin/wineserver'), '-k'], env=env, timeout=30)
     print('Whisky Libraries archive, metadata, relocation and x86/x64 launches: PASS')
 
 

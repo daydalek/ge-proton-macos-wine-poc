@@ -94,9 +94,12 @@ jobs:
           POC_WORK_DIR: ${{ runner.temp }}/libraries-check-${{ github.run_id }}-${{ github.run_attempt }}
         run: python3 scripts/ci/verify-libraries.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
           name: whisky-libraries-integration-check
-          path: ${{ runner.temp }}/libraries-check-${{ github.run_id }}-${{ github.run_attempt }}/release/*
+          path: |
+            ${{ runner.temp }}/libraries-check-${{ github.run_id }}-${{ github.run_attempt }}/release/*
+            ${{ runner.temp }}/libraries-check-${{ github.run_id }}-${{ github.run_attempt }}/diagnostics/*
           compression-level: 0
           if-no-files-found: error
 
