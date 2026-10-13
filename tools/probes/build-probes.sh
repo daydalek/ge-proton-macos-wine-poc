@@ -7,6 +7,8 @@ toolchain="$POC_LLVM_MINGW/bin"
 poc_require_path "$toolchain/i686-w64-mingw32-clang" "run scripts/build-deps.sh"
 for target in i686 x86_64; do
     case "$target" in i686) bits=x86;; x86_64) bits=x64;; esac
+    "$toolchain/$target-w64-mingw32-clang" -Wall -O2 \
+      "$kit/fullscreen-state-probe.c" -o "$kit/fullscreen-state-probe-$bits.exe" -luser32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/media-probe.c" -o "$kit/media-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid

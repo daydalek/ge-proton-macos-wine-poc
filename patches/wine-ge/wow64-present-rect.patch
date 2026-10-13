@@ -1,0 +1,15 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-13
+Scope: Convert the GetPresentRect pointer and DPI parameters for WoW64 callers.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/wow64win/user.c
++++ b/dlls/wow64win/user.c
+@@ -1696,6 +1696,7 @@
+         }
+ 
+     case NtUserCallHwndParam_GetClientRect:
++    case NtUserCallHwndParam_GetPresentRect:
+         {
+             struct
+             {
