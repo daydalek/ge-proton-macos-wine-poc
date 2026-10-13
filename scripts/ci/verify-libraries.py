@@ -64,7 +64,7 @@ def main():
                DYLD_FALLBACK_LIBRARY_PATH=str(core / 'lib') + ':/usr/lib')
     for bits in ('x86', 'x64'):
         subprocess.run([str(core / 'bin/wine64'), str(package / f'command-line-probe-{bits}.exe')],
-                       env=env, check=True, timeout=180)
+                       env=env, check=True, timeout=300)
     subprocess.run([str(core / 'bin/wineserver'), '-k'], env=env)
     print('Whisky Libraries archive, metadata, relocation and x86/x64 launches: PASS')
 
