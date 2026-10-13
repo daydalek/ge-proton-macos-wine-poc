@@ -173,3 +173,29 @@ or edits also trigger the channel workflow. After adding runtime assets to an ex
 release, run **Publish Wine runtime channel** from Actions; leave the release tag empty
 for automatic selection or provide a specific tag. Its authenticated GitHub API access
 runs only in CI; client downloads use public HTTPS endpoints.
+
+### Independent Whisky Libraries build
+
+The CI release now includes a separate **Libraries.tar.gz** and **WhiskyWineVersion.plist**.
+`Libraries/Wine` contains the current build's **media** core and its runtime dependencies;
+`Libraries/DXVK` supplies the digest-pinned DXVK-macOS 1.10.3 payload. The bootstrap archive
+is used only for DXVK. Current Wine binaries always come from this run's stage.
+
+The runtime version is `11.0.(GITHUB_RUN_NUMBER + 1)`, independent of the public release tag.
+The inner plist records installed components; the outer plist additionally records the
+exact archive SHA-256. `SHA256SUMS` covers the portable package, corresponding sources,
+Libraries package, both metadata reports, release notes and version plist.
+
+Before packing, the publisher removes development headers/import archives and debug info,
+remaps personal build paths, preserves PE builtin markers, applies ad-hoc Mach-O signatures,
+checks symlinks and private-state filenames, scans payload bytes, and anonymizes tar headers.
+The package includes component license texts. Detailed build/test logs stay in the CI job.
+
+On a tag build, CI creates a draft release with all files, then publishes it after upload.
+The channel refresh uses that exact tag and verifies the uploaded archive digest against
+its version plist. Existing complete releases preserve their published assets; incomplete
+existing releases stop publication and require review. Manual CI runs retain their output
+as downloadable Actions artifacts.
+
+The current payload requires macOS 27+ Apple Silicon with Rosetta 2. DXMT and the licensed
+GPTK payload retain their separate runtime capability gates in Whisky.
