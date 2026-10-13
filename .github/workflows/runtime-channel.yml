@@ -1,0 +1,33 @@
+name: Publish Wine runtime channel
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag; empty selects the newest complete release, including prereleases'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wine-runtime-channel
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Validate assets and publish static version manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python3 scripts/ci/publish-runtime-channel.py --tag "$RELEASE_TAG"
