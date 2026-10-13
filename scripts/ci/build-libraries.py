@@ -78,6 +78,15 @@ def main():
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/assemble-libraries.py'),
                     '--stage', str(STAGE), '--base-libraries', str(base),
                     '--version', args.version, '--output', str(assembled)], check=True)
+    provenance_path = assembled / 'Libraries/GE-Media/runtime-manifest.json'
+    provenance = json.loads(provenance_path.read_text())
+    provenance['packaging_commit'] = provenance.pop('poc_commit')
+    provenance['packaging_checkout_dirty'] = provenance.pop('poc_dirty')
+    release_context = json.loads((output / 'release-manifest.json').read_text())
+    provenance['source_kind'] = 'released-core validation' if 'validation_scope' in release_context else 'current CI Wine build'
+    if 'input_archive_sha256' in release_context:
+        provenance['input_archive_sha256'] = release_context['input_archive_sha256']
+    provenance_path.write_text(json.dumps(provenance, indent=2) + '\n')
     objcopy = WORK / 'poc/tools' / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin/llvm-objcopy'
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/prepare-libraries.py'),
                     '--input', str(assembled / 'Libraries'), '--output', str(public),
