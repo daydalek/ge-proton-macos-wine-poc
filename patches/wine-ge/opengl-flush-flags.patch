@@ -1,0 +1,16 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-13
+Scope: Preserve drawable update and present flags when updating the swap interval.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/opengl.c
++++ b/dlls/win32u/opengl.c
+@@ -159,7 +159,7 @@
+     if (interval != drawable->interval)
+     {
+         drawable->interval = interval;
+-        flags = GL_FLUSH_INTERVAL;
++        flags |= GL_FLUSH_INTERVAL;
+     }
+ 
+     if (flags) drawable->funcs->flush( drawable, flags );

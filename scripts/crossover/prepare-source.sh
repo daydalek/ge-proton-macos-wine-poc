@@ -27,7 +27,11 @@ git apply "$POC_PROJECT/patches/wine-ge/command-line-append.patch"
 git apply "$POC_PROJECT/patches/wine-ge/vkd3d-partial-varyings.patch"
 git apply "$POC_PROJECT/patches/wine-ge/dbghelp-dwarf-divisor.patch"
 git apply "$POC_PROJECT/patches/wine-ge/sechost-device-notify-handle.patch"
-python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" --patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch" --patch "$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch" --patch "$POC_PROJECT/patches/wine-ge/mpeg-audio-wave-format.patch" --patch "$POC_PROJECT/patches/wine-ge/command-line-append.patch" --patch "$POC_PROJECT/patches/wine-ge/vkd3d-partial-varyings.patch" --patch "$POC_PROJECT/patches/wine-ge/dbghelp-dwarf-divisor.patch" --patch "$POC_PROJECT/patches/wine-ge/sechost-device-notify-handle.patch"
+git apply "$POC_PROJECT/patches/wine-ge/stale-present-rect.patch"
+git apply "$POC_PROJECT/patches/wine-ge/opengl-flush-flags.patch"
+git apply "$POC_PROJECT/patches/wine-ge/macos-fullscreen-surface.patch"
+git apply "$POC_PROJECT/patches/wine-ge/wow64-present-rect.patch"
+python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" --patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch" --patch "$POC_PROJECT/patches/wine-ge/quartz-preserve-window-size.patch" --patch "$POC_PROJECT/patches/wine-ge/mpeg-audio-wave-format.patch" --patch "$POC_PROJECT/patches/wine-ge/command-line-append.patch" --patch "$POC_PROJECT/patches/wine-ge/vkd3d-partial-varyings.patch" --patch "$POC_PROJECT/patches/wine-ge/dbghelp-dwarf-divisor.patch" --patch "$POC_PROJECT/patches/wine-ge/sechost-device-notify-handle.patch" --patch "$POC_PROJECT/patches/wine-ge/stale-present-rect.patch" --patch "$POC_PROJECT/patches/wine-ge/opengl-flush-flags.patch" --patch "$POC_PROJECT/patches/wine-ge/macos-fullscreen-surface.patch" --patch "$POC_PROJECT/patches/wine-ge/wow64-present-rect.patch"
 git add .
 commit 'Port GE multimedia rework and macOS playback fixes'
 echo "Prepared CrossOver source: $source_dir"

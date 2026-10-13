@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-12",
+  "date": "2026-10-13",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -1992,10 +1992,70 @@
         "Copyright 2005 Mike McCormack",
         "Copyright 2007 Rolf Kalbermatter"
       ]
+    },
+    {
+      "patch": "patches/wine-ge/wow64-present-rect.patch",
+      "source_file": "dlls/wow64win/user.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "74400b3967faa47b66d4ce89286f69f8b4ce17a23f4e6b19a421ae1785c1a80c",
+      "copyright_notices": [
+        "Copyright 2021 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/stale-present-rect.patch",
+      "source_file": "dlls/win32u/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "48a94f172ff56ca96e45f94d96a9f23656a1c4f8909e27defa7f17c996da7ed5",
+      "copyright_notices": [
+        "Copyright 1993, 1994 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/opengl-flush-flags.patch",
+      "source_file": "dlls/win32u/opengl.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "9783ef4b2f211c7f2b5d7a8aac7bc3038b0bd4cda144e7cc16367997fd21967b",
+      "copyright_notices": [
+        "Copyright 2012 Alexandre Julliard",
+        "Copyright 2025 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-fullscreen-surface.patch",
+      "source_file": "dlls/winemac.drv/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "2c65ad24569082366075b08fa7ea95705232edaa14623b5e0fcb21de00bedb2f",
+      "copyright_notices": [
+        "Copyright 1993, 1994, 1995, 1996, 2001 Alexandre Julliard",
+        "Copyright 1993 David Metcalfe",
+        "Copyright 1995, 1996 Alex Korobka",
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-fullscreen-surface.patch",
+      "source_file": "dlls/winemac.drv/opengl.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "91a56243f9e7c978bd340f438b7ed53d83b83190ff0a896ac5f36b2e8ba4fa2a",
+      "copyright_notices": [
+        "Copyright 2012 Alexandre Julliard",
+        "Copyright 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 175,
+    "LGPL-2.1-or-later": 180,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2011,6 +2071,10 @@
     "patches/wine-ge/command-line-append.patch": "0fad254f781c1fdd4488db7d83fb21efb7cb9ac62e3b2b7a185f2aaf7bdfbc7f",
     "patches/wine-ge/vkd3d-partial-varyings.patch": "9a423b4152b8d098d16e748acbd0f02f31ba6b747aeb7fc794249f71974c91ce",
     "patches/wine-ge/dbghelp-dwarf-divisor.patch": "79574884f42a6ceb901afa8b2637965806ee53e4273f2897a936b9497ff28834",
-    "patches/wine-ge/sechost-device-notify-handle.patch": "3a3be241c1c9772ef4e42aed1ab7dfb3d1a8ab903f9b4d569dd9170367961ad1"
+    "patches/wine-ge/sechost-device-notify-handle.patch": "3a3be241c1c9772ef4e42aed1ab7dfb3d1a8ab903f9b4d569dd9170367961ad1",
+    "patches/wine-ge/stale-present-rect.patch": "3d5f1ef0937201e8c0d5e34ebddd36922a66d4f43e1186c0e1281289dba76f39",
+    "patches/wine-ge/opengl-flush-flags.patch": "931f3120de4de284c3a222477069ea422b57a80e7e1142add49efb7a7f0ca8fe",
+    "patches/wine-ge/macos-fullscreen-surface.patch": "ad335ec4b04613eafe460cb803ed54c0eb9383c906bcc6495dad3be0c70b1d3c",
+    "patches/wine-ge/wow64-present-rect.patch": "0d72870259ccd066937cd33c75e36bdde72c56daf61cfa564fb378c6986a7e40"
   }
 }

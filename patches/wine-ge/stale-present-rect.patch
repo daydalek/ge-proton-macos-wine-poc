@@ -1,0 +1,97 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-13
+Scope: Keep macOS exclusive fullscreen geometry consistent with its present rectangle; clear leftover rectangles on restored captioned windows, preserve minimized or hidden state and roll back on position failure.
+Original authors and per-file licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -3963,7 +3963,7 @@
+ /* NtUserSetWindowPos implementation */
+ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+ {
+-    RECT valid_rects[2], surface_rect;
++    RECT valid_rects[2], surface_rect, stale_present_rect = {0};
+     struct window_surface *surface;
+     struct window_rects old_rects, new_rects;
+     UINT orig_flags, context;
+@@ -4014,6 +4014,28 @@
+ 
+     if (!calc_winpos( winpos, &old_rects, &new_rects )) goto done;
+ 
++#ifdef __APPLE__
++    /* Keep an active exclusive fullscreen window in the same coordinate space
++     * as its present rectangle. A smaller client would leave the native full
++     * screen drawable and the Win32 mouse hit-test area with different sizes. */
++    if (!(winpos->flags & SWP_NOSIZE))
++    {
++        RECT present_rect;
++        DWORD style = NtUserGetWindowLongW( winpos->hwnd, GWL_STYLE );
++
++        if ((style & (WS_CHILD | WS_CAPTION | WS_MINIMIZE | WS_VISIBLE)) == WS_VISIBLE &&
++            get_present_rect( winpos->hwnd, &present_rect, get_thread_dpi() ))
++        {
++            new_rects.window = present_rect;
++            winpos->x = present_rect.left;
++            winpos->y = present_rect.top;
++            winpos->cx = present_rect.right - present_rect.left;
++            winpos->cy = present_rect.bottom - present_rect.top;
++        }
++    }
++
++#endif
++
+     /* Fix redundant flags */
+     if (!fixup_swp_flags( winpos, &old_rects.window, parent_x, parent_y )) goto done;
+ 
+@@ -4026,12 +4048,51 @@
+     /* Common operations */
+ 
+     calc_ncsize( winpos, &old_rects, &new_rects, valid_rects, parent_x, parent_y );
++
++    /* An application that runs exclusive fullscreen on its own can leave a stale
++     * present rect behind: it resizes the window back to a windowed rect with
++     * SetWindowPos instead of letting the swapchain restore the window state, and
++     * restoring is the only path that clears the present rect.  While a stale
++     * rect is set, get_present_rect() keeps reporting the monitor, so the window
++     * surface stays monitor-sized and the driver presents it into a window that
++     * is no longer that big.  When this call actually changes the window
++     * geometry, a visible, restored captioned window smaller than the monitor
++     * indicates a return to windowed mode. Fullscreen setup can use a logical
++     * size smaller than the host monitor and must retain its present rect. */
++    if ((winpos->flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE))
++    {
++        MONITORINFO monitor_info = monitor_info_from_rect( new_rects.window, get_thread_dpi() );
++        WND *win = get_win_ptr( winpos->hwnd );
++
++        if (win && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
++        {
++            if (!IsRectEmpty( &win->present_rect ) &&
++                (win->dwStyle & WS_CAPTION) == WS_CAPTION &&
++                (win->dwStyle & (WS_VISIBLE | WS_MINIMIZE)) == WS_VISIBLE &&
++                !is_fullscreen( &monitor_info, &new_rects.window ))
++            {
++                TRACE( "window %p left exclusive fullscreen, dropping stale present rect\n", winpos->hwnd );
++                stale_present_rect = win->present_rect;
++                SetRectEmpty( &win->present_rect );
++            }
++            release_win_ptr( win );
++        }
++    }
+ 
+     surface = get_window_surface( winpos->hwnd, winpos->flags, FALSE, &new_rects, &surface_rect );
+     if (!apply_window_pos( winpos->hwnd, winpos->hwndInsertAfter, winpos->flags, surface,
+                            &new_rects, valid_rects ))
+     {
+         if (surface) window_surface_release( surface );
++        if (!IsRectEmpty( &stale_present_rect ))
++        {
++            WND *win = get_win_ptr( winpos->hwnd );
++            if (win && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
++            {
++                if (IsRectEmpty( &win->present_rect )) win->present_rect = stale_present_rect;
++                release_win_ptr( win );
++            }
++        }
+         goto done;
+     }
+     if (surface) window_surface_release( surface );
