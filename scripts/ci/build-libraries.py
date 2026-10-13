@@ -16,7 +16,7 @@ import urllib.request
 
 PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT / 'scripts/lib'))
-from poc_common import STAGE, WORK, SETTINGS, sha256_file
+from poc_common import STAGE, CROSSOVER_PORT, WORK, SETTINGS, sha256_file
 
 # Bootstrap only the pinned DXVK payload. Wine always comes from the current build.
 DXVK_BASE_URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz'
@@ -52,10 +52,40 @@ def update_checksums(output):
     (output / 'SHA256SUMS').write_text(''.join(f'{sha256_file(p)}  {p.name}\n' for p in files))
 
 
+REQUIRED_MODULES = ('bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
+                    'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll')
+REQUIRED_PATCHES = ('patches/crossover/crossover-26.3-media.patch',
+                    'patches/wine-ge/stale-present-rect.patch',
+                    'patches/wine-ge/opengl-flush-flags.patch',
+                    'patches/wine-ge/macos-fullscreen-surface.patch',
+                    'patches/wine-ge/wow64-present-rect.patch')
+
+
+def validate_compiled_provenance(wine_stage, project=PROJECT):
+    compiled = json.loads((wine_stage / '.wine-build-provenance.json').read_text())
+    lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
+    if (compiled['core'] != 'crossover-ge-media'
+            or compiled['source_archive_sha256'] != lock['source_sha256']):
+        raise ValueError('Expected the locked CrossOver core')
+    if not set(REQUIRED_MODULES) <= compiled['compiled_modules'].keys():
+        raise ValueError('Incomplete compiled module provenance')
+    if not set(REQUIRED_PATCHES) <= compiled['patches'].keys():
+        raise ValueError('Fullscreen patch provenance is incomplete')
+    for name, digest in compiled['compiled_modules'].items():
+        if sha256_file(wine_stage / name) != digest:
+            raise ValueError('Compiled module provenance mismatch: ' + name)
+    for name, digest in compiled['patches'].items():
+        if sha256_file(project / name) != digest:
+            raise ValueError('Compiled patch provenance mismatch: ' + name)
+    return compiled
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', required=True, help='Monotonically increasing runtime version X.Y.Z')
     parser.add_argument('--output', type=Path, required=True, help='Existing CI release output directory')
+    parser.add_argument('--wine-stage', type=Path, default=CROSSOVER_PORT / 'stage',
+                        help='CrossOver Wine install tree; validation can provide a released core')
     parser.add_argument('--base-archive', type=Path, help='Pinned DXVK bootstrap archive (local verification)')
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version):
@@ -73,19 +103,29 @@ def main():
     staging = WORK / 'whisky-libraries-staging'
     staging.mkdir()
     base = extract_dxvk(archive, staging / 'dxvk-base')
+    release_context = json.loads((output / 'release-manifest.json').read_text())
+    core_kind = release_context.get('core', 'crossover-ge-media')
+    compiled = None
+    if 'validation_scope' not in release_context:
+        compiled = validate_compiled_provenance(args.wine_stage)
+
     assembled = staging / 'assembled'
     public = staging / 'public'
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/assemble-libraries.py'),
-                    '--stage', str(STAGE), '--base-libraries', str(base),
+                    '--stage', str(STAGE), '--wine-stage', str(args.wine_stage), '--core', core_kind, '--base-libraries', str(base),
                     '--version', args.version, '--output', str(assembled)], check=True)
     provenance_path = assembled / 'Libraries/GE-Media/runtime-manifest.json'
     provenance = json.loads(provenance_path.read_text())
     provenance['packaging_commit'] = provenance.pop('poc_commit')
     provenance['packaging_checkout_dirty'] = provenance.pop('poc_dirty')
-    release_context = json.loads((output / 'release-manifest.json').read_text())
-    provenance['source_kind'] = 'released-core validation' if 'validation_scope' in release_context else 'current CI Wine build'
+    provenance['source_kind'] = 'released-core validation' if 'validation_scope' in release_context else 'current CI CrossOver Wine build'
     if 'input_archive_sha256' in release_context:
         provenance['input_archive_sha256'] = release_context['input_archive_sha256']
+    provenance['wine_base'] = release_context.get('wine_base', 'CrossOver 26.3.0')
+    if 'crossover_source_sha256' in release_context:
+        provenance['crossover_source_sha256'] = release_context['crossover_source_sha256']
+    if compiled is not None:
+        provenance['build_provenance'] = compiled
     provenance_path.write_text(json.dumps(provenance, indent=2) + '\n')
     objcopy = WORK / 'poc/tools' / SETTINGS['POC_LLVM_MINGW_DIR'] / 'bin/llvm-objcopy'
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/prepare-libraries.py'),
@@ -103,13 +143,13 @@ def main():
     manifest = json.loads((output / 'release-manifest.json').read_text())
     manifest['minimum_macos_actual'] = static['minimum_macos_actual']
     manifest['static_checks'] = static
-    manifest['whisky_runtime'] = {'version': args.version, 'core': 'media', 'archive': 'Libraries.tar.gz',
+    manifest['whisky_runtime'] = {'version': args.version, 'core': core_kind, 'archive': 'Libraries.tar.gz',
                                   'dxvk_version': '1.10.3', 'privacy_audit': 'Libraries-privacy-audit.json',
                                   'bootstrap_sha256': DXVK_BASE_SHA256}
     (output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     notes = output / 'RELEASE-NOTES.md'
     with notes.open('a') as f:
-        source_description = 'released media core' if 'validation_scope' in manifest else "this CI run's media build"
+        source_description = 'released media core' if 'validation_scope' in manifest else "this CI run's CrossOver Wine build"
         f.write('\nWhisky-compatible runtime: Libraries.tar.gz and WhiskyWineVersion.plist.\n'
                 f'The Wine core is from {source_description}; DXVK-macOS 1.10.3 is digest-pinned.\n'
                 'Runtime version: ' + args.version + '.\n')

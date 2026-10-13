@@ -145,7 +145,7 @@ export POC_WORK_DIR="$PWD/work"
 
 GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心。分支 push 和 PR 执行源码与语法检查；手动运行执行完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
 
-每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。CI 编译 GE media 核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
+每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。CI 编译 CrossOver 26.3 Wine＋GE 多媒体与全屏修复核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
 
 先从 Actions 手动执行一次构建，确认产物后创建版本标签：
 
@@ -176,11 +176,17 @@ runs only in CI; client downloads use public HTTPS endpoints.
 
 ### Independent Whisky Libraries build
 
-The CI builds the **media** core and publishes **Libraries.tar.gz**, **Libraries-sources.tar.gz**
+The CI builds the **CrossOver 26.3 Wine + GE media** core and publishes **Libraries.tar.gz**, **Libraries-sources.tar.gz**
 and **WhiskyWineVersion.plist**. The runtime asset is the Whisky Libraries package.
-`Libraries/Wine` contains the current build's **media** core and its runtime dependencies;
+`Libraries/Wine` contains the current build's **CrossOver** core and its runtime dependencies;
 `Libraries/DXVK` supplies the digest-pinned DXVK-macOS 1.10.3 payload. The bootstrap archive
 is used only for DXVK. Current Wine binaries always come from this run's stage.
+
+Full builds prepare the digest-locked official CrossOver sources and apply the GE multimedia
+port, stale fullscreen rectangle, OpenGL flush flag, macOS fullscreen surface and WoW64
+present-rectangle fixes. Both i386 and x86_64 Windows modules are built and installed.
+`Libraries-sources.tar.gz` carries the exact patched CrossOver tree, official source archive,
+dependency archives and build recipes. Provenance identifies the CrossOver baseline explicitly.
 
 The runtime version is `11.0.(GITHUB_RUN_NUMBER + 1)`, independent of the public release tag.
 The inner plist records installed components; the outer plist additionally records the
@@ -199,7 +205,7 @@ The channel refresh uses that exact tag and verifies the uploaded archive digest
 its version plist. Existing complete releases preserve their published assets; incomplete
 existing releases stop publication and require review. Manual CI runs retain their output
 as downloadable Actions artifacts named `whisky-libraries`.
-The `libraries_only` manual check repackages the pinned released Libraries core and compiles
+The `libraries_only` manual check currently repackages the pinned v0.1.0 Valve-based Libraries core and compiles
 x86/x64 launch probes using the locked toolchain.
 
 The current payload requires macOS 27+ Apple Silicon with Rosetta 2. DXMT and the licensed

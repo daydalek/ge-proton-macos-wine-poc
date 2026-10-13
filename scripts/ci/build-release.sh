@@ -13,8 +13,8 @@ test ! -e "$POC_WORK_DIR" || { echo 'Build work directory must be fresh.' >&2; e
 command -v cmake >/dev/null
 command -v pkg-config >/dev/null || command -v pkgconf >/dev/null
 bash scripts/build-deps.sh
-python3 scripts/prepare.py
-bash scripts/build-wine.sh media
+bash scripts/crossover/prepare-source.sh
+bash scripts/crossover/build.sh full
 python3 scripts/ci/make-release.py --output "${POC_RELEASE_DIR:-$project/outputs/release}"
 
 # The runtime release counter is independent of the upstream Wine version/tag.

@@ -50,11 +50,12 @@ def main():
     release = WORK / 'release'
     release.mkdir()
     (release / 'release-manifest.json').write_text(json.dumps({
-        'validation_scope': 'packaging the already released media core', 'input_archive_sha256': DIGEST}) + '\n')
+        'validation_scope': 'packaging the already released Valve media core',
+        'core': 'media', 'wine_base': 'Valve Wine 46b29104', 'input_archive_sha256': DIGEST}) + '\n')
     (release / 'RELEASE-NOTES.md').write_text('Libraries integration check; Actions artifact only.\n')
     version = '11.0.' + str(int(os.environ['GITHUB_RUN_NUMBER']) + 1)
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/build-libraries.py'),
-                    '--version', version, '--output', str(release)], check=True)
+                    '--version', version, '--wine-stage', str(stage / 'media'), '--output', str(release)], check=True)
     install = WORK / 'install'
     extract_tar(release / 'Libraries.tar.gz', install)
     core = install / 'Libraries/Wine'
@@ -64,7 +65,8 @@ def main():
     subprocess.run([str(core / 'bin/wine64'), '--version'], check=True)
     env = os.environ.copy()
     env.update(WINEPREFIX=str(WORK / 'probe-prefix'), WINEDEBUG='+timestamp,+pid,+tid,+seh',
-               WINEDLLOVERRIDES='winemenubuilder.exe=d',
+               # Headless probes need neither Mono nor Gecko; skip their install dialogs.
+               WINEDLLOVERRIDES='winemenubuilder.exe=d;mscoree,mshtml=d',
                WINELOADER=str(core / 'bin/wine64'), WINESERVER=str(core / 'bin/wineserver'),
                DYLD_FALLBACK_LIBRARY_PATH=str(core / 'lib') + ':/usr/lib')
     # Keep bootstrap separate so a hosted prefix failure has an identifiable log.

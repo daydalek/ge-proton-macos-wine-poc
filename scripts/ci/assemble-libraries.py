@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Assemble the GE media Wine stage as Whisky's Libraries.tar.gz (macOS)."""
+"""Assemble a patched Wine stage as Whisky's Libraries.tar.gz (macOS)."""
 import argparse
 import hashlib
 import json
@@ -29,6 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poc', type=Path, default=Path(__file__).resolve().parents[2], help='GE Wine source/build repository')
     parser.add_argument('--stage', type=Path, required=True, help='Current build stage containing media and deps-x64')
+    parser.add_argument('--wine-stage', type=Path, help='Wine install tree; default is stage/media')
+    parser.add_argument('--core', default='media', choices=('media', 'crossover-ge-media'))
     parser.add_argument('--base-libraries', type=Path, required=True, help='Existing Libraries tree providing DXVK')
     parser.add_argument('--version', required=True, help='Runtime release version X.Y.Z; independent of Wine version')
     parser.add_argument('--output', type=Path, required=True, help='Fresh output directory')
@@ -37,7 +39,8 @@ def main():
         parser.error('version must be X.Y.Z')
     poc, base, out = args.poc.resolve(), args.base_libraries.resolve(), args.output.resolve()
     stage = args.stage.resolve()
-    required = [stage / 'media/bin/wine', stage / 'media/bin/wineserver',
+    wine_stage = args.wine_stage.resolve() if args.wine_stage else stage / 'media'
+    required = [wine_stage / 'bin/wine', wine_stage / 'bin/wineserver',
                 stage / 'deps-x64/lib/libMoltenVK.dylib', base / 'WhiskyWineVersion.plist',
                 poc / 'licenses', poc / 'COPYING.LIB', poc / 'UPSTREAMS.md']
     required += [base / 'DXVK' / arch / dll for arch in ('x64', 'x32')
@@ -55,7 +58,7 @@ def main():
     lib.mkdir()
     wine = lib / 'Wine'
     print('Copying GE media core and dependencies', flush=True)
-    shutil.copytree(stage / 'media', wine, symlinks=True)
+    shutil.copytree(wine_stage, wine, symlinks=True)
     shutil.copytree(stage / 'deps-x64/lib', wine / 'lib', symlinks=True, dirs_exist_ok=True)
     wine64 = wine / 'bin/wine64'
     if wine64.exists() or wine64.is_symlink():
@@ -70,7 +73,7 @@ def main():
         shutil.copytree(poc / name, notices / name, symlinks=True)
     (notices / 'configs').mkdir()
     for name in ('source-lock.json', 'dependency-lock.json', 'source-license-inventory.json',
-                 'vulkan-generation-lock.json', 'build.env'):
+                 'vulkan-generation-lock.json', 'crossover-source-lock.json', 'build.env'):
         shutil.copy2(poc / 'configs' / name, notices / 'configs' / name)
 
     # Every shipped symlink must resolve within Libraries after installation.
@@ -127,7 +130,7 @@ def main():
             'dxvkVersion': base_info['dxvkVersion'], 'gptkCapable': False}
     (lib / 'WhiskyWineVersion.plist').write_bytes(plistlib.dumps(info))
     manifest = {'runtime_version': args.version, 'wine_version': run(str(wine64), '--version').strip(),
-                'core': 'media', 'poc_commit': run('git', '-C', str(poc), 'rev-parse', 'HEAD').strip(),
+                'core': args.core, 'poc_commit': run('git', '-C', str(poc), 'rev-parse', 'HEAD').strip(),
                 'poc_dirty': bool(run('git', '-C', str(poc), 'status', '--porcelain').strip()),
                 'minimum_macos': '.'.join(map(str, minimum)), 'architecture': 'x86_64 / Rosetta 2',
                 'graphics': ['DXVK', 'wined3d'], 'target_device_acceptance': 'pending', 'mach_o': audit}

@@ -9,7 +9,8 @@ port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
 notice_args=(--patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch")
-for patch_name in quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch; do
+patch_names=(quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch)
+for patch_name in "${patch_names[@]}"; do
   patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
   if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
     git -C "$source_dir" apply "$patch_file"
@@ -39,5 +40,21 @@ case "$mode" in
   full)
     make -j"$POC_JOBS" > "$port/build-full.log" 2>&1
     make install > "$port/install.log" 2>&1
+    # Record successful compilation inputs beside the installed core.
+    python3 - "$POC_PROJECT" "$source_dir" "$port/stage" "${patch_names[@]}" <<'PY_BUILD'
+import hashlib, json, pathlib, subprocess, sys
+project, source, stage = map(pathlib.Path, sys.argv[1:4])
+lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
+patches = ['patches/crossover/crossover-26.3-media.patch'] + ['patches/wine-ge/' + name for name in sys.argv[4:]]
+modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
+           'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll']
+record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
+          'source_archive_sha256': lock['source_sha256'],
+          'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
+          'source_dirty': bool(subprocess.check_output(['git', '-C', str(source), 'status', '--porcelain'], text=True).strip()),
+          'patches': {name: hashlib.sha256((project / name).read_bytes()).hexdigest() for name in patches},
+          'compiled_modules': {name: hashlib.sha256((stage / name).read_bytes()).hexdigest() for name in modules}}
+(stage / '.wine-build-provenance.json').write_text(json.dumps(record, indent=2) + '\n')
+PY_BUILD
     ;;
 esac

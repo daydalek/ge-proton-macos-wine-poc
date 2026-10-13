@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
 import hashlib
+import json
 import importlib.util
 from pathlib import Path
 import plistlib
@@ -68,6 +69,37 @@ class LibrariesTests(unittest.TestCase):
         path = b'/' + b'Users/' + b'runner/job'
         self.assertTrue(privacy.private_identifier(path, 'runner', hosted_ci=True))
         self.assertTrue(privacy.private_identifier(b'private-account', 'private-account'))
+
+    def test_cross_over_provenance_rejects_changed_modules_or_patches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage, project = root / 'stage', root / 'project'
+            stage.mkdir()
+            (project / 'configs').mkdir(parents=True)
+            (project / 'configs/crossover-source-lock.json').write_text(json.dumps({'source_sha256': 'a' * 64}))
+            record = {'core': 'crossover-ge-media', 'source_archive_sha256': 'a' * 64,
+                      'compiled_modules': {}, 'patches': {}}
+            for category, base, names in [('compiled_modules', stage, libraries.REQUIRED_MODULES),
+                                          ('patches', project, libraries.REQUIRED_PATCHES)]:
+                for name in names:
+                    file = base / name
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_bytes(name.encode())
+                    record[category][name] = hashlib.sha256(file.read_bytes()).hexdigest()
+            marker = stage / '.wine-build-provenance.json'
+            marker.write_text(json.dumps(record))
+            self.assertEqual(libraries.validate_compiled_provenance(stage, project), record)
+            for base, name in [(stage, libraries.REQUIRED_MODULES[0]), (project, libraries.REQUIRED_PATCHES[0])]:
+                file = base / name
+                original = file.read_bytes()
+                file.write_bytes(b'changed')
+                with self.assertRaises(ValueError):
+                    libraries.validate_compiled_provenance(stage, project)
+                file.write_bytes(original)
+            del record['patches'][libraries.REQUIRED_PATCHES[-1]]
+            marker.write_text(json.dumps(record))
+            with self.assertRaises(ValueError):
+                libraries.validate_compiled_provenance(stage, project)
 
     def test_archive_header_contains_anonymous_metadata(self):
         info = tarfile.TarInfo('Libraries/Wine/bin/wine')
