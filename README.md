@@ -155,3 +155,21 @@ git push origin v0.1.0
 ```
 
 仓库变量 `MACOS_BUILD_RUNNER_JSON` 可覆盖节点选择，例如 `["self-hosted", "macOS", "ARM64", "macos-27"]`。工作流会校验实际系统、arm64 宿主和 Rosetta 环境。
+
+## Whisky runtime update channel
+
+Whisky reads the public static manifest at
+`https://raw.githubusercontent.com/daydalek/ge-proton-macos-wine-poc/runtime-channel/WhiskyWineVersion.plist`.
+The dedicated branch contains only this public manifest and uses an anonymous CI author.
+The manifest records the runtime version, SHA-256, component versions and exact Release download URL.
+
+The publisher accepts stable releases and prereleases carrying both `Libraries.tar.gz`
+and `WhiskyWineVersion.plist`. It verifies the archive digest, preserves newer runtime
+versions already in the channel, and requires a version bump for changed archives.
+Portable-package-only releases keep the current Whisky runtime channel in place.
+
+The build/release workflow refreshes the channel after publishing. Release publication
+or edits also trigger the channel workflow. After adding runtime assets to an existing
+release, run **Publish Wine runtime channel** from Actions; leave the release tag empty
+for automatic selection or provide a specific tag. Its authenticated GitHub API access
+runs only in CI; client downloads use public HTTPS endpoints.
