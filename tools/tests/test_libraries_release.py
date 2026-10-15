@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 import io
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('libraries', ROOT / 'scripts/ci/build-libraries.py')
@@ -20,6 +21,35 @@ spec.loader.exec_module(privacy)
 
 
 class LibrariesTests(unittest.TestCase):
+    def pem(self, body=b'VEVTVA=='):
+        return b'-----BEGIN ' + b'PRIVATE KEY-----\n' + body + b'\n-----END ' + b'PRIVATE KEY-----'
+
+    def test_only_exact_reviewed_public_vector_is_allowed_in_gnutls_macho(self):
+        vector = self.pem()
+        data = privacy.MACHO[0] + b'\0' + vector + b'\0'
+        digest = hashlib.sha256(vector).hexdigest()
+        with patch.dict(privacy.GNUTLS_SELFTEST_PEMS, {digest: 'synthetic-unit-test'}):
+            self.assertEqual(privacy.credential_findings(data, 'Wine/lib/libgnutls.30.dylib'), (False, 1))
+            self.assertEqual(privacy.credential_findings(data, 'Wine/lib/other.dylib'), (True, 0))
+            self.assertEqual(privacy.credential_findings(vector, 'Wine/lib/libgnutls.30.dylib'), (True, 0))
+            changed = data.replace(b'VEVTVA==', b'RElGRg==')
+            self.assertEqual(privacy.credential_findings(changed, 'Wine/lib/libgnutls.30.dylib'), (True, 0))
+
+    def test_public_vector_does_not_hide_other_keys_or_tokens(self):
+        vector = self.pem()
+        data = privacy.MACHO[0] + b'\0' + vector + b'\0'
+        digest = hashlib.sha256(vector).hexdigest()
+        with patch.dict(privacy.GNUTLS_SELFTEST_PEMS, {digest: 'synthetic-unit-test'}):
+            for extra in (self.pem(b'VVNOS09XTg=='), b'ghp_' + b'X' * 36,
+                          self.pem(b'VVNOS09XTg==').decode().encode('utf-16le')):
+                with self.subTest(extra_length=len(extra)):
+                    self.assertEqual(privacy.credential_findings(data + extra, 'Wine/lib/libgnutls.30.dylib'),
+                                     (True, 1))
+
+    def test_unterminated_private_key_is_not_exempted(self):
+        data = privacy.MACHO[0] + self.pem().split(b'-----END ')[0]
+        self.assertEqual(privacy.credential_findings(data, 'Wine/lib/libgnutls.30.dylib'), (True, 0))
+
     def archive(self, file, extra=None):
         files = {'Libraries/WhiskyWineVersion.plist': plistlib.dumps({'dxvkVersion': '1.10.3'}),
                  'Libraries/Wine/bin/wine': b'old-core', 'Libraries/user.reg': b'old-state'}
