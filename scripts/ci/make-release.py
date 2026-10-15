@@ -25,7 +25,8 @@ source_dirs = [CROSSOVER_PORT / 'sources/wine']
 crossover_lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
 locks = json.loads((project / 'configs/dependency-lock.json').read_text())
 archives = [item for item in locks if item['archive'] in
-            ('ffmpeg.tar.gz', 'freetype.tar.gz', 'vulkan-headers.tar.gz', 'MoltenVK-macos.tar')]
+            ('ffmpeg.tar.gz', 'freetype.tar.gz', 'vulkan-headers.tar.gz', 'MoltenVK-macos.tar',
+             'gmp.tar.xz', 'nettle.tar.gz', 'libtasn1.tar.gz', 'libunistring.tar.xz', 'gnutls.tar.xz')]
 archives.insert(0, {'archive': SETTINGS['POC_CROSSOVER_ARCHIVE'],
                    'url': crossover_lock['source_url'], 'sha256': crossover_lock['source_sha256']})
 archive_paths = {item['archive']: (CROSSOVER_PORT if item['archive'] == SETTINGS['POC_CROSSOVER_ARCHIVE'] else WORK) / item['archive']
@@ -61,7 +62,7 @@ project_archive.unlink()
 manifest = {'commit': commit, 'target': 'macOS 27+ Apple Silicon', 'host_architecture': platform.machine(),
             'wine_core_architecture': 'x86_64', 'windows_architectures': ['i386', 'x86_64'],
             'execution': 'Rosetta 2', 'signing': 'ad-hoc; Apple notarization not performed',
-            'runtime_tests': 'Not run; file architectures, signatures and dependencies checked',
+             'runtime_tests': 'Wine/game playback not run; file architectures, signatures, dependencies and native FFmpeg capabilities checked by the release pipeline',
             'core': 'crossover-ge-media', 'wine_base': 'CrossOver 26.3.0',
             'crossover_source_sha256': crossover_lock['source_sha256'],
             'runtime_asset': 'Libraries.tar.gz', 'source_asset': sources.name,

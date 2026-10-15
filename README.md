@@ -65,6 +65,16 @@ bash scripts/build-wine.sh media
 
 > **提示**：如果需要纯净上游版本做对照测试，可执行 `bash scripts/build-wine.sh baseline`。
 
+#### FFmpeg 格式覆盖
+
+`scripts/build-deps.sh` 默认开启锁定 FFmpeg 源码中所有依赖满足的内置解码器、解封装器、解析器和码流过滤器，不再使用播放格式白名单。包括 WMA Lossless、AAC、Vorbis、Opus、FLAC、MPEG-4、HEVC、VP8/VP9 等；编码器、封装器和滤镜仍仅保留合成测试样片所需部分。
+
+该配置关闭外部库自动检测、网络、硬件加速和 GPL/nonfree/version3 组件，保持 FFmpeg 的 LGPL-2.1-or-later 构建。它不是“包含所有第三方编解码器”的 FFmpeg；实际可用格式取决于源码与依赖，FFmpeg 可解码也不等于 Wine 已接入对应格式。
+
+#### Wine 加密与 TLS
+
+依赖构建同时编译私有 x86_64 GnuTLS、GMP、Nettle/Hogweed、libtasn1 和 libunistring；已有构建可单独运行 `bash scripts/build-crypto-deps.sh`，随后重新配置并编译 Wine。Wine 配置显式要求 GnuTLS，缺失时构建失败，不再静默生成无加密后端的运行库。Whisky 打包携带依赖并使用 `@rpath` 加载，不依赖 Homebrew 路径，也不关闭证书验证。完整 CI 会检查相关库及加密模块的可重定位加载名。各依赖许可证独立于 FFmpeg，见 [UPSTREAMS.md](UPSTREAMS.md)。
+
 #### 运行游戏与回放验证
 
 ```bash
@@ -217,3 +227,5 @@ x86/x64 launch probes using the locked toolchain.
 
 The current payload requires macOS 27+ Apple Silicon with Rosetta 2. DXMT and the licensed
 GPTK payload retain their separate runtime capability gates in Whisky.
+
+完整 CI 构建会读取最终 Libraries 中的 FFmpeg 动态库，检查常见游戏格式及 LGPL 许可，并发布 `Libraries-ffmpeg-capabilities.json` 格式清单（同时纳入 `release-manifest.json` 和 `SHA256SUMS`）。检查不启动 Wine 或游戏，也不代表实际播放验收；缺少 WMA Lossless、AAC 等关键解码器时构建失败。`libraries_only` 仅检查旧版发布核心的打包与启动，不重编 FFmpeg，也不验证当前格式覆盖；要发布新解码库，请使用默认完整构建。

@@ -53,7 +53,8 @@ def update_checksums(output):
 
 
 REQUIRED_MODULES = ('bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
-                    'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll')
+                    'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll',
+                    'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so')
 REQUIRED_PATCHES = crossover_patch_series()
 
 
@@ -115,6 +116,9 @@ def main():
     provenance['packaging_commit'] = provenance.pop('poc_commit')
     provenance['packaging_checkout_dirty'] = provenance.pop('poc_dirty')
     provenance['source_kind'] = 'released-core validation' if 'validation_scope' in release_context else 'current CI CrossOver Wine build'
+    if 'validation_scope' not in release_context:
+        provenance['ffmpeg_profile'] = 'builtin-software-playback'
+        provenance['wine_crypto'] = 'bundled GnuTLS; certificate verification enabled'
     if 'input_archive_sha256' in release_context:
         provenance['input_archive_sha256'] = release_context['input_archive_sha256']
     provenance['wine_base'] = release_context.get('wine_base', 'CrossOver 26.3.0')
@@ -127,9 +131,19 @@ def main():
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/prepare-libraries.py'),
                     '--input', str(assembled / 'Libraries'), '--output', str(public),
                     '--objcopy', str(objcopy), '--private-name', os.environ.get('USER', 'runner')], check=True)
+    crypto_checks = [] if 'validation_scope' in release_context else ['--require-crypto']
     subprocess.run([sys.executable, str(PROJECT / 'scripts/static-check.py'),
                     '--libraries', '--package', str(public / 'Libraries'),
-                    '--max-minimum-macos', '27.0'], check=True)
+                    '--max-minimum-macos', '27.0', *crypto_checks], check=True)
+    # Check the final stripped/relocated libraries, not the build host's ffmpeg.
+    # The legacy packaging-only job intentionally reuses an older released core.
+    ffmpeg = None
+    if 'validation_scope' not in release_context:
+        capability_report = output / 'Libraries-ffmpeg-capabilities.json'
+        subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/check-ffmpeg.py'),
+                        '--library-dir', str(public / 'Libraries/Wine/lib'),
+                        '--output', str(capability_report)], check=True)
+        ffmpeg = json.loads(capability_report.read_text())
     static = json.loads((public / 'Libraries/static-check.json').read_text())
     shutil.move(public / 'Libraries/static-check.json', output / 'Libraries-static-check.json')
     for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist'):
@@ -139,6 +153,8 @@ def main():
     manifest = json.loads((output / 'release-manifest.json').read_text())
     manifest['minimum_macos_actual'] = static['minimum_macos_actual']
     manifest['static_checks'] = static
+    if ffmpeg is not None:
+        manifest['ffmpeg'] = ffmpeg
     manifest['whisky_runtime'] = {'version': args.version, 'core': core_kind, 'archive': 'Libraries.tar.gz',
                                   'dxvk_version': '1.10.3', 'privacy_audit': 'Libraries-privacy-audit.json',
                                   'bootstrap_sha256': DXVK_BASE_SHA256}
@@ -149,6 +165,11 @@ def main():
         f.write('\nWhisky-compatible runtime: Libraries.tar.gz and WhiskyWineVersion.plist.\n'
                 f'The Wine core is from {source_description}; DXVK-macOS 1.10.3 is digest-pinned.\n'
                 'Runtime version: ' + args.version + '.\n')
+        if ffmpeg is not None:
+            f.write('FFmpeg: broad built-in software playback (LGPL 2.1+); '
+                    'actual registered formats are listed in Libraries-ffmpeg-capabilities.json.\n'
+                    'Optional external codecs/hardware backends are not bundled; '
+                    'Wine integration and game playback require separate acceptance.\n')
     update_checksums(output)
     print('Whisky Libraries assets ready:', output)
 

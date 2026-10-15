@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       libraries_only:
-        description: 'Validate independent Libraries packaging using the released media core'
+        description: 'Legacy released-core packaging check only; does not build or verify current FFmpeg codecs'
         type: boolean
         default: false
 
@@ -60,7 +60,7 @@ jobs:
           if ! /usr/bin/arch -x86_64 /usr/bin/true; then
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
           fi
-      - name: Build macOS 27 Whisky Libraries
+      - name: Build macOS 27 Whisky Libraries and verify FFmpeg capabilities
         env:
           POC_WORK_DIR: ${{ runner.temp }}/wine-build-${{ github.run_id }}-${{ github.run_attempt }}
         run: bash scripts/ci/build-release.sh
@@ -89,7 +89,7 @@ jobs:
           if ! /usr/bin/arch -x86_64 /usr/bin/true; then
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
           fi
-      - name: Package and launch the independent Libraries runtime
+      - name: Package and launch the legacy released runtime (not current codec validation)
         env:
           POC_WORK_DIR: ${{ runner.temp }}/libraries-check-${{ github.run_id }}-${{ github.run_attempt }}
         run: python3 scripts/ci/verify-libraries.py
@@ -128,14 +128,14 @@ jobs:
           sha256sum -c SHA256SUMS
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release already exists; verify its required runtime assets before updating the channel."
-            gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '[.assets[] | select(.state == "uploaded") | .name] | contains(["Libraries.tar.gz", "Libraries-sources.tar.gz", "WhiskyWineVersion.plist", "SHA256SUMS", "Libraries-privacy-audit.json", "Libraries-static-check.json"])' | grep -qx true
+            gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '[.assets[] | select(.state == "uploaded") | .name] | contains(["Libraries.tar.gz", "Libraries-sources.tar.gz", "WhiskyWineVersion.plist", "SHA256SUMS", "Libraries-privacy-audit.json", "Libraries-static-check.json", "Libraries-ffmpeg-capabilities.json"])' | grep -qx true
             if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true ]; then
               gh release edit "$RELEASE_TAG" --draft=false --prerelease
             fi
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease \
               --title "$RELEASE_TAG — macOS 27+ Apple Silicon (Rosetta)" \
-              --notes-file RELEASE-NOTES.md Libraries.tar.gz Libraries-sources.tar.gz WhiskyWineVersion.plist SHA256SUMS release-manifest.json Libraries-privacy-audit.json Libraries-static-check.json RELEASE-NOTES.md
+              --notes-file RELEASE-NOTES.md Libraries.tar.gz Libraries-sources.tar.gz WhiskyWineVersion.plist SHA256SUMS release-manifest.json Libraries-privacy-audit.json Libraries-static-check.json Libraries-ffmpeg-capabilities.json RELEASE-NOTES.md
             gh release edit "$RELEASE_TAG" --draft=false --prerelease
           fi
       - name: Refresh the public Wine runtime channel

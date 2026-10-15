@@ -47,23 +47,25 @@ Path(os.environ['DEPS_ROOT'], 'lib/pkgconfig/zlib.pc').write_text(
     f'prefix=/usr\nName: zlib\nDescription: macOS SDK/system zlib\nVersion: {version}\nLibs: -lz\nCflags:\n')
 PY
 poc_note "Building $POC_FFMPEG_DIR"
+# Broad built-in playback support; retain only the encoders/muxers needed by
+# synthetic samples. Optional external libraries remain disabled for reproducibility.
 (cd "$root/src/$POC_FFMPEG_DIR"
  ./configure --prefix="$deps" --cc="$POC_HOST_CC" \
    --arch=x86_64 --target-os=darwin --enable-cross-compile \
    --enable-shared --disable-static --disable-autodetect --disable-x86asm \
    --disable-doc --disable-debug --disable-network --disable-everything \
+   --disable-gpl --disable-nonfree --disable-version3 --disable-hwaccels \
    --enable-avcodec --enable-avformat --enable-avutil --enable-swscale \
    --enable-swresample --enable-avfilter --enable-indev=lavfi \
    --enable-filter=testsrc2,color,format,aresample,sine,scale \
-   --enable-demuxer=asf,mpegps,mpegvideo,avi,mov,wav,mp3 \
-   --enable-decoder=wmv1,wmv2,wmv3,vc1,wmav1,wmav2,wmapro,mpeg1video,mpeg2video,mp1,mp2,mp3,pcm_s16le,h264,wrapped_avframe \
-   --enable-parser=mpegvideo,mpegaudio,h264,vc1 \
+   --enable-demuxers --enable-decoders --enable-parsers \
    --enable-encoder=wmv1,wmv2,wmav2,mpeg1video,mp2,pcm_s16le \
    --enable-muxer=asf,mpeg1system,vob,wav,avi --enable-protocol=file \
-   --enable-bsf=h264_mp4toannexb,vc1_asftorcv \
+   --enable-bsfs \
    --extra-ldflags="-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -Wl,-rpath,$deps/lib" \
    > "$root/logs/ffmpeg-configure.log" 2>&1
  make -j"$POC_JOBS" > "$root/logs/ffmpeg-build.log" 2>&1
  make install > "$root/logs/ffmpeg-install.log" 2>&1)
+bash "$POC_PROJECT/scripts/build-crypto-deps.sh"
 bash "$POC_PROJECT/scripts/build-vulkan-deps.sh"
 echo "Local dependencies installed: $deps"

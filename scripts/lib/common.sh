@@ -128,6 +128,7 @@ poc_setup_wine_build_env() {
   poc_require_path "$POC_TOOLS/bin/autoconf" "run scripts/build-deps.sh"
   poc_require_path "$POC_LLVM_MINGW/bin/lld-link" "run scripts/build-deps.sh"
   poc_require_path "$POC_DEPS/lib/pkgconfig" "run scripts/build-deps.sh"
+  poc_require_path "$POC_DEPS/lib/libgnutls.dylib" "run scripts/build-crypto-deps.sh"
   export BISON_PKGDATADIR="$POC_TOOLS/share/bison"
   export M4="$POC_TOOLS/bin/m4"
   export CC="$POC_HOST_CC"
@@ -136,4 +137,9 @@ poc_setup_wine_build_env() {
   export PKG_CONFIG_PATH=''
   export CPPFLAGS="-I$POC_DEPS/include"
   export LDFLAGS="-L$POC_DEPS/lib -Wl,-rpath,$POC_DEPS/lib"
+  # Wine dlopens GnuTLS. A bare dylib name does not use LC_RPATH on macOS;
+  # retain an @rpath name so relocated Whisky runtimes need no DYLD override.
+  local gnutls_id
+  gnutls_id="$(/usr/bin/otool -D "$POC_DEPS/lib/libgnutls.dylib" | /usr/bin/tail -n 1)"
+  export ac_cv_lib_soname_gnutls="@rpath/${gnutls_id##*/}"
 }

@@ -29,7 +29,7 @@ poc_note "Building CrossOver core ($mode, macOS >= $MACOSX_DEPLOYMENT_TARGET, $P
 mkdir -p "$port/build" "$port/stage"
 cd "$port/build"
 "$source_dir/configure" --host=x86_64-apple-darwin --enable-archs=i386,x86_64 \
-  --with-mingw=llvm-mingw --with-ffmpeg --with-coreaudio --with-freetype --with-vulkan \
+  --with-mingw=llvm-mingw --with-ffmpeg --with-coreaudio --with-freetype --with-vulkan --with-gnutls \
   --without-x --without-wayland --without-pulse --without-alsa \
   --disable-tests --prefix="$port/stage" > "$port/configure.log" 2>&1
 case "$mode" in
@@ -49,7 +49,8 @@ project, source, stage = map(pathlib.Path, sys.argv[1:4])
 lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
 patches = sys.argv[4:]
 modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
-           'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll']
+           'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll',
+           'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
           'source_archive_sha256': lock['source_sha256'],
           'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),

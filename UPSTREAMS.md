@@ -13,10 +13,15 @@ source preparation, isolated builds and diagnostics.
 | [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) | GE-Proton11-7; c191f35dcebbeccfacd3b4c6f6eea026e588c1c2 | 64 multimedia patches and supporting hotfix; retain individual patch authors including GloriousEggroll and atty303 |
 | [vkd3d](https://gitlab.winehq.org/wine/vkd3d) | Henri Verbeet, MR 2063, commit 2d2b02426363c8fb3bb02388a1d945ec2e4b7353 | Backport partial shader I/O initialization for the Vulkan renderer; LGPL-2.1-or-later and original author credit retained |
 | [WineForge](https://github.com/Alien4042x/WineForge/blob/main/dlls/wow64cpu/cpu.c) | Reference file SHA-256 0fc33bffbd7066449853547d9a4c25a352cb7a1d6c6f1e1e4518f3caf7839afc | Rosetta thunk adaptation in the GE/Valve PoC; copyright/license header retained. CrossOver branch uses its existing CodeWeavers implementation |
-| [FFmpeg](https://github.com/FFmpeg/FFmpeg) | 9047fa1b084f76b1b4d065af2d743df1b40dfb56 | Media decode and sample generation; configuration in scripts/build-deps.sh; license copies in licenses/ |
+| [FFmpeg](https://github.com/FFmpeg/FFmpeg) | 9047fa1b084f76b1b4d065af2d743df1b40dfb56 | Broad dependency-satisfied built-in software decoding/demuxing/parsing and bitstream filters; limited sample-generation encoders/muxers; LGPL-2.1-or-later configuration in scripts/build-deps.sh, without GPL/nonfree/version3 components or external-library autodetection; license copies in licenses/ |
 | [MoltenVK](https://github.com/KhronosGroup/MoltenVK) | 1.4.2; official macOS binary archive with locked SHA-256 | Vulkan-to-Metal runtime; x86_64 slice retained for Rosetta; original bundled license notices in licenses/MoltenVK-LICENSE.txt |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | 1.4.357; locked source archive | Vulkan development headers; Apache-2.0 and MIT notices retained in licenses/ |
 | [FreeType](https://freetype.org/) | 2.13.3 | Font support; FTL license copy in licenses/ |
+| [GnuTLS](https://www.gnutls.org/) | 3.8.13; archive digest in configs/dependency-lock.json | Wine bcrypt asymmetric cryptography and Schannel TLS; library LGPL-2.1-or-later; tools and optional PKCS#11/TPM/IDN dependencies disabled |
+| [GMP](https://gmplib.org/) | 6.3.0 | Multiprecision arithmetic for Nettle/Hogweed; upstream LGPL-3.0-or-later / GPL-2.0-or-later dual licensing retained |
+| [Nettle](https://www.lysator.liu.se/~nisse/nettle/) | 3.10.2 | GnuTLS cryptographic primitives, including Hogweed; upstream LGPL-3.0-or-later / GPL-2.0-or-later dual licensing and individual file notices retained |
+| [libtasn1](https://www.gnu.org/software/libtasn1/) | 4.21.0 | ASN.1 parsing for GnuTLS; library LGPL-2.1-or-later |
+| [libunistring](https://www.gnu.org/software/libunistring/) | 1.4.2 | Unicode support for GnuTLS; upstream LGPL-3.0-or-later / GPL-2.0-or-later dual licensing retained |
 | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) | 20260616 UCRT macOS universal | Windows PE build toolchain; component terms in upstream distribution |
 | [GNU Autoconf, Bison and M4](https://www.gnu.org/software/) | Versions and archive digests in configs/dependency-lock.json | Build tools; original archive licenses retained |
 

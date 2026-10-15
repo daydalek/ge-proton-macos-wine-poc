@@ -12,6 +12,8 @@
 
 `media` 为 GE 多媒体修复版，`baseline` 为上游 Wine 对照版。游戏运行目录自动设置为 EXE 所在目录。
 
+当前构建默认启用 FFmpeg 中所有依赖满足的内置软件解码器、解封装器、解析器和码流过滤器，不包含额外第三方解码库或硬件加速组件。FFmpeg 保持 LGPL-2.1-or-later 配置。格式可解码不等于 Wine 已接入对应格式；游戏播放仍需实际确认。
+
 Prefix、缓存与日志默认保存在 `~/Library/Application Support/GE-Proton macOS Wine PoC`。使用独立数据目录测试：
 
 ```bash

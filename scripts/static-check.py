@@ -13,9 +13,17 @@ script_dir = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--package', type=Path, default=(script_dir if (script_dir / 'baseline').is_dir() else script_dir.parent / 'outputs/wine-poc'))
 parser.add_argument('--libraries', action='store_true', help='Check the final Whisky Libraries tree')
+parser.add_argument('--require-crypto', action='store_true', help='Require bundled GnuTLS and Wine crypto backends')
 parser.add_argument('--max-minimum-macos', help='Reject binaries requiring a newer macOS than this version')
 args = parser.parse_args()
 root = args.package.resolve()
+if args.require_crypto:
+    assert args.libraries, '--require-crypto expects --libraries'
+    crypto_lib = root / 'Wine/lib/libgnutls.dylib'
+    assert crypto_lib.is_file(), 'Missing GnuTLS runtime'
+    for module in ('bcrypt.so', 'secur32.so'):
+        data = (root / 'Wine/lib/wine/x86_64-unix' / module).read_bytes()
+        assert b'@rpath/libgnutls.' in data, ('GnuTLS backend missing or not relocatable', module)
 records = []
 for item in ([] if args.libraries else json.loads((root / 'probe-and-sample-manifest.json').read_text())):
     file = root / item['file']

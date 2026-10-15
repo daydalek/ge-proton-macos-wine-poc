@@ -47,7 +47,7 @@ fi
 cd "$root/build/$variant"
 "$src/configure" --host=x86_64-apple-darwin \
   --enable-archs=i386,x86_64 --with-mingw=llvm-mingw \
-  --with-ffmpeg --with-coreaudio --with-freetype --with-vulkan \
+  --with-ffmpeg --with-coreaudio --with-freetype --with-vulkan --with-gnutls \
   --without-x --without-wayland --without-pulse --without-alsa \
   ${platform_flags[@]+"${platform_flags[@]}"} \
   --disable-tests --prefix="$root/stage/$variant" \

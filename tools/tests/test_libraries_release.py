@@ -54,12 +54,13 @@ class LibrariesTests(unittest.TestCase):
     def test_checksums_cover_runtime_plist_and_original_assets(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist', 'Libraries-static-check.json', 'Libraries-sources.tar.gz'):
+            for name in ('Libraries.tar.gz', 'WhiskyWineVersion.plist', 'Libraries-static-check.json',
+                         'Libraries-sources.tar.gz', 'Libraries-ffmpeg-capabilities.json'):
                 (root / name).write_bytes(name.encode())
             (root / 'SHA256SUMS').write_text('stale')
             libraries.update_checksums(root)
             rows = (root / 'SHA256SUMS').read_text().splitlines()
-            self.assertEqual(len(rows), 4)
+            self.assertEqual(len(rows), 5)
             for row in rows:
                 digest, name = row.split('  ')
                 self.assertEqual(digest, hashlib.sha256((root / name).read_bytes()).hexdigest())

@@ -66,6 +66,30 @@ bash scripts/build-wine.sh media
 
 > For an upstream reference build, run `bash scripts/build-wine.sh baseline`.
 
+#### FFmpeg format coverage
+
+`scripts/build-deps.sh` enables all dependency-satisfied built-in decoders, demuxers,
+parsers and bitstream filters in the locked FFmpeg source, rather than a playback
+allowlist. This includes WMA Lossless, AAC, Vorbis, Opus, FLAC, MPEG-4, HEVC and
+VP8/VP9. Encoders, muxers and filters remain limited to synthetic sample generation.
+
+External-library autodetection, networking, hardware acceleration and
+GPL/nonfree/version3 components are disabled, retaining an LGPL-2.1-or-later
+FFmpeg build. Optional third-party codecs are not bundled. Actual coverage depends
+on the locked source and dependencies; FFmpeg support does not guarantee Wine
+integration or game playback.
+
+#### Wine cryptography and TLS
+
+Dependency builds also compile private x86_64 GnuTLS, GMP, Nettle/Hogweed,
+libtasn1 and libunistring. Existing builds can run `bash scripts/build-crypto-deps.sh`
+before reconfiguring and rebuilding Wine. Wine explicitly requires GnuTLS, so a
+missing backend fails configuration instead of silently disabling cryptography.
+Whisky packages bundle these libraries and use `@rpath` loading, without Homebrew
+paths or disabling certificate verification. Full CI checks the bundled libraries
+and relocatable crypto backend names. These dependencies have their own licenses,
+independent of FFmpeg; see [UPSTREAMS.md](UPSTREAMS.md).
+
 #### Run a game and test playback
 
 ```bash
@@ -161,3 +185,12 @@ git push origin v0.1.0
 ```
 
 The repository variable `MACOS_BUILD_RUNNER_JSON` can override the runner selection, for example `["self-hosted", "macOS", "ARM64", "macos-27"]`. The workflow checks the actual macOS version, arm64 host architecture, and Rosetta environment.
+
+Full CI builds inspect the final Libraries FFmpeg dylibs for common game formats
+and LGPL licensing. `Libraries-ffmpeg-capabilities.json` lists the actual registered
+formats and is included in the release assets, `release-manifest.json` and
+`SHA256SUMS`. Missing required codecs such as WMA Lossless or AAC fail the build.
+This check launches neither Wine nor games and is not playback acceptance.
+The `libraries_only` job only repackages and smoke-tests the pinned older released
+core; it does not rebuild FFmpeg or validate current codec coverage. Use the default
+full build to release the updated decoding libraries.

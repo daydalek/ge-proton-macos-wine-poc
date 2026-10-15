@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Exercise the CI Libraries contract on a hosted Mac without rebuilding Wine."""
+"""Check legacy released-core packaging; does not validate current FFmpeg coverage."""
 import json
 import os
 from pathlib import Path
