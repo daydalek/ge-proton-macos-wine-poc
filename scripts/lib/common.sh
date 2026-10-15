@@ -80,6 +80,19 @@ poc_require_path() {
   test -e "$1" || poc_die "missing $1${2:+ ($2)}"
 }
 
+# Fill the POC_CROSSOVER_PATCHES array with the ordered, project-relative
+# CrossOver patch series (comments and blank lines skipped).
+poc_load_crossover_patches() {
+  local line
+  POC_CROSSOVER_PATCHES=()
+  while IFS= read -r line || test -n "$line"; do
+    case "$line" in ''|'#'*) continue ;; esac
+    test -f "$POC_PROJECT/$line" || poc_die "missing patch $line (configs/crossover-patch-series.txt)"
+    POC_CROSSOVER_PATCHES+=("$line")
+  done < "$POC_PROJECT/configs/crossover-patch-series.txt"
+  test "${#POC_CROSSOVER_PATCHES[@]}" -gt 0 || poc_die "empty CrossOver patch series"
+}
+
 # PATH and tool variables for configure/make. Only the project tools, the
 # directories of the detected cmake/pkg-config and the system directories are
 # visible, so random user tools cannot leak into the build.

@@ -8,10 +8,12 @@ case "$mode" in full|media) ;; *) echo 'Usage: build.sh [full|media]' >&2; exit 
 port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
-notice_args=(--patch "$POC_PROJECT/patches/crossover/crossover-26.3-media.patch")
-patch_names=(quartz-preserve-window-size.patch mpeg-audio-wave-format.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch)
-for patch_name in "${patch_names[@]}"; do
-  patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
+poc_load_crossover_patches
+# The base media port is part of the prepared import and later patches overlap
+# it, so only the remaining series entries are applied or verified here.
+notice_args=(--patch "$POC_PROJECT/${POC_CROSSOVER_PATCHES[0]}")
+for patch_name in "${POC_CROSSOVER_PATCHES[@]:1}"; do
+  patch_file="$POC_PROJECT/$patch_name"
   if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
     git -C "$source_dir" apply "$patch_file"
   else
@@ -41,11 +43,11 @@ case "$mode" in
     make -j"$POC_JOBS" > "$port/build-full.log" 2>&1
     make install > "$port/install.log" 2>&1
     # Record successful compilation inputs beside the installed core.
-    python3 - "$POC_PROJECT" "$source_dir" "$port/stage" "${patch_names[@]}" <<'PY_BUILD'
+    python3 - "$POC_PROJECT" "$source_dir" "$port/stage" "${POC_CROSSOVER_PATCHES[@]}" <<'PY_BUILD'
 import hashlib, json, pathlib, subprocess, sys
 project, source, stage = map(pathlib.Path, sys.argv[1:4])
 lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
-patches = ['patches/crossover/crossover-26.3-media.patch'] + ['patches/wine-ge/' + name for name in sys.argv[4:]]
+patches = sys.argv[4:]
 modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
            'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],

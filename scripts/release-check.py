@@ -18,7 +18,7 @@ credentials = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b
 media_names = {'test-wmv2.wmv', 'test-mpeg1.mpg', 'test-pcm.wav'}
 forbidden = {'.exe', '.dll', '.paz', '.vff', '.iso', '.zip', '.tar', '.gz', '.xz', '.dmg'}
 
-PUBLIC_CONFIGS = {'build.env', 'crossover-source-lock.json', 'dependency-lock.json',
+PUBLIC_CONFIGS = {'build.env', 'crossover-patch-series.txt', 'crossover-source-lock.json', 'dependency-lock.json',
                   'source-license-inventory.json', 'source-lock.json', 'vulkan-generation-lock.json'}
 LOCAL_ROOTS = {'work', 'outputs', 'docs', 'plans', 'reports', 'logs'}
 

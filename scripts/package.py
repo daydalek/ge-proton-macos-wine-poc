@@ -36,7 +36,7 @@ for file in sorted(samples.glob('test-*')):
 for file in sorted((project / 'licenses').iterdir()):
     if file.is_file():
         inputs['licenses/' + file.name] = file
-for name in ('crossover-source-lock.json', 'dependency-lock.json',
+for name in ('crossover-patch-series.txt', 'crossover-source-lock.json', 'dependency-lock.json',
              'source-license-inventory.json', 'source-lock.json', 'vulkan-generation-lock.json'):
     inputs[name] = project / 'configs' / name
 for file in sorted((project / 'patches/wine-ge').glob('*.patch')):

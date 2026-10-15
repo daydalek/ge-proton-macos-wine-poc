@@ -7,7 +7,7 @@ source preparation, isolated builds and diagnostics.
 
 | Upstream | Version / provenance | Use |
 | --- | --- | --- |
-| [Wine](https://gitlab.winehq.org/wine/wine), [source mirror](https://github.com/wine-mirror/wine) | wine-11.0 | Upstream Wine implementation and baseline build; retain source AUTHORS and license files |
+| [Wine](https://gitlab.winehq.org/wine/wine), [source mirror](https://github.com/wine-mirror/wine) | wine-11.0; syscall parameter-normalization wrappers ported from commit f43402c | Upstream Wine implementation and baseline build; the ported wrappers normalize small integer syscall arguments whose upper bits the Win64 ABI leaves undefined but clang-built Unix code assumes extended; retain source AUTHORS and license files |
 | [CodeWeavers CrossOver FOSS sources](https://www.codeweavers.com/crossover/source) | 26.3.0; archive SHA-256 in configs/crossover-source-lock.json | CrossOver Wine base, macOS drivers and existing Rosetta thunk adaptation |
 | [ValveSoftware/wine](https://github.com/ValveSoftware/wine) | 46b29104e3741fe23bf5e2547196a253aab88c89 | GE PoC Wine base and prerequisite implementations |
 | [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) | GE-Proton11-7; c191f35dcebbeccfacd3b4c6f6eea026e588c1c2 | 64 multimedia patches and supporting hotfix; retain individual patch authors including GloriousEggroll and atty303 |

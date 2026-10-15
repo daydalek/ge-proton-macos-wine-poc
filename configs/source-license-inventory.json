@@ -2052,10 +2052,34 @@
         "Copyright 2012 Alexandre Julliard",
         "Copyright 2012, 2013 Ken Thomases for CodeWeavers Inc."
       ]
+    },
+    {
+      "patch": "patches/wine-ge/wine-upstream-syscall-wrappers.patch",
+      "source_file": "dlls/ntdll/unix/loader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "451eb34296572d19e072b7399f5e4d6b053a0e809ccb0dedfe18da7c523703b2",
+      "copyright_notices": [
+        "Copyright (C) 2020 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/steam-auto-args.patch",
+      "source_file": "loader/wine.inf.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "753a54203c14c4291c97436d8e922619faf4b52ee0e3fe1722441760520a3789",
+      "copyright_notices": [
+        ";; Copyright (C) 2004 Chris Morgan",
+        ";; Copyright (C) 2004 Brian Vincent",
+        ";; Copyright (C) 2004 Alexandre Julliard"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 180,
+    "LGPL-2.1-or-later": 182,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2075,6 +2099,8 @@
     "patches/wine-ge/stale-present-rect.patch": "3d5f1ef0937201e8c0d5e34ebddd36922a66d4f43e1186c0e1281289dba76f39",
     "patches/wine-ge/opengl-flush-flags.patch": "931f3120de4de284c3a222477069ea422b57a80e7e1142add49efb7a7f0ca8fe",
     "patches/wine-ge/macos-fullscreen-surface.patch": "ad335ec4b04613eafe460cb803ed54c0eb9383c906bcc6495dad3be0c70b1d3c",
-    "patches/wine-ge/wow64-present-rect.patch": "0d72870259ccd066937cd33c75e36bdde72c56daf61cfa564fb378c6986a7e40"
+    "patches/wine-ge/wow64-present-rect.patch": "0d72870259ccd066937cd33c75e36bdde72c56daf61cfa564fb378c6986a7e40",
+    "patches/wine-ge/wine-upstream-syscall-wrappers.patch": "fea09994775ee98adc0b5274213547053238842427fa8a89c23aec62e7859d11",
+    "patches/crossover/steam-auto-args.patch": "79490b4bd10941425157db9a9f60e393983f8c860cc0f98a87e8669c535a77db"
   }
 }

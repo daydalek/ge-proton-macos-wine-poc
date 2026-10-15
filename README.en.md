@@ -94,6 +94,8 @@ bash scripts/crossover/build.sh full
 bash scripts/crossover/build.sh media
 ```
 
+The patch order is recorded in `configs/crossover-patch-series.txt`. The build ports upstream wine's syscall parameter-normalization wrappers (commit `f43402c`): the Unix side is built with clang, which assumes callers have zero/sign-extended small integer arguments (`BOOLEAN`, `UCHAR`, …), whereas the Win64 ABI leaves their upper bits undefined. Without the wrappers, garbage upper bits from Windows callers keep Steam's connection coroutine (`YieldingConnect`) from starting. `wine.inf` also seeds default `HKCU\Software\Wine\AppDefaults\<exe>\CommandLineAppend` values for `steam.exe` and `steamwebhelper.exe` without overwriting existing values; set an empty string to disable one.
+
 The standalone runtime is installed to `work/crossover-port/stage`. Your existing CrossOver application and bottles remain unchanged.
 
 ---

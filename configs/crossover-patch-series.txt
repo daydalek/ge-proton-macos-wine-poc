@@ -1,0 +1,18 @@
+# Ordered patch series applied to the official CrossOver source tree.
+# Paths are relative to the project root. The first entry is the base media
+# port; later entries are checked individually and may be appended to an
+# already prepared tree. Read by scripts/crossover/*.sh and
+# scripts/ci/build-libraries.py.
+patches/crossover/crossover-26.3-media.patch
+patches/wine-ge/quartz-preserve-window-size.patch
+patches/wine-ge/mpeg-audio-wave-format.patch
+patches/wine-ge/command-line-append.patch
+patches/crossover/steam-auto-args.patch
+patches/wine-ge/vkd3d-partial-varyings.patch
+patches/wine-ge/dbghelp-dwarf-divisor.patch
+patches/wine-ge/sechost-device-notify-handle.patch
+patches/wine-ge/stale-present-rect.patch
+patches/wine-ge/opengl-flush-flags.patch
+patches/wine-ge/macos-fullscreen-surface.patch
+patches/wine-ge/wow64-present-rect.patch
+patches/wine-ge/wine-upstream-syscall-wrappers.patch

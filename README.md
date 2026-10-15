@@ -93,6 +93,8 @@ bash scripts/crossover/build.sh full
 bash scripts/crossover/build.sh media
 ```
 
+补丁顺序统一记录在 `configs/crossover-patch-series.txt`。其中移植了上游 Wine 的 syscall 参数规范化包装（commit `f43402c`）：Unix 侧由 clang 编译，clang 假定调用方已对小整数参数（`BOOLEAN`/`UCHAR` 等）做零/符号扩展，而 Win64 ABI 不保证高位清零，Windows 程序传入的参数高位可能是垃圾，导致 Steam 的连接协程（`YieldingConnect`）无法启动。另外 `wine.inf` 会为 `steam.exe` / `steamwebhelper.exe` 写入默认的 `HKCU\Software\Wine\AppDefaults\<exe>\CommandLineAppend`，不会覆盖已有值；设为空字符串即可关闭。
+
 产物将安装到 `work/crossover-port/stage`，完全独立隔离，不会影响本机已有的 CrossOver 应用与 Bottles。
 
 ---
@@ -183,8 +185,13 @@ and **WhiskyWineVersion.plist**. The runtime asset is the Whisky Libraries packa
 is used only for DXVK. Current Wine binaries always come from this run's stage.
 
 Full builds prepare the digest-locked official CrossOver sources and apply the GE multimedia
-port, stale fullscreen rectangle, OpenGL flush flag, macOS fullscreen surface and WoW64
-present-rectangle fixes. Both i386 and x86_64 Windows modules are built and installed.
+port, stale fullscreen rectangle, OpenGL flush flag, macOS fullscreen surface, WoW64
+present-rectangle fixes, default Steam `CommandLineAppend` values in `wine.inf`, and upstream
+wine's **syscall parameter-normalization wrappers** (commit `f43402c`; the Unix side is built with
+clang, which assumes callers zero/sign-extend small integer arguments, while the Win64 ABI leaves
+their upper bits undefined — without it Steam's CM connection never starts). The ordered patch
+series lives in `configs/crossover-patch-series.txt`. Both i386 and x86_64 Windows modules are
+built and installed.
 `Libraries-sources.tar.gz` carries the exact patched CrossOver tree, official source archive,
 dependency archives and build recipes. Provenance identifies the CrossOver baseline explicitly.
 

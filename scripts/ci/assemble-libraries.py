@@ -73,7 +73,7 @@ def main():
         shutil.copytree(poc / name, notices / name, symlinks=True)
     (notices / 'configs').mkdir()
     for name in ('source-lock.json', 'dependency-lock.json', 'source-license-inventory.json',
-                 'vulkan-generation-lock.json', 'crossover-source-lock.json', 'build.env'):
+                 'vulkan-generation-lock.json', 'crossover-source-lock.json', 'crossover-patch-series.txt', 'build.env'):
         shutil.copy2(poc / 'configs' / name, notices / 'configs' / name)
 
     # Every shipped symlink must resolve within Libraries after installation.

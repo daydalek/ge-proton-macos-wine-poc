@@ -1,0 +1,30 @@
+Subject: wine.inf: default Steam compatibility arguments via CommandLineAppend
+License: LGPL-2.1-or-later
+
+Requires patches/wine-ge/command-line-append.patch, which reads these values.
+The defaults are written on prefix creation and update without overwriting
+existing user values; set an empty string to disable an append.
+
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -56,6 +56,7 @@ WineFakeDlls=FakeDlls
+ UpdateInis=SystemIni
+ CopyFiles=ColorFiles,EtcFiles,InfFiles,NlsFiles,SortFiles,WinmdFiles
+ AddReg=\
++    AppDefaults,\
+     Classes,\
+     ContentIndex,\
+     ControlClass,\
+@@ -405,6 +406,12 @@ HKLM,%CurrentVersion%,"CommonFilesDir (x86)",,"%16427%"
+ HKLM,%CurrentVersion%,"ProgramFilesDir (Arm)",,"%16422%"
+ HKLM,%CurrentVersion%,"CommonFilesDir (Arm)",,"%16427%"
+ 
++[AppDefaults]
++;; Steam compatibility arguments, consumed by kernelbase's CommandLineAppend support.
++;; FLG_ADDREG_NOCLOBBER keeps user values; an empty string disables the append.
++HKCU,Software\Wine\AppDefaults\steam.exe,"CommandLineAppend",2,"-allosarches -cef-force-32bit"
++HKCU,Software\Wine\AppDefaults\steamwebhelper.exe,"CommandLineAppend",2,"--no-sandbox --in-process-gpu --disable-gpu"
++
+ [Debugger]
+ HKLM,%CurrentVersionNT%\AeDebug,"Debugger",2,"winedbg --auto %ld %ld"
+ HKLM,%CurrentVersionNT%\AeDebug,"Auto",2,"1"

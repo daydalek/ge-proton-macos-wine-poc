@@ -16,7 +16,7 @@ import urllib.request
 
 PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT / 'scripts/lib'))
-from poc_common import STAGE, CROSSOVER_PORT, WORK, SETTINGS, sha256_file
+from poc_common import STAGE, CROSSOVER_PORT, WORK, SETTINGS, sha256_file, crossover_patch_series
 
 # Bootstrap only the pinned DXVK payload. Wine always comes from the current build.
 DXVK_BASE_URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz'
@@ -54,11 +54,7 @@ def update_checksums(output):
 
 REQUIRED_MODULES = ('bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
                     'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll')
-REQUIRED_PATCHES = ('patches/crossover/crossover-26.3-media.patch',
-                    'patches/wine-ge/stale-present-rect.patch',
-                    'patches/wine-ge/opengl-flush-flags.patch',
-                    'patches/wine-ge/macos-fullscreen-surface.patch',
-                    'patches/wine-ge/wow64-present-rect.patch')
+REQUIRED_PATCHES = crossover_patch_series()
 
 
 def validate_compiled_provenance(wine_stage, project=PROJECT):
@@ -70,7 +66,7 @@ def validate_compiled_provenance(wine_stage, project=PROJECT):
     if not set(REQUIRED_MODULES) <= compiled['compiled_modules'].keys():
         raise ValueError('Incomplete compiled module provenance')
     if not set(REQUIRED_PATCHES) <= compiled['patches'].keys():
-        raise ValueError('Fullscreen patch provenance is incomplete')
+        raise ValueError('Required patch provenance is incomplete')
     for name, digest in compiled['compiled_modules'].items():
         if sha256_file(wine_stage / name) != digest:
             raise ValueError('Compiled module provenance mismatch: ' + name)

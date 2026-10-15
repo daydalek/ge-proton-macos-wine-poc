@@ -49,6 +49,15 @@ def sha256_file(path):
     return hasher.hexdigest()
 
 
+def crossover_patch_series(project=PROJECT):
+    """Ordered, project-relative CrossOver patches from configs/crossover-patch-series.txt."""
+    lines = (project / 'configs/crossover-patch-series.txt').read_text().splitlines()
+    series = tuple(line.strip() for line in lines if line.strip() and not line.lstrip().startswith('#'))
+    if not series:
+        raise ValueError('Empty CrossOver patch series')
+    return series
+
+
 def download_verified(url, destination, sha256):
     """Download to a temporary name, verify, then move into place."""
     destination = Path(destination)
