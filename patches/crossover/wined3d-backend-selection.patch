@@ -1,0 +1,57 @@
+From: GE macOS Wine PoC
+Subject: ntdll: select same-build Wine graphics builtins for WINED3DMETAL=0
+
+Whisky deploys Apple's forwarders over the default Wine graphics builtins.
+Keep Wine's implementation in lib/wine/wined3d and select it per process,
+without changing a shared runtime or prefix. Fail closed when it is missing,
+and never attach Apple's unix bridge to an original Wine graphics DLL.
+
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1713,7 +1713,8 @@
+             pe_build_dir = alt_build_dir;
+         maxlen = max( strlen(build_dir), strlen(pe_build_dir) ) + sizeof("/programs/") + len;
+     }
+-    maxlen = max( maxlen, dll_path_maxlen + 1 ) + len + sizeof("/aarch64-windows") + sizeof(".so");
++    maxlen = max( maxlen, dll_path_maxlen + 1 ) + len + sizeof("/aarch64-windows")
++             + sizeof("/wined3d") + sizeof(".so");
+ 
+     if (!(file = malloc( maxlen ))) return STATUS_NO_MEMORY;
+ 
+@@ -1738,6 +1739,36 @@
+     file[--pos] = '/';
+ 
+     TRACE( "looking for %s for file %s\n", debugstr_a(file + pos + 1), debugstr_us(nt_name) );
++
++    /* Whisky installs Apple's forwarders over the default builtins. Keep a
++     * separate, same-build Wine implementation so backend selection is local
++     * to this process, not a mutation of the shared runtime or prefix. */
++    if (!build_dir && getenv("WINED3DMETAL") && !strcmp(getenv("WINED3DMETAL"), "0")
++        && (!strcmp(file + pos + 1, "dxgi.dll")
++            || !strcmp(file + pos + 1, "d3d10.dll")
++            || !strcmp(file + pos + 1, "d3d10core.dll")
++            || !strcmp(file + pos + 1, "d3d11.dll")
++            || !strcmp(file + pos + 1, "d3d12.dll")))
++    {
++        ptr = prepend( file + pos, pe_dir, strlen(pe_dir) );
++        ptr = prepend( ptr, "/wined3d", strlen("/wined3d") );
++        ptr = prepend( ptr, dll_dir, strlen(dll_dir) );
++        TRACE( "WINED3DMETAL=0: loading Wine graphics builtin %s\n", debugstr_a(ptr) );
++        status = open_builtin_pe_file( ptr, &attr, module, size_ptr, image_info,
++                                       limit_low, limit_high, load_machine, prefer_native, offset );
++        if (status) ERR( "Cannot load Wine graphics builtin %s, status %#x; refusing D3DMetal fallback\n",
++                         debugstr_a(ptr), status );
++        /* load_builtin treats these search results as permission to map the
++         * prefix image. An explicitly selected backend requires a terminal
++         * error when its runtime component is missing or unsupported. */
++        if (status == STATUS_DLL_NOT_FOUND || status == STATUS_NOT_SUPPORTED)
++            status = STATUS_DLL_INIT_FAILED;
++        /* Never attach Apple's same-named unix bridge to Wine's original PE. */
++        ptr = prepend( file + pos, so_dir, strlen(so_dir) );
++        ptr = prepend( ptr, "/wined3d", strlen("/wined3d") );
++        ptr = prepend( ptr, dll_dir, strlen(dll_dir) );
++        goto done;
++    }
+ 
+     if (build_dir)
+     {

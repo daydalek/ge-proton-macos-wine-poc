@@ -4,6 +4,12 @@ This project ports and adapts existing Wine multimedia work to macOS. Original
 file copyright notices, author credits and applicable license terms are retained.
 Project additions cover macOS rendering, child-window coordinates, WoW64 cleanup,
 source preparation, isolated builds and diagnostics.
+The project-authored `patches/crossover/wined3d-backend-selection.patch` adds
+per-process Wine graphics builtin routing for Whisky's `WINED3DMETAL=0`;
+it is not a port of an upstream Whisky loader-switch patch.
+The project-authored `patches/crossover/i386-hotpatch-prologue.patch` adapts
+Clang i386 `DECLSPEC_HOTPATCH` code generation and `winebuild --builtin` to emit
+traditional Windows `90 90 90 90 90 | 8b ff` hotpatch prologues.
 
 | Upstream | Version / provenance | Use |
 | --- | --- | --- |

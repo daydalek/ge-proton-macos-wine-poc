@@ -1,0 +1,236 @@
+Subject: winebuild,gdi32,user32: emit traditional x86 hotpatch prologues for Clang i386 DECLSPEC_HOTPATCH APIs
+License: LGPL-2.1-or-later
+
+When building i386 PE modules with llvm-mingw (Clang + LLD), -fms-hotpatch emits
+a two-byte 66 90 NOP at function entry while LLD's --functionpadmin fills the
+preceding inter-section padding with 0xcc. Older Windows hotpatchers (such as
+rUGP localization hooks) require five 0x90 NOP bytes before the entry point and
+an 8b ff (mov edi, edi) two-byte entry instruction.
+
+Map DECLSPEC_HOTPATCH on Clang i386 to __patchable_function_entry__(8, 6) and
+__noinline__ so each hotpatchable function owns six 0x90 bytes before its
+two-byte-aligned entry and intra-DLL wrappers do not inline it. In winebuild's
+make_builtin_files pass, rewrite the 66 90 entry of i386 functions preceded by
+five 0x90 bytes to 8b ff. Mark CreateFontIndirectA, GetGlyphOutlineA,
+EnumFontFamiliesExA, and AppendMenuA with DECLSPEC_HOTPATCH alongside the
+existing CreateWindowExA and SetWindowTextA annotations.
+
+--- a/dlls/gdi32/text.c
++++ b/dlls/gdi32/text.c
+@@ -860,7 +860,7 @@ HFONT WINAPI CreateFontIndirectExW( const ENUMLOGFONTEXDVW *enumex )
+ /***********************************************************************
+  *           CreateFontIndirectA   (GDI32.@)
+  */
+-HFONT WINAPI CreateFontIndirectA( const LOGFONTA *lfA )
++HFONT WINAPI DECLSPEC_HOTPATCH CreateFontIndirectA( const LOGFONTA *lfA )
+ {
+     LOGFONTW lfW;
+ 
+@@ -1908,7 +1908,7 @@ BOOL WINAPI GetCharABCWidthsI( HDC hdc, UINT first, UINT count, WORD *glyphs, AB
+ /***********************************************************************
+  *           GetGlyphOutlineA    (GDI32.@)
+  */
+-DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics, DWORD size,
++DWORD WINAPI DECLSPEC_HOTPATCH GetGlyphOutlineA( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics, DWORD size,
+                                void *buffer, const MAT2 *mat2 )
+ {
+     if (!mat2) return GDI_ERROR;
+@@ -2253,7 +2253,7 @@ static INT WINAPI enum_proc_WtoA( const LOGFONTW *lf, const TEXTMETRICW *tm,
+ /***********************************************************************
+  *              EnumFontFamiliesExA	(GDI32.@)
+  */
+-INT WINAPI EnumFontFamiliesExA( HDC hdc, LOGFONTA *lf, FONTENUMPROCA efproc,
++INT WINAPI DECLSPEC_HOTPATCH EnumFontFamiliesExA( HDC hdc, LOGFONTA *lf, FONTENUMPROCA efproc,
+                                 LPARAM lparam, DWORD flags )
+ {
+     struct enum_proc_paramsWtoA param;
+--- a/dlls/user32/menu.c
++++ b/dlls/user32/menu.c
+@@ -434,7 +434,7 @@ BOOL WINAPI InsertMenuA( HMENU hMenu, UINT pos, UINT flags,
+ /*******************************************************************
+  *         AppendMenuA    (USER32.@)
+  */
+-BOOL WINAPI AppendMenuA( HMENU hMenu, UINT flags,
++BOOL WINAPI DECLSPEC_HOTPATCH AppendMenuA( HMENU hMenu, UINT flags,
+                          UINT_PTR id, LPCSTR data )
+ {
+     return InsertMenuA( hMenu, -1, flags | MF_BYPOSITION, id, data );
+--- a/include/winnt.h
++++ b/include/winnt.h
+@@ -195,6 +195,8 @@ extern "C" {
+ 
+ #if ((defined(__GNUC__) && ((__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 6)))) || __has_attribute(ms_hook_prologue)) && (defined(__i386__) || defined(__x86_64__))
+ #define DECLSPEC_HOTPATCH __attribute__((__ms_hook_prologue__))
++#elif defined(__clang__) && defined(__i386__) && __has_attribute(patchable_function_entry)
++#define DECLSPEC_HOTPATCH __attribute__((__patchable_function_entry__(8, 6), __noinline__))
+ #else
+ #define DECLSPEC_HOTPATCH
+ #endif
+--- a/tools/winebuild/spec32.c
++++ b/tools/winebuild/spec32.c
+@@ -1430,6 +1430,157 @@ void output_def_file( DLLSPEC *spec, struct exports *exports, int import_only )
+ }
+ 
+ 
++struct pe_section_range
++{
++    unsigned int virt_addr;
++    unsigned int raw_size;
++    unsigned int raw_ptr;
++    unsigned int flags;
++};
++
++static unsigned int pe_rva_to_offset( const struct pe_section_range *secs, unsigned int nsecs,
++                                      unsigned int rva, unsigned int min_len, size_t file_size )
++{
++    unsigned int i, offset, rel;
++
++    for (i = 0; i < nsecs; i++)
++    {
++        if (rva < secs[i].virt_addr) continue;
++        rel = rva - secs[i].virt_addr;
++        if (rel >= secs[i].raw_size || secs[i].raw_size - rel < min_len) continue;
++        offset = secs[i].raw_ptr + rel;
++        if (offset > file_size || file_size - offset < min_len) return 0;
++        return offset;
++    }
++    return 0;
++}
++
++static void patch_i386_hotpatch_rva( int fd, unsigned char *buf, size_t file_size,
++                                     const struct pe_section_range *secs, unsigned int nsecs,
++                                     unsigned int rva )
++{
++    static const unsigned char nop5[5] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
++    static const unsigned char mov_edi_edi[2] = { 0x8b, 0xff };
++    unsigned int i, rel, offset;
++
++    for (i = 0; i < nsecs; i++)
++    {
++        if (!(secs[i].flags & 0x20000020)) continue; /* IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE */
++        if (rva < secs[i].virt_addr) continue;
++        rel = rva - secs[i].virt_addr;
++        if (rel < 5 || rel >= secs[i].raw_size || secs[i].raw_size - rel < 2) continue;
++        offset = secs[i].raw_ptr + rel;
++        if (offset < 5 || offset > file_size || file_size - offset < 2) return;
++        if (!memcmp( buf + offset - 5, nop5, sizeof(nop5) ) &&
++            buf[offset] == 0x66 && buf[offset + 1] == 0x90)
++        {
++            memcpy( buf + offset, mov_edi_edi, sizeof(mov_edi_edi) );
++            lseek( fd, offset, SEEK_SET );
++            write( fd, mov_edi_edi, sizeof(mov_edi_edi) );
++        }
++        return;
++    }
++}
++
++/* Convert Clang i386 patchable_function_entry(8,6) prologues (5x 0x90 + 66 90)
++ * into traditional Windows x86 hotpatch prologues (5x 0x90 + 8b ff). */
++static void fixup_i386_hotpatch_prologues( int fd, unsigned int lfanew )
++{
++    unsigned char *buf;
++    struct pe_section_range *secs = NULL;
++    off_t end_pos;
++    size_t file_size;
++    unsigned int sig, sym_ptr, num_syms, num_rva, exp_rva, exp_size;
++    unsigned int sec_table, i;
++    unsigned short machine, nsecs, opt_size, magic;
++
++    end_pos = lseek( fd, 0, SEEK_END );
++    if (end_pos <= 0) return;
++    file_size = (size_t)end_pos;
++    if (lfanew > file_size || file_size - lfanew < 24 + IMAGE_SIZEOF_NT_OPTIONAL32_HEADER)
++        return;
++
++    buf = xmalloc( file_size );
++    lseek( fd, 0, SEEK_SET );
++    if (read( fd, buf, file_size ) != (ssize_t)file_size) goto done;
++
++    memcpy( &sig, buf + lfanew, sizeof(sig) );
++    memcpy( &machine, buf + lfanew + 4, sizeof(machine) );
++    memcpy( &nsecs, buf + lfanew + 6, sizeof(nsecs) );
++    memcpy( &sym_ptr, buf + lfanew + 12, sizeof(sym_ptr) );
++    memcpy( &num_syms, buf + lfanew + 16, sizeof(num_syms) );
++    memcpy( &opt_size, buf + lfanew + 20, sizeof(opt_size) );
++    memcpy( &magic, buf + lfanew + 24, sizeof(magic) );
++
++    if (sig != 0x00004550 || machine != IMAGE_FILE_MACHINE_I386 ||
++        opt_size < IMAGE_SIZEOF_NT_OPTIONAL32_HEADER || magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC)
++        goto done;
++
++    sec_table = lfanew + 24 + opt_size;
++    if (sec_table > file_size || nsecs > (file_size - sec_table) / 40) goto done;
++
++    secs = xmalloc( nsecs * sizeof(*secs) );
++    for (i = 0; i < nsecs; i++)
++    {
++        const unsigned char *sh = buf + sec_table + i * 40;
++        memcpy( &secs[i].virt_addr, sh + 12, sizeof(secs[i].virt_addr) );
++        memcpy( &secs[i].raw_size, sh + 16, sizeof(secs[i].raw_size) );
++        memcpy( &secs[i].raw_ptr, sh + 20, sizeof(secs[i].raw_ptr) );
++        memcpy( &secs[i].flags, sh + 36, sizeof(secs[i].flags) );
++    }
++
++    memcpy( &num_rva, buf + lfanew + 116, sizeof(num_rva) );
++    if (num_rva >= 1)
++    {
++        unsigned int exp_off;
++        memcpy( &exp_rva, buf + lfanew + 120, sizeof(exp_rva) );
++        memcpy( &exp_size, buf + lfanew + 124, sizeof(exp_size) );
++        exp_off = (exp_rva && exp_size >= 40) ? pe_rva_to_offset( secs, nsecs, exp_rva, 40, file_size ) : 0;
++        if (exp_off)
++        {
++            unsigned int num_funcs, funcs_rva, funcs_off;
++            memcpy( &num_funcs, buf + exp_off + 20, sizeof(num_funcs) );
++            memcpy( &funcs_rva, buf + exp_off + 28, sizeof(funcs_rva) );
++            funcs_off = (num_funcs && num_funcs <= (file_size / 4))
++                        ? pe_rva_to_offset( secs, nsecs, funcs_rva, num_funcs * 4, file_size ) : 0;
++            if (funcs_off)
++            {
++                for (i = 0; i < num_funcs; i++)
++                {
++                    unsigned int fn_rva;
++                    memcpy( &fn_rva, buf + funcs_off + i * 4, sizeof(fn_rva) );
++                    if (!fn_rva || (fn_rva >= exp_rva && fn_rva < exp_rva + exp_size)) continue;
++                    patch_i386_hotpatch_rva( fd, buf, file_size, secs, nsecs, fn_rva );
++                }
++            }
++        }
++    }
++
++    if (sym_ptr && num_syms && sym_ptr < file_size && num_syms <= (file_size - sym_ptr) / 18)
++    {
++        for (i = 0; i < num_syms; i++)
++        {
++            const unsigned char *sym = buf + sym_ptr + i * 18;
++            unsigned int val;
++            short sec_num;
++            unsigned short type;
++            unsigned char aux = sym[17];
++
++            memcpy( &val, sym + 8, sizeof(val) );
++            memcpy( &sec_num, sym + 12, sizeof(sec_num) );
++            memcpy( &type, sym + 14, sizeof(type) );
++            if (type == 0x20 && sec_num >= 1 && (unsigned int)sec_num <= nsecs)
++                patch_i386_hotpatch_rva( fd, buf, file_size, secs, nsecs, secs[sec_num - 1].virt_addr + val );
++            i += aux;
++        }
++    }
++
++done:
++    free( secs );
++    free( buf );
++}
++
++
+ /*******************************************************************
+  *         make_builtin_files
+  */
+@@ -1471,6 +1622,7 @@ void make_builtin_files( struct strarray files )
+                     write( fd, &dll_charact, sizeof(dll_charact) );
+                 }
+             }
++            fixup_i386_hotpatch_prologues( fd, header.e_lfanew );
+         }
+         else fatal_error( "%s: Unrecognized file format\n", file );
+         close( fd );

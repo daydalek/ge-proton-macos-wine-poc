@@ -107,6 +107,18 @@ bash scripts/crossover/build.sh media
 
 产物将安装到 `work/crossover-port/stage`，完全独立隔离，不会影响本机已有的 CrossOver 应用与 Bottles。
 
+#### Whisky 的 D3DMetal／WineD3D 切换
+
+CrossOver 核心补丁支持 Whisky 已有的 `WINED3DMETAL=0`：将 `dxgi`、`d3d10`、`d3d10core`、`d3d11`、`d3d12` 的 builtin 加载路由到 `Wine/lib/wine/wined3d/{x86_64,i386}-windows/` 中的同次构建原版 DLL，不加载 Apple 的同名 Unix 桥接。完整构建和 Whisky 打包会生成这套文件；它们属于运行库，不依赖 GPTK 仓库的回滚备份，也不写入 Bottle。
+
+因此可按程序选择 D3DMetal 或 WineD3D，而无需反复替换共享 DLL。`WINED3DMETAL` 未设置或不等于 `0` 时保持原有加载行为；DXVK／DXMT 的 native DLL 选择不变。指定 WineD3D 但配套 DLL 缺失时明确失败，不会静默使用 D3DMetal。直接从构建树启动仍使用构建树中的 Wine 实现。
+
+`WINE_D3D_CONFIG=renderer=gl` 或 `renderer=gdi` 仍需配合 WineD3D 使用；GDI 模式禁用 3D，不能用“D3D11 设备创建成功”作为通过标准。本机制只负责 DLL 路由，不增加 WineD3D 或 D3D12 的图形能力。
+
+#### i386 传统 Windows 热补丁入口兼容
+
+`llvm-mingw`（Clang + LLD）在 `-fms-hotpatch` 下为 32 位 PE 函数生成 `66 90` 入口，并由链接器以 `0xcc` 填充节间空隙。`patches/crossover/i386-hotpatch-prologue.patch` 将 Clang i386 的 `DECLSPEC_HOTPATCH` 映射为 `__patchable_function_entry__(8, 6)` 与 `__noinline__`，由 `winebuild --builtin` 将带五字节 `0x90` 预留区的 `66 90` 入口改写为传统 `8b ff`（`mov edi, edi`），并为 `CreateFontIndirectA`、`GetGlyphOutlineA`、`EnumFontFamiliesExA`、`AppendMenuA`（连同已有的 `CreateWindowExA`、`SetWindowTextA`）补齐热补丁标注，兼容依赖 `90 90 90 90 90 | 8b ff` 入口假设的旧式汉化与注入组件。
+
 ---
 
 ## 打包与发布检查

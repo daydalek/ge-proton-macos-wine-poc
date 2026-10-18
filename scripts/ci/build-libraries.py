@@ -54,7 +54,9 @@ def update_checksums(output):
 
 REQUIRED_MODULES = ('bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
                     'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll',
-                    'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so')
+                    'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so',
+                    'lib/wine/x86_64-unix/ntdll.so', 'lib/wine/i386-windows/gdi32.dll',
+                    'lib/wine/i386-windows/user32.dll')
 REQUIRED_PATCHES = crossover_patch_series()
 
 

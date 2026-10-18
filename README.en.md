@@ -122,6 +122,33 @@ The patch order is recorded in `configs/crossover-patch-series.txt`. The build p
 
 The standalone runtime is installed to `work/crossover-port/stage`. Your existing CrossOver application and bottles remain unchanged.
 
+#### Whisky graphics backend selection
+
+The CrossOver loader supports Whisky's `WINED3DMETAL=0` by loading Wine's original
+`dxgi`, `d3d10`, `d3d10core`, `d3d11`, and `d3d12` builtins from
+`Wine/lib/wine/wined3d/{x86_64,i386}-windows/`, without attaching Apple's Unix
+bridges. Full builds and Whisky packaging preserve these same-build DLLs as
+runtime components, independent of GPTK rollback backups. Selection is per
+process and does not mutate shared DLLs or bottles. Missing originals fail
+explicitly rather than silently loading D3DMetal. Other variable values leave
+normal loading unchanged; native DXVK/DXMT selection is unaffected, and build-tree
+execution continues to use the original build outputs.
+
+WineD3D's `WINE_D3D_CONFIG=renderer=gl` or `renderer=gdi` still requires selecting
+WineD3D. GDI disables 3D, so D3D11 device creation should fail in that mode. This
+patch changes DLL routing, not WineD3D's or D3D12's graphics capabilities.
+
+#### i386 legacy Windows hotpatch prologue compatibility
+
+Under `-fms-hotpatch`, `llvm-mingw` (Clang + LLD) emits a two-byte `66 90` NOP at
+32-bit PE function entries and fills inter-section padding with `0xcc`.
+`patches/crossover/i386-hotpatch-prologue.patch` maps `DECLSPEC_HOTPATCH` on Clang
+i386 to `__patchable_function_entry__(8, 6)` and `__noinline__`, rewrites `66 90`
+entries preceded by five `0x90` bytes to `8b ff` (`mov edi, edi`) during
+`winebuild --builtin`, and annotates `CreateFontIndirectA`, `GetGlyphOutlineA`,
+`EnumFontFamiliesExA`, and `AppendMenuA` alongside the existing `CreateWindowExA`
+and `SetWindowTextA` hotpatch markers.
+
 ---
 
 ## Packaging and release checks

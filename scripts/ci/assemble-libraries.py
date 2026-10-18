@@ -10,7 +10,11 @@ import plistlib
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
+from wined3d_builtins import preserve_wined3d_builtins
 
 
 def run(*args):
@@ -60,6 +64,8 @@ def main():
     print('Copying GE media core and dependencies', flush=True)
     shutil.copytree(wine_stage, wine, symlinks=True)
     shutil.copytree(stage / 'deps-x64/lib', wine / 'lib', symlinks=True, dirs_exist_ok=True)
+    if args.core == 'crossover-ge-media':
+        preserve_wined3d_builtins(wine, source=wine_stage)
     wine64 = wine / 'bin/wine64'
     if wine64.exists() or wine64.is_symlink():
         wine64.unlink()
@@ -126,8 +132,10 @@ def main():
             minimum = max(minimum, parts + (0,) * (3 - len(parts)))
         audit.append({'file': str(path.relative_to(lib)), 'rpath': rpath,
                       'dependencies': run('/usr/bin/otool', '-L', str(path)).splitlines()[1:]})
+    # Local D3DMetal 3.0 device/present probes passed on the CrossOver core.
+    # Do not advertise this capability for the legacy Valve packaging check.
     info = {'version': dict(zip(('major', 'minor', 'patch'), map(int, args.version.split('.')))),
-            'dxvkVersion': base_info['dxvkVersion'], 'gptkCapable': False}
+            'dxvkVersion': base_info['dxvkVersion'], 'gptkCapable': args.core == 'crossover-ge-media'}
     (lib / 'WhiskyWineVersion.plist').write_bytes(plistlib.dumps(info))
     manifest = {'runtime_version': args.version, 'wine_version': run(str(wine64), '--version').strip(),
                 'core': args.core, 'poc_commit': run('git', '-C', str(poc), 'rev-parse', 'HEAD').strip(),

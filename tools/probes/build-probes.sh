@@ -7,10 +7,15 @@ toolchain="$POC_LLVM_MINGW/bin"
 poc_require_path "$toolchain/i686-w64-mingw32-clang" "run scripts/build-deps.sh"
 for target in i686 x86_64; do
     case "$target" in i686) bits=x86;; x86_64) bits=x64;; esac
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
+      "$kit/backend-switch-probe.c" -o "$kit/backend-switch-probe-$bits.exe" -ldxguid -luser32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 \
       "$kit/crypto-probe.c" -o "$kit/crypto-probe-$bits.exe" -lbcrypt -lsecur32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 \
       "$kit/fullscreen-state-probe.c" -o "$kit/fullscreen-state-probe-$bits.exe" -luser32
+    "$toolchain/$target-w64-mingw32-clang++" -Wall -Wextra -O2 -municode -static \
+      "$kit/repeated-seek-probe.cpp" -o "$kit/repeated-seek-probe-$bits.exe" \
+      -lole32 -loleaut32 -lstrmiids -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/media-probe.c" -o "$kit/media-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid
@@ -19,6 +24,10 @@ for target in i686 x86_64; do
       -lole32 -loleaut32 -lstrmiids -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
       "$kit/exception-probe.c" -o "$kit/exception-probe-$bits.exe"
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
+      "$kit/directory-compat-probe.c" -o "$kit/directory-compat-probe-$bits.exe"
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
+      "$kit/hotpatch-probe.c" -o "$kit/hotpatch-probe-$bits.exe" -lgdi32 -luser32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/reconnect-probe.c" -o "$kit/reconnect-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid

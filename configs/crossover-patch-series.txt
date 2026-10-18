@@ -16,3 +16,7 @@ patches/wine-ge/opengl-flush-flags.patch
 patches/wine-ge/macos-fullscreen-surface.patch
 patches/wine-ge/wow64-present-rect.patch
 patches/wine-ge/wine-upstream-syscall-wrappers.patch
+patches/crossover/wined3d-backend-selection.patch
+patches/crossover/kernelbase-legacy-directory-info.patch
+patches/crossover/i386-hotpatch-prologue.patch
+patches/crossover/winedmo-repeated-seek.patch

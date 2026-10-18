@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-13",
+  "date": "2026-10-15",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -62,9 +62,9 @@
         "Copyright 1997-2000 Marcus Meissner",
         "Copyright 1998-2000 Lionel Ulmer",
         "Copyright 2000-2001 TransGaming Technologies Inc.",
-        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2006 Stefan D\u00f6singer",
         "Copyright 2008 Denver Gingerich",
-        "Copyright 2007-2008, 2011, 2013 Stefan Dösinger for CodeWeavers"
+        "Copyright 2007-2008, 2011, 2013 Stefan D\u00f6singer for CodeWeavers"
       ]
     },
     {
@@ -75,7 +75,7 @@
       "source_origin": "prepared source",
       "source_sha256": "73ec0f94cfceef8fd48fa97a8a67770ae3e206c12f43ec4ce8c3b95efa3728fe",
       "copyright_notices": [
-        "Copyright 2006 Stefan Dösinger"
+        "Copyright 2006 Stefan D\u00f6singer"
       ]
     },
     {
@@ -89,7 +89,7 @@
         "Copyright 1997-1999 Marcus Meissner",
         "Copyright 1998 Lionel Ulmer",
         "Copyright 2000-2001 TransGaming Technologies Inc.",
-        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2006 Stefan D\u00f6singer",
         "Copyright 2008 Denver Gingerich"
       ]
     },
@@ -104,8 +104,8 @@
         "Copyright (c) 1997-2000 Marcus Meissner",
         "Copyright (c) 1998-2000 Lionel Ulmer",
         "Copyright (c) 2000-2001 TransGaming Technologies Inc.",
-        "Copyright (c) 2006 Stefan Dösinger",
-        "Copyright (c) 2011 Ričardas Barkauskas for CodeWeavers"
+        "Copyright (c) 2006 Stefan D\u00f6singer",
+        "Copyright (c) 2011 Ri\u010dardas Barkauskas for CodeWeavers"
       ]
     },
     {
@@ -382,7 +382,7 @@
       "source_sha256": "270ef832f7655831ccb5227a5cf0c43e9e77e78957c51697f814e6c161aee1b6",
       "copyright_notices": [
         "Copyright 2017 Nikolay Sivov",
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -470,7 +470,7 @@
       "source_origin": "prepared source",
       "source_sha256": "0e49c1d109b139a6372f1e00e35ff46ba6da84851c955189a76919c6c80d6ff2",
       "copyright_notices": [
-        "Copyright 2015 Michael Müller"
+        "Copyright 2015 Michael M\u00fcller"
       ]
     },
     {
@@ -492,7 +492,7 @@
       "source_origin": "prepared source",
       "source_sha256": "c74fefa1bd0e2b5952e3298fbd0ef522a972c3bc245e100dc2dbb9cb2d342377",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -503,7 +503,7 @@
       "source_origin": "prepared source",
       "source_sha256": "26283118cc5268b486c541ba1d27b4934684aa596acd5b83823aaf0ac434d5d9",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -523,7 +523,7 @@
       "source_origin": "prepared source",
       "source_sha256": "e58721fdd603b588e91f04cc964a65b925025370e3a6471a4a649ca4e7d38074",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -534,7 +534,7 @@
       "source_origin": "prepared source",
       "source_sha256": "8da76ccaeada4195f2955aa99b6022cb682700de616bad84b8ba9441f6eb0919",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -820,7 +820,7 @@
       "source_origin": "prepared source",
       "source_sha256": "e597c8fbc923926aac24327ea70e97e723455c32825ad5b9d335b46119fbd7d6",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -851,7 +851,7 @@
       "source_origin": "prepared source",
       "source_sha256": "9f383085161f050ef69196d61b69e69799a3efc25995caf82f5d3b63227c6e8f",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -862,7 +862,7 @@
       "source_origin": "prepared source",
       "source_sha256": "5001d12f2a821202aa6cf2014ee6e379047a89f5eb9802bb80d39ec4b6f4d00d",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -886,7 +886,7 @@
       "copyright_notices": [
         "Copyright 2002 Lionel Ulmer",
         "Copyright 2010 Aric Stewart, CodeWeavers",
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1012,7 +1012,7 @@
       "source_origin": "prepared source",
       "source_sha256": "1f7db2432bb562ce3812c97b9e8a4a8235ec7ca3fcdce517fdfea870aa5c6788",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1032,7 +1032,7 @@
       "source_origin": "prepared source",
       "source_sha256": "d6568d9c29989eca44be60b692766b05a59e1adca3b8635c220d63fe0bce661a",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1043,7 +1043,7 @@
       "source_origin": "prepared source",
       "source_sha256": "b73e802871bca57906aa3528d031ac534ad430c42a8329905f21a2c835a2c4fc",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1054,7 +1054,7 @@
       "source_origin": "prepared source",
       "source_sha256": "501c25daa1ac79c0226bb33729f36089b95e16a9ebe1eea1f08aa28c5db08ca6",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1076,7 +1076,7 @@
       "source_origin": "prepared source",
       "source_sha256": "3f81fc01541ea9910fd5fd43f731685359da7ddd3913b0d6587e11f587fffb61",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1088,7 +1088,7 @@
       "source_sha256": "e1a518b04123076e2935a56f2508636d57376946f4294936759c210edfc92378",
       "copyright_notices": [
         "Copyright 2024 GloriousEggroll",
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1099,7 +1099,7 @@
       "source_origin": "prepared source",
       "source_sha256": "00979f5f527a4509a8e3cb8d855dd1f69ec77992f4e50240263a01af63bdab1d",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1110,7 +1110,7 @@
       "source_origin": "prepared source",
       "source_sha256": "f342e2ac9a54f44a641f57267bc404da77bf275046b542e3dfc55ea1252cd296",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1121,7 +1121,7 @@
       "source_origin": "prepared source",
       "source_sha256": "c9ade44faf48f265fc8b03a6e5141e17064cceb2ec99e41035be2407abceeb8c",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers",
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers",
         "Copyright 2023 Shaun Ren for CodeWeavers"
       ]
     },
@@ -1144,7 +1144,7 @@
       "source_origin": "prepared source",
       "source_sha256": "364e9dc15a5f3c8df867d07ea6d9248374c96eac0bfaa1392c03ad834e939897",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1233,7 +1233,7 @@
       "source_origin": "prepared source",
       "source_sha256": "cc86a0ff6829c16beaa1c6d6945742e8c59fda21e728aac7a7c25caccfb0d3f0",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1253,7 +1253,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "20c34c15c5d5d87623fcefdd152c1e28b9fe46776ed2f441c3b5cdfd5bb8a370",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1322,7 +1322,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "87090e97326d09fede7c8fec5ba2e8e0c9f61adb4ed1d8a90ca52aef324acafd",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1386,7 +1386,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "57f2e43dd6cc1551d8d9c164a1d2add6966fd0958734b223cabbbc51b6c07e48",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1410,7 +1410,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "16f8044456e2996affec858a632aa9c893b7d4528674320849b10249dd38fa49",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1432,7 +1432,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "5b258ea31e582f305f572f48372996244af9d801dfd711a45f78e6145952fac5",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1443,7 +1443,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "9eda0999fdb191b4afb5aebd5d60e9e65b561b7a89be47659154a81f5a89a526",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1472,7 +1472,7 @@
       "source_origin": "official baseline (removed file)",
       "source_sha256": "92e6a8a1a3fb08aa26b5bb6332ed2846817e233e4b35ba2c9fd82f9bcb05b49a",
       "copyright_notices": [
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1517,7 +1517,7 @@
       "source_origin": "prepared source",
       "source_sha256": "a4c1013a1eb4574e4b5dd99591c1355fd7949cca80017a902539d7700484efb1",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1582,7 +1582,7 @@
       "source_sha256": "040f144eb83cc0dcadd1bf357b1407b02c765e4129d4b032a097382ea6160d95",
       "copyright_notices": [
         "Copyright (C) 2002 Alexandre Julliard",
-        "Copyright (C) 2004 Vincent Béron"
+        "Copyright (C) 2004 Vincent B\u00e9ron"
       ]
     },
     {
@@ -1626,7 +1626,7 @@
       "source_origin": "prepared source",
       "source_sha256": "732ce371fbe76146986a4e79b1a4d8a16c15c65d5b3b8337b45f5c59e21e9659",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1664,7 +1664,7 @@
         "Copyright (C) 1995,96,97,98,99,2000,2001,2002 Free Software Foundation, Inc.",
         "Copyright (C) 2004 Mike McCormack for CodeWeavers",
         "Copyright (C) 2004 Alexandre Julliard",
-        "Copyright (C) 2017 Michael Müller",
+        "Copyright (C) 2017 Michael M\u00fcller",
         "Copyright (C) 2017 Sebastian Lackner"
       ]
     },
@@ -1755,7 +1755,7 @@
       "source_sha256": "f6c26eaa0f0c797380507033d1b734fe2f675768ef34c810dedcfdf4c50a6b0f",
       "copyright_notices": [
         "Copyright 2012 Alexandre Julliard",
-        "Copyright 2025 Rémi Bernon for CodeWeavers"
+        "Copyright 2025 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1814,7 +1814,7 @@
         "Copyright 1997-1999 Marcus Meissner",
         "Copyright 1998 Lionel Ulmer",
         "Copyright 2000-2001 TransGaming Technologies Inc.",
-        "Copyright 2006 Stefan Dösinger",
+        "Copyright 2006 Stefan D\u00f6singer",
         "Copyright 2008 Denver Gingerich"
       ]
     },
@@ -1859,7 +1859,7 @@
       "source_origin": "prepared source",
       "source_sha256": "00979f5f527a4509a8e3cb8d855dd1f69ec77992f4e50240263a01af63bdab1d",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1929,7 +1929,7 @@
       "source_origin": "prepared GE media source before MPEG audio format modification",
       "source_sha256": "501c25daa1ac79c0226bb33729f36089b95e16a9ebe1eea1f08aa28c5db08ca6",
       "copyright_notices": [
-        "Copyright 2024 Rémi Bernon for CodeWeavers"
+        "Copyright 2024 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -1941,7 +1941,7 @@
       "source_sha256": "e1a518b04123076e2935a56f2508636d57376946f4294936759c210edfc92378",
       "copyright_notices": [
         "Copyright 2024 GloriousEggroll",
-        "Copyright 2022 Rémi Bernon for CodeWeavers"
+        "Copyright 2022 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -2024,7 +2024,7 @@
       "source_sha256": "9783ef4b2f211c7f2b5d7a8aac7bc3038b0bd4cda144e7cc16367997fd21967b",
       "copyright_notices": [
         "Copyright 2012 Alexandre Julliard",
-        "Copyright 2025 Rémi Bernon for CodeWeavers"
+        "Copyright 2025 R\u00e9mi Bernon for CodeWeavers"
       ]
     },
     {
@@ -2065,6 +2065,17 @@
       ]
     },
     {
+      "patch": "patches/crossover/wined3d-backend-selection.patch",
+      "source_file": "dlls/ntdll/unix/loader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained; project-authored per-process graphics builtin routing",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "ea680b22a697d0607d75290eccd35740a042bad1453a3a5e6cecab8cbab49c76",
+      "copyright_notices": [
+        "Copyright (C) 2020 Alexandre Julliard"
+      ]
+    },
+    {
       "patch": "patches/crossover/steam-auto-args.patch",
       "source_file": "loader/wine.inf.in",
       "license": "LGPL-2.1-or-later",
@@ -2076,10 +2087,93 @@
         ";; Copyright (C) 2004 Brian Vincent",
         ";; Copyright (C) 2004 Alexandre Julliard"
       ]
+    },
+    {
+      "patch": "patches/crossover/kernelbase-legacy-directory-info.patch",
+      "source_file": "dlls/kernelbase/file.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "dedecf664b1a905258c53954f9d3c9a6929684e48f0a7bbf28ab3096d2480184",
+      "copyright_notices": [
+        "Copyright 1993 John Burton",
+        "Copyright 1996, 2004 Alexandre Julliard",
+        "Copyright 2008 Jeff Zaroyko"
+      ]
+    },
+    {
+      "patch": "patches/crossover/i386-hotpatch-prologue.patch",
+      "source_file": "dlls/gdi32/text.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "2ca54432d9fbc978b356d26fa46c1a62fc719231f7edc15847150120ccfb942a",
+      "copyright_notices": [
+        "Copyright 1993 Alexandre Julliard",
+        "Copyright 1997 Alex Korobka",
+        "Copyright 2002,2003 Shachar Shemesh",
+        "Copyright 2007 Maarten Lankhorst",
+        "Copyright 2010 CodeWeavers, Aric Stewart"
+      ]
+    },
+    {
+      "patch": "patches/crossover/i386-hotpatch-prologue.patch",
+      "source_file": "dlls/user32/menu.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "5ab8a6bc924bbdca8639490b78f9fe2383d806db2a8d0b37c304bc6886f37829",
+      "copyright_notices": [
+        "Copyright 1993 Martin Ayotte",
+        "Copyright 1994 Alexandre Julliard",
+        "Copyright 1997 Morten Welinder",
+        "Copyright 2005 Maxime Belleng\u00e9",
+        "Copyright 2006 Phil Krylov"
+      ]
+    },
+    {
+      "patch": "patches/crossover/i386-hotpatch-prologue.patch",
+      "source_file": "include/winnt.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "b210d16f66e1c9c14a42f528060fc76eeae2eddf4ae5cfad6e611616ad52adf5",
+      "copyright_notices": [
+        "Copyright 1996 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/i386-hotpatch-prologue.patch",
+      "source_file": "tools/winebuild/spec32.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "8945921d1190d28075a4c8450712263fbda0f13eae3f66306b8ef3a5a335ad35",
+      "copyright_notices": [
+        "Copyright 1993 Robert J. Amstadt",
+        "Copyright 1995 Martin von Loewis",
+        "Copyright 1995, 1996, 1997 Alexandre Julliard",
+        "Copyright 1997 Eric Youngdale",
+        "Copyright 1999 Ulrich Weigand"
+      ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-repeated-seek.patch",
+      "source_file": "dlls/winedmo/winedmo_quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "2481471db1dd98c314318258759579bc3fd98789724dc4d65b26be6dcf869374",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 182,
+    "LGPL-2.1-or-later": 189,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2101,6 +2195,10 @@
     "patches/wine-ge/macos-fullscreen-surface.patch": "ad335ec4b04613eafe460cb803ed54c0eb9383c906bcc6495dad3be0c70b1d3c",
     "patches/wine-ge/wow64-present-rect.patch": "0d72870259ccd066937cd33c75e36bdde72c56daf61cfa564fb378c6986a7e40",
     "patches/wine-ge/wine-upstream-syscall-wrappers.patch": "fea09994775ee98adc0b5274213547053238842427fa8a89c23aec62e7859d11",
-    "patches/crossover/steam-auto-args.patch": "79490b4bd10941425157db9a9f60e393983f8c860cc0f98a87e8669c535a77db"
+    "patches/crossover/steam-auto-args.patch": "79490b4bd10941425157db9a9f60e393983f8c860cc0f98a87e8669c535a77db",
+    "patches/crossover/wined3d-backend-selection.patch": "673b9c1500141747716cf5d81f58e727ccb070534b1940c908f2830205354821",
+    "patches/crossover/kernelbase-legacy-directory-info.patch": "33aed0fc1cc34814b343bba8ba49c966c277646e10da1cdbc50a6d954d31818b",
+    "patches/crossover/i386-hotpatch-prologue.patch": "cbe167d01ceeaff24fd1faf81d808856865b7b5c6a79466870cf7800cff86c0e",
+    "patches/crossover/winedmo-repeated-seek.patch": "356a262982330c71a6847c2088a25f912fc33b84d3f21538294566c2e3543b34"
   }
 }

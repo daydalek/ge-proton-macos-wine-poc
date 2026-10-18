@@ -42,6 +42,11 @@ case "$mode" in
   full)
     make -j"$POC_JOBS" > "$port/build-full.log" 2>&1
     make install > "$port/install.log" 2>&1
+    PYTHONPATH="$POC_PROJECT/scripts/lib" python3 - "$port/stage" <<'PY_GRAPHICS'
+import sys
+from wined3d_builtins import preserve_wined3d_builtins
+preserve_wined3d_builtins(sys.argv[1])
+PY_GRAPHICS
     # Record successful compilation inputs beside the installed core.
     python3 - "$POC_PROJECT" "$source_dir" "$port/stage" "${POC_CROSSOVER_PATCHES[@]}" <<'PY_BUILD'
 import hashlib, json, pathlib, subprocess, sys
@@ -50,7 +55,9 @@ lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
 patches = sys.argv[4:]
 modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
            'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll',
-           'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so']
+            'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so',
+            'lib/wine/x86_64-unix/ntdll.so', 'lib/wine/i386-windows/gdi32.dll',
+            'lib/wine/i386-windows/user32.dll']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
           'source_archive_sha256': lock['source_sha256'],
           'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
