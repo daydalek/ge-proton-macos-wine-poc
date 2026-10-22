@@ -1,0 +1,65 @@
+Subject: winepulse: complete GE playback timing integration for CrossOver Linux
+License: LGPL-2.1-or-later
+Modification date: 2026-10-23
+
+CrossOver's stream model uses PulseAudio-backed audio streams. Restore the
+readiness predicate required by GE's smooth-playback changes, and apply the
+timing path to those streams. The original helper references come from the
+separate Valve DualSense/haptic patch series. Link the existing udev device
+container-id implementation through the configured udev flags.
+
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -489,9 +489,15 @@
+     memset(buffer, format == PA_SAMPLE_U8 ? 0x80 : 0, bytes);
+ }
+ 
++/* The CrossOver stream model uses PulseAudio-backed streams. */
++static BOOL pulse_stream_ready(struct pulse_stream *stream)
++{
++    return stream->stream && pa_stream_get_state(stream->stream) == PA_STREAM_READY;
++}
++
+ static BOOL pulse_stream_valid(struct pulse_stream *stream)
+ {
+-    return pa_stream_get_state(stream->stream) == PA_STREAM_READY;
++    return pulse_stream_ready(stream);
+ }
+ 
+ static HRESULT pulse_connect(const char *name)
+@@ -1912,18 +1918,18 @@
+                 stream->timeline_start_period_time = 0;
+                 stream->timeline_start_stream_time = 0;
+             }
+-            if (!pulse_stream_haptic(stream) && !pulse_stream_ready(stream))
++            if (!pulse_stream_ready(stream))
+                 continue;
+-            if (!pulse_stream_haptic(stream) && !stream->update_timing_info_pending && (o = pa_stream_update_timing_info(stream->stream, pulse_update_timing_cb, stream)))
++            if (!stream->update_timing_info_pending && (o = pa_stream_update_timing_info(stream->stream, pulse_update_timing_cb, stream)))
+             {
+                 pa_operation_unref(o);
+                 stream->update_timing_info_pending = TRUE;
+             }
+-            else if (!pulse_stream_haptic(stream) && stream->update_timing_info_pending)
++            else if (stream->update_timing_info_pending)
+             {
+                 TRACE("pa_stream_update_timing_info is still pending.\n");
+             }
+-            else if (!pulse_stream_haptic(stream))
++            else
+             {
+                 ERR("pa_stream_update_timing_info err %d.\n", pa_context_errno(pulse_ctx));
+             }
+--- a/dlls/winepulse.drv/Makefile.in
++++ b/dlls/winepulse.drv/Makefile.in
+@@ -1,8 +1,8 @@
+ MODULE    = winepulse.drv
+ UNIXLIB   = winepulse.so
+ IMPORTS   = dxguid uuid winmm user32 advapi32 ole32
+-UNIX_LIBS    = $(PULSE_LIBS) $(PTHREAD_LIBS) -lm
+-UNIX_CFLAGS  = $(PULSE_CFLAGS)
++UNIX_LIBS    = $(PULSE_LIBS) $(UDEV_LIBS) $(PTHREAD_LIBS) -lm
++UNIX_CFLAGS  = $(PULSE_CFLAGS) $(UDEV_CFLAGS)
+ 
+ SOURCES = \
+ 	pulse.c

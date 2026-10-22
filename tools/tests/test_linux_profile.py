@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 import sys
 import struct
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -12,7 +15,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/linux'))
-from build import patch_plan, sha256_file
+from build import patch_plan, sha256_file, incremental_additions
 import verify as linux_verify
 
 spec = importlib.util.spec_from_file_location('linux_package', ROOT / 'scripts/linux/package.py')
@@ -21,6 +24,53 @@ spec.loader.exec_module(package)
 
 
 class LinuxProfileTests(unittest.TestCase):
+    def test_pulse_readiness_uses_real_stream_state_and_handles_missing_stream(self):
+        compiler = shutil.which('cc')
+        if not compiler:
+            self.skipTest('A C compiler is required')
+        added = '\n'.join(line[1:] for line in (ROOT / 'patches/linux/crossover-pulse-build.patch').read_text().splitlines()
+                          if line.startswith('+') and not line.startswith('+++'))
+        helper = re.search(r'static BOOL pulse_stream_ready\(.*?\n\}', added, re.S).group()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'pulse-ready.c'
+            source.write_text('''typedef int BOOL;
+enum { PA_STREAM_CREATING, PA_STREAM_READY, PA_STREAM_FAILED, PA_STREAM_TERMINATED };
+struct fake_stream { int state; };
+struct pulse_stream { struct fake_stream *stream; };
+static int queries;
+static int pa_stream_get_state(struct fake_stream *stream) { ++queries; return stream->state; }
+''' + helper + '''
+int main(void) {
+    struct fake_stream native = {0};
+    struct pulse_stream stream = {0};
+    if (pulse_stream_ready(&stream) || queries) return 1;
+    stream.stream = &native;
+    for (int i = 0; i < 4; ++i) {
+        native.state = i;
+        if (pulse_stream_ready(&stream) != (i == PA_STREAM_READY)) return 2;
+    }
+    return queries == 4 ? 0 : 3;
+}
+''')
+            binary = root / 'pulse-ready'
+            subprocess.run([compiler, '-std=c99', '-Werror=implicit-function-declaration',
+                            str(source), '-o', str(binary)], check=True, capture_output=True)
+            subprocess.run([str(binary)], check=True, timeout=10)
+
+    def test_incremental_source_rejects_rewritten_history_and_baseline_changes(self):
+        previous = {'source_sha256': 'baseline', 'patches': [{'path': 'first', 'sha256': 'original'}]}
+        added = {'path': 'second', 'sha256': 'new'}
+        current = {'source_sha256': 'baseline', 'patches': previous['patches'] + [added]}
+        self.assertEqual(incremental_additions(previous, current), [added])
+        for changed in (
+            {'source_sha256': 'other', 'patches': current['patches']},
+            {'source_sha256': 'baseline', 'patches': [{'path': 'first', 'sha256': 'changed'}, added]},
+            previous,
+        ):
+            with self.assertRaisesRegex(ValueError, 'Source inputs changed'):
+                incremental_additions(previous, changed)
+
     def test_runtime_environment_clears_inherited_renderer_and_loader_overrides(self):
         with patch.dict('os.environ', {'LD_PRELOAD': '/inherited/inject.so',
                                      'LD_AUDIT': '/inherited/audit.so',

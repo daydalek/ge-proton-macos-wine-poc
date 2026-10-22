@@ -12,6 +12,10 @@ The generic CommandLineAppend implementation, directory-hook compatibility,
 i386 hotpatch rewriter, repeated-seek repair, and all other shared fixes remain
 selected. macOS driver patches stay in the prepared source and retain their
 platform-specific activation conditions.
+The Linux profile appends a PulseAudio integration patch for CrossOver's
+audio-stream model and udev linkage, preserving GE's smooth-playback timing.
+Append-only patch additions can reuse an existing build tree; changes to an
+earlier patch or the source baseline require a fresh work directory.
 
 ## Build
 
@@ -30,7 +34,7 @@ python3 scripts/linux/build-probes.py --work-dir "$POC_LINUX_WORK_DIR"
 `build.py prepare`, `deps`, and `wine` expose individual stages. Downloads are
 SHA-256 verified. `--archive-cache /path/to/existing/work` can reuse verified
 CrossOver and dependency archives from the macOS build. Prepared source inputs
-are recorded; select a fresh work directory when changing source patches.
+and append-only patch additions are recorded in the work directory.
 Logs are saved under the work directory's `logs/` folder.
 
 Run the isolated regression suite under a virtual X display:

@@ -19,13 +19,26 @@ from poc_common import crossover_patch_series, download_verified, extract_tar, s
 
 def patch_plan(project=PROJECT):
     profile = json.loads((project / 'configs/linux-build.json').read_text())
-    series = crossover_patch_series(project)
+    shared = crossover_patch_series(project)
+    additional = tuple(profile.get('additional_patches', []))
+    series = shared + additional
+    if len(series) != len(set(series)):
+        raise ValueError('Duplicate patch in the Linux profile')
     excluded = profile['platform_exclusions']
-    if not set(excluded) <= set(series):
+    if not set(excluded) <= set(shared):
         raise ValueError('Linux exclusion refers to a patch outside the shared series')
     return [{'path': name, 'sha256': sha256_file(project / name),
-             'applied': name not in excluded, 'reason': excluded.get(name, 'Shared source patch')}
+             'applied': name not in excluded,
+             'reason': excluded.get(name, 'Linux adaptation' if name in additional else 'Shared source patch')}
             for name in series]
+
+
+def incremental_additions(previous, current):
+    old = previous['patches']
+    if (previous['source_sha256'] != current['source_sha256']
+            or len(current['patches']) <= len(old) or current['patches'][:len(old)] != old):
+        raise ValueError('Source inputs changed; select a fresh POC_LINUX_WORK_DIR')
+    return current['patches'][len(old):]
 
 
 def write_json(path, value):
@@ -72,8 +85,26 @@ class Build:
         inputs = {'source_sha256': self.lock['source_sha256'], 'patches': plan}
         marker = self.work / 'source-inputs.json'
         if self.source.exists():
-            if not marker.exists() or json.loads(marker.read_text()) != inputs:
+            if not marker.exists():
                 raise SystemExit('Source inputs changed; select a fresh POC_LINUX_WORK_DIR')
+            previous = json.loads(marker.read_text())
+            if previous != inputs:
+                try:
+                    additions = incremental_additions(previous, inputs)
+                except ValueError as error:
+                    raise SystemExit(str(error)) from error
+                for entry in additions:
+                    if entry['applied']:
+                        patch = PROJECT / entry['path']
+                        self.run(['git', 'apply', '--check', patch], 'patch-check.log', cwd=self.source)
+                        self.run(['git', 'apply', patch], 'patch-apply.log', cwd=self.source)
+                notice_args = []
+                for entry in plan:
+                    if entry['applied']:
+                        notice_args += ['--patch', PROJECT / entry['path']]
+                self.run([sys.executable, PROJECT / 'scripts/source-notices.py', '--source', self.source,
+                          *notice_args], 'source-notices.log')
+                write_json(marker, inputs)
             return
         item = {'archive': 'crossover-sources-26.3.0.tar.gz', 'url': self.lock['source_url'],
                 'sha256': self.lock['source_sha256']}
