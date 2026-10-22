@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Cross-compile the existing Windows regression probes on Linux."""
+"""Build Windows regression probes and the Linux host compatibility probe."""
 import argparse
 from pathlib import Path
 import shutil
@@ -37,6 +37,9 @@ def main():
     build = Build(args.work_dir, 1)
     output = build.work / 'probes'
     output.mkdir(exist_ok=True)
+    subprocess.run(list(map(str, ['cc', '-Wall', '-Wextra', '-O2',
+        PROJECT / 'tools/probes/linux-compat-syscall-probe.c', '-o',
+        output / 'linux-compat-syscall-probe'])), check=True)
     headers = build.work / 'probe-headers'
     headers.mkdir(exist_ok=True)
     for name in ('vulkan', 'vk_video'):

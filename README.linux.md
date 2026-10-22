@@ -49,6 +49,8 @@ xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
 
 Reports and per-probe logs are kept under `validation/`. The suite uses a
 dedicated prefix and a PulseAudio null sink for silent unattended playback.
+The host probe checks the i386 `int 0x80` syscall entry used by Linux WoW64.
+Its result is recorded alongside the Wine probes, including on translated CPUs.
 Mono and Gecko are disabled in this native C/C++ probe environment so their
 first-run download dialogs can be handled separately in desktop acceptance.
 The suite requests software OpenGL and selects the installed x86_64 Mesa

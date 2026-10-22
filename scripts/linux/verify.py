@@ -91,6 +91,8 @@ def main():
     env['PULSE_SINK'] = sink_name
     report = output / 'linux-runtime-check.json'
     try:
+        results.append(check('host-compat-syscall',
+            [build.work / 'probes/linux-compat-syscall-probe'], env, output, 10))
         # A null sink keeps unattended playback silent and provides a clocked audio device.
         subprocess.run(['pulseaudio', '--start', '--exit-idle-time=-1'], capture_output=True, timeout=20)
         pulse = subprocess.run(['pactl', 'load-module', 'module-null-sink', 'sink_name=' + sink_name],
