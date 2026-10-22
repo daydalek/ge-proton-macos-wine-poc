@@ -27,6 +27,15 @@ def is_elf(path):
         return stream.read(4) == b'\x7fELF'
 
 
+def relocate_elf(path):
+    dynamic = subprocess.check_output(['readelf', '-d', str(path)], text=True)
+    # Wine's static-PIE preloader relocates itself and has no DT_NEEDED entries.
+    # Preserve its loader layout; dependency-bearing ELFs use relative lookup.
+    if '(NEEDED)' in dynamic:
+        subprocess.run(['patchelf', '--set-rpath',
+                        '$ORIGIN:$ORIGIN/..:$ORIGIN/../lib:$ORIGIN/../..', str(path)], check=True)
+
+
 def archive_filter(info):
     if any(part in ('.git', '__pycache__', 'autom4te.cache') for part in Path(info.name).parts):
         return None
@@ -154,8 +163,7 @@ def main():
             shutil.copy2(path, target)
     for path in runtime.rglob('*'):
         if is_elf(path):
-            subprocess.run(['patchelf', '--set-rpath',
-                            '$ORIGIN:$ORIGIN/..:$ORIGIN/../lib:$ORIGIN/../..', str(path)], check=True)
+            relocate_elf(path)
     launcher = runtime / 'run'
     launcher.write_text('''#!/bin/sh
 set -eu
