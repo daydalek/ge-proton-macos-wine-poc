@@ -53,6 +53,8 @@ Mono and Gecko are disabled in this native C/C++ probe environment so their
 first-run download dialogs can be handled separately in desktop acceptance.
 The suite requests software OpenGL and selects the installed x86_64 Mesa
 Lavapipe Vulkan driver. Inherited renderer and loader overrides are cleared.
+Full-system emulation can use `--timeout-scale 4` to allow longer test deadlines;
+the report records the selected multiplier. The default multiplier is 1.
 
 The Linux PE toolchain is the official LLVM-MinGW 20260616 UCRT release.
 FFmpeg is built from the same locked source as macOS with broad built-in

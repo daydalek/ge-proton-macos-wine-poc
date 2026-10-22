@@ -3,6 +3,7 @@
 """Run isolated x86/x64 Wine regression probes under an existing X display."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -66,7 +67,14 @@ def main():
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--runtime', type=Path, help='Packaged runtime; default is the installed build stage')
     parser.add_argument('--quick', action='store_true', help='Startup, exception and syscall probes')
+    parser.add_argument('--timeout-scale', type=float, default=1.0,
+                        help='Explicit timeout multiplier for slow full-system emulation')
     args = parser.parse_args()
+    if not math.isfinite(args.timeout_scale) or args.timeout_scale <= 0:
+        parser.error('--timeout-scale must be finite and positive')
+
+    def check(name, command, env, output, timeout=90):
+        return run_case(name, command, env, output, timeout * args.timeout_scale)
     if not os.environ.get('DISPLAY'):
         parser.error('Run with xvfb-run -a or provide a Linux desktop DISPLAY')
     build = Build(args.work_dir, 1)
@@ -89,16 +97,16 @@ def main():
                                capture_output=True, text=True, timeout=20)
         if pulse.returncode == 0:
             null_sink = pulse.stdout.strip()
-        startup = run_case('wineboot', [wine, 'wineboot', '-u'], env, output, 180)
+        startup = check('wineboot', [wine, 'wineboot', '-u'], env, output, 180)
         results.append(startup)
         if startup['status'] == 'passed':
-            results.append(run_case('cmd', [wine, 'cmd', '/c', 'ver'], env, output))
+            results.append(check('cmd', [wine, 'cmd', '/c', 'ver'], env, output))
             names = ['exception-probe', 'syscall-boolean-probe'] if args.quick else [
                 'exception-probe', 'syscall-boolean-probe', 'crypto-probe', 'directory-compat-probe', 'hotpatch-probe',
                 'command-line-probe', 'device-notify-probe', 'dbghelp-probe', 'fullscreen-state-probe']
             for bits in ('x64', 'x86'):
                 for name in names:
-                    results.append(run_case(name + '-' + bits,
+                    results.append(check(name + '-' + bits,
                         [wine, build.work / 'probes' / (name + '-' + bits + '.exe')], env, output))
                 if args.quick:
                     continue
@@ -107,35 +115,35 @@ def main():
                     ('ddraw', 'backend-switch-probe', ['--ddraw']),
                     ('vulkan', 'vulkan-probe', []),
                     ('vulkan-surface', 'vulkan-probe', ['--surface'])):
-                    results.append(run_case(label + '-' + bits,
+                    results.append(check(label + '-' + bits,
                         [wine, build.work / 'probes' / (probe_name + '-' + bits + '.exe'), *arguments], env, output))
-                results.append(run_case('dwarf-divisor-' + bits,
+                results.append(check('dwarf-divisor-' + bits,
                     [wine, build.work / 'probes' / ('dwarf-divisor-probe-' + bits + '.exe'),
                      windows_path(build.work / 'probes' / ('dwarf-divisor-fixture-' + bits + '.dll'))], env, output))
                 probe = build.work / 'probes' / ('media-probe-' + bits + '.exe')
                 for sample in ('test-wmv2.wmv', 'test-mpeg1.mpg', 'test-pcm.wav'):
                     path = PROJECT / 'tools/samples' / sample
-                    results.append(run_case('play-' + sample + '-' + bits,
+                    results.append(check('play-' + sample + '-' + bits,
                         [wine, probe, 'play', windows_path(path), 'gdi'], env, output, 150))
-                results.append(run_case('reader-wmv-' + bits,
+                results.append(check('reader-wmv-' + bits,
                     [wine, probe, 'reader', windows_path(PROJECT / 'tools/samples/test-wmv2.wmv')], env, output))
-                results.append(run_case('mpeg-format-' + bits,
+                results.append(check('mpeg-format-' + bits,
                     [wine, build.work / 'probes' / ('mpeg-audio-format-probe-' + bits + '.exe'),
                      windows_path(PROJECT / 'tools/samples/test-mpeg1.mpg')], env, output))
                 for name in ('child-window-probe', 'reconnect-probe', 'repeated-seek-probe'):
-                    results.append(run_case(name + '-' + bits,
+                    results.append(check(name + '-' + bits,
                         [wine, build.work / 'probes' / (name + '-' + bits + '.exe'),
                          windows_path(PROJECT / 'tools/samples/test-mpeg1.mpg')], env, output))
         else:
             print((output / 'wineboot.log').read_text(errors='replace')[-8000:], file=sys.stderr)
         completed = True
     finally:
-        results.append(run_case('wineserver-stop', [server, '-k'], env, output, 20))
-        results.append(run_case('wineserver-wait', [server, '-w'], env, output, 20))
+        results.append(check('wineserver-stop', [server, '-k'], env, output, 20))
+        results.append(check('wineserver-wait', [server, '-w'], env, output, 20))
         if null_sink:
             subprocess.run(['pactl', 'unload-module', null_sink], capture_output=True, timeout=20)
         passed = completed and bool(results) and all(r['status'] == 'passed' for r in results)
-        write_json(report, {'result': 'passed' if passed else 'failed', 'quick': args.quick,
+        write_json(report, {'result': 'passed' if passed else 'failed', 'quick': args.quick, 'timeout_scale': args.timeout_scale,
             'scope': 'Isolated Wine prefix, CPU translation when applicable, X display and software rendering',
             'optional_addons': 'Mono and Gecko disabled for native C/C++ probes',
             'external_acceptance': ['native x86_64 kernel', 'hardware GPU', 'Wayland desktop', 'real games'],
