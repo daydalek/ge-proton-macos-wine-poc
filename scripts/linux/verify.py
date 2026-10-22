@@ -24,7 +24,10 @@ def runtime_environment(build, runtime, output, packaged=False):
         libraries.append(build.deps / 'lib')
     env.update(WINEPREFIX=str(output / 'prefix'), WINEDEBUG='-all',
                LD_LIBRARY_PATH=':'.join(map(str, libraries)),
-               LIBGL_ALWAYS_SOFTWARE='1', WINEDLLOVERRIDES='winemenubuilder.exe=d')
+               LIBGL_ALWAYS_SOFTWARE='1',
+               # These native probes require no managed/browser addons. Their
+               # first-run download dialogs need an interactive desktop.
+               WINEDLLOVERRIDES='winemenubuilder.exe=d;mscoree,mshtml=')
     driver_dir = Path('/usr/share/vulkan/icd.d')
     for name in ('lvp_icd.x86_64.json', 'lvp_icd.json'):
         if (driver_dir / name).is_file():
@@ -133,6 +136,7 @@ def main():
         passed = completed and bool(results) and all(r['status'] == 'passed' for r in results)
         write_json(report, {'result': 'passed' if passed else 'failed', 'quick': args.quick,
             'scope': 'Isolated Wine prefix, CPU translation when applicable, X display and software rendering',
+            'optional_addons': 'Mono and Gecko disabled for native C/C++ probes',
             'external_acceptance': ['native x86_64 kernel', 'hardware GPU', 'Wayland desktop', 'real games'],
             'tests': results})
         print('Report:', report)
