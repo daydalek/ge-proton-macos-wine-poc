@@ -25,6 +25,7 @@ def runtime_environment(build, runtime, output, packaged=False):
     env.update(WINEPREFIX=str(output / 'prefix'), WINEDEBUG='-all',
                LD_LIBRARY_PATH=':'.join(map(str, libraries)),
                LIBGL_ALWAYS_SOFTWARE='1',
+               WINE_PROBE_FONT='Liberation Sans',
                # These native probes require no managed/browser addons. Their
                # first-run download dialogs need an interactive desktop.
                WINEDLLOVERRIDES='winemenubuilder.exe=d;mscoree,mshtml=')
