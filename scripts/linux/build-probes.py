@@ -10,6 +10,7 @@ from build import Build, PROJECT
 
 
 PROBES = {
+    'backend-switch-probe': ['-ldxguid', '-luser32'],
     'crypto-probe': ['-lbcrypt', '-lsecur32'],
     'fullscreen-state-probe': ['-luser32'],
     'media-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],

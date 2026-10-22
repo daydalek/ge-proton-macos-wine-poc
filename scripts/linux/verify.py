@@ -13,6 +13,24 @@ import time
 from build import Build, PROJECT, write_json
 
 
+def runtime_environment(build, runtime, output, packaged=False):
+    env = dict(os.environ)
+    for key in ('WINEDLLPATH', 'WINELOADER', 'WINESERVER', 'WINEARCH', 'WAYLAND_DISPLAY',
+                'WINEDLLOVERRIDES', 'WINED3DMETAL'):
+        env.pop(key, None)
+    libraries = [runtime / 'lib']
+    if not packaged:
+        libraries.append(build.deps / 'lib')
+    env.update(WINEPREFIX=str(output / 'prefix'), WINEDEBUG='-all',
+               LD_LIBRARY_PATH=':'.join(map(str, libraries)),
+               LIBGL_ALWAYS_SOFTWARE='1', WINEDLLOVERRIDES='winemenubuilder.exe=d')
+    return env
+
+
+def windows_path(path):
+    return 'Z:' + str(path.resolve())
+
+
 def run_case(name, command, env, output, timeout=90):
     log = output / (name + '.log')
     started = time.monotonic()
@@ -45,14 +63,8 @@ def main():
     runtime = args.runtime.resolve() if args.runtime else build.stage
     output = build.work / 'validation' / time.strftime('%Y%m%d-%H%M%S')
     output.mkdir(parents=True, exist_ok=False)
-    env = dict(os.environ)
-    for key in ('WINEDLLPATH', 'WINELOADER', 'WINESERVER', 'WINEARCH', 'WAYLAND_DISPLAY',
-                'WINEDLLOVERRIDES', 'WINED3DMETAL'):
-        env.pop(key, None)
-    env.update(WINEPREFIX=str(output / 'prefix'), WINEDEBUG='-all',
-               LD_LIBRARY_PATH=str(runtime / 'lib') + ':' + str(build.deps / 'lib'),
-               LIBGL_ALWAYS_SOFTWARE='1', WINEDLLOVERRIDES='winemenubuilder.exe=d')
-    wine = runtime / 'bin/wine'
+    env = runtime_environment(build, runtime, output, packaged=bool(args.runtime))
+    wine = runtime / 'run' if args.runtime else runtime / 'bin/wine'
     server = runtime / 'bin/wineserver'
     results = []
     null_sink = None
@@ -73,30 +85,37 @@ def main():
             results.append(run_case('cmd', [wine, 'cmd', '/c', 'ver'], env, output))
             names = ['exception-probe'] if args.quick else [
                 'exception-probe', 'crypto-probe', 'directory-compat-probe', 'hotpatch-probe',
-                'command-line-probe', 'device-notify-probe', 'dbghelp-probe']
+                'command-line-probe', 'device-notify-probe', 'dbghelp-probe', 'fullscreen-state-probe']
             for bits in ('x64', 'x86'):
                 for name in names:
                     results.append(run_case(name + '-' + bits,
                         [wine, build.work / 'probes' / (name + '-' + bits + '.exe')], env, output))
                 if args.quick:
                     continue
+                for label, probe_name, arguments in (
+                    ('d3d11', 'backend-switch-probe', []),
+                    ('ddraw', 'backend-switch-probe', ['--ddraw']),
+                    ('vulkan', 'vulkan-probe', []),
+                    ('vulkan-surface', 'vulkan-probe', ['--surface'])):
+                    results.append(run_case(label + '-' + bits,
+                        [wine, build.work / 'probes' / (probe_name + '-' + bits + '.exe'), *arguments], env, output))
                 results.append(run_case('dwarf-divisor-' + bits,
                     [wine, build.work / 'probes' / ('dwarf-divisor-probe-' + bits + '.exe'),
-                     build.work / 'probes' / ('dwarf-divisor-fixture-' + bits + '.dll')], env, output))
+                     windows_path(build.work / 'probes' / ('dwarf-divisor-fixture-' + bits + '.dll'))], env, output))
                 probe = build.work / 'probes' / ('media-probe-' + bits + '.exe')
                 for sample in ('test-wmv2.wmv', 'test-mpeg1.mpg', 'test-pcm.wav'):
                     path = PROJECT / 'tools/samples' / sample
                     results.append(run_case('play-' + sample + '-' + bits,
-                        [wine, probe, 'play', path, 'gdi'], env, output, 150))
+                        [wine, probe, 'play', windows_path(path), 'gdi'], env, output, 150))
                 results.append(run_case('reader-wmv-' + bits,
-                    [wine, probe, 'reader', PROJECT / 'tools/samples/test-wmv2.wmv'], env, output))
+                    [wine, probe, 'reader', windows_path(PROJECT / 'tools/samples/test-wmv2.wmv')], env, output))
                 results.append(run_case('mpeg-format-' + bits,
                     [wine, build.work / 'probes' / ('mpeg-audio-format-probe-' + bits + '.exe'),
-                     PROJECT / 'tools/samples/test-mpeg1.mpg'], env, output))
-                for name in ('reconnect-probe', 'repeated-seek-probe'):
+                     windows_path(PROJECT / 'tools/samples/test-mpeg1.mpg')], env, output))
+                for name in ('child-window-probe', 'reconnect-probe', 'repeated-seek-probe'):
                     results.append(run_case(name + '-' + bits,
                         [wine, build.work / 'probes' / (name + '-' + bits + '.exe'),
-                         PROJECT / 'tools/samples/test-mpeg1.mpg'], env, output))
+                         windows_path(PROJECT / 'tools/samples/test-mpeg1.mpg')], env, output))
         else:
             print((output / 'wineboot.log').read_text(errors='replace')[-8000:], file=sys.stderr)
         completed = True

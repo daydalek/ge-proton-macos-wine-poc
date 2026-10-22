@@ -7,10 +7,12 @@ import sys
 import struct
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/linux'))
 from build import patch_plan, sha256_file
+import verify as linux_verify
 
 spec = importlib.util.spec_from_file_location('linux_package', ROOT / 'scripts/linux/package.py')
 package = importlib.util.module_from_spec(spec)
@@ -18,6 +20,29 @@ spec.loader.exec_module(package)
 
 
 class LinuxProfileTests(unittest.TestCase):
+    def test_ne_bitmap_fonts_are_preserved_by_runtime_preparation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = bytearray(128)
+            image[:2] = b'MZ'
+            struct.pack_into('<I', image, 60, 64)
+            image[64:66] = b'NE'
+            path = root / 'bitmap.fon'
+            path.write_bytes(image)
+            report = package.prepare_runtime(root, Path('/unavailable-objcopy'))
+            self.assertEqual(report['debug_stripped'], 0)
+            self.assertEqual(path.read_bytes(), image)
+
+    def test_packaged_validation_uses_only_shipped_libraries(self):
+        build = SimpleNamespace(deps=Path('/build/deps'))
+        runtime = Path('/relocated/runtime')
+        output = Path('/validation')
+        packaged = linux_verify.runtime_environment(build, runtime, output, packaged=True)
+        self.assertEqual(packaged['LD_LIBRARY_PATH'], '/relocated/runtime/lib')
+        self.assertEqual(packaged['WINEPREFIX'], '/validation/prefix')
+        staged = linux_verify.runtime_environment(build, runtime, output)
+        self.assertEqual(staged['LD_LIBRARY_PATH'], '/relocated/runtime/lib:/build/deps/lib')
+
     def test_legacy_and_media_repairs_remain_enabled(self):
         plan = {entry['path']: entry for entry in patch_plan()}
         for name in ('i386-hotpatch-prologue', 'kernelbase-legacy-directory-info', 'winedmo-repeated-seek'):

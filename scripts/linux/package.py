@@ -100,7 +100,10 @@ def prepare_runtime(root, objcopy):
         if path.name in {'system.reg', 'user.reg', 'userdef.reg', '.DS_Store', 'Metadata.plist'}:
             raise ValueError('Runtime contains user state: ' + str(path))
         data = path.read_bytes()
-        pe = data[:2] == b'MZ'
+        pe = False
+        if len(data) >= 64 and data[:2] == b'MZ':
+            pe_offset = struct.unpack_from('<I', data, 60)[0]
+            pe = data[pe_offset:pe_offset + 4] == b'PE\0\0'
         if pe or data[:4] == b'\x7fELF':
             marker = data[64:80]
             subprocess.run([str(objcopy), '--strip-debug', str(path)], check=True, capture_output=True)
