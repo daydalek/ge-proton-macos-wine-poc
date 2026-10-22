@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-15",
+  "date": "2026-10-23",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -2193,6 +2193,18 @@
       "source_origin": "CrossOver 26.3 GE media source with Linux PulseAudio adaptation",
       "source_sha256": "825911fa40df5ea9703f503ff4436af79d29de96c12893be535cf7a008b3359e",
       "copyright_notices": []
+    },
+    {
+      "patch": "patches/linux/quartz-pause-position.patch",
+      "source_file": "dlls/quartz/filtergraph.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared CrossOver source before Linux position repair",
+      "source_sha256": "cefd45c97c36b24b9efa17236eaff184611df7bdda9a5b5cd3be52cc604f54fe",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer",
+        "Copyright 2004 Christian Costa"
+      ]
     }
   ],
   "counts": {
@@ -2223,6 +2235,7 @@
     "patches/crossover/kernelbase-legacy-directory-info.patch": "33aed0fc1cc34814b343bba8ba49c966c277646e10da1cdbc50a6d954d31818b",
     "patches/crossover/i386-hotpatch-prologue.patch": "cbe167d01ceeaff24fd1faf81d808856865b7b5c6a79466870cf7800cff86c0e",
     "patches/crossover/winedmo-repeated-seek.patch": "356a262982330c71a6847c2088a25f912fc33b84d3f21538294566c2e3543b34",
-    "patches/linux/crossover-pulse-build.patch": "6bc8c58824516d2501ffda1ccabb2d5c810ca178173bd6a60cf62f6173a5bfe4"
+    "patches/linux/crossover-pulse-build.patch": "6bc8c58824516d2501ffda1ccabb2d5c810ca178173bd6a60cf62f6173a5bfe4",
+    "patches/linux/quartz-pause-position.patch": "974ea8187dc61b9a310df210f4d5c9aff32f9a9f007e4e9c6de861b9d5a1b189"
   }
 }
