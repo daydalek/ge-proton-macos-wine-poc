@@ -310,10 +310,14 @@ static int exercise_baseline_apis(BYTE req_charset, UINT glyph_char,
 int main(void)
 {
     int failures = 0;
+    char configured_font[LF_FACESIZE];
+    DWORD font_length;
 
     setvbuf(stdout, NULL, _IONBF, 0);
-    if (GetEnvironmentVariableA("WINE_PROBE_FONT", probe_font, sizeof(probe_font)) >= sizeof(probe_font))
+    font_length = GetEnvironmentVariableA("WINE_PROBE_FONT", configured_font, sizeof(configured_font));
+    if (font_length >= sizeof(configured_font))
         return 2;
+    if (font_length) strcpy(probe_font, configured_font);
     printf("HOTPATCH_FONT %s\n", probe_font);
     failures += exercise_baseline_apis(DEFAULT_CHARSET, 'A', "raw-create", "raw-title", "raw-menu");
 
