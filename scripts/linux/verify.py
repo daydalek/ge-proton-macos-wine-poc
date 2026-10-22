@@ -12,13 +12,15 @@ import sys
 import time
 
 from build import Build, PROJECT, write_json
+from audio_fixture import PulseAudioFixture
 
 
 def runtime_environment(build, runtime, output, packaged=False):
     env = dict(os.environ)
     for key in ('WINEDLLPATH', 'WINELOADER', 'WINESERVER', 'WINEARCH', 'WAYLAND_DISPLAY',
                 'WINEDLLOVERRIDES', 'WINED3DMETAL', 'WINE_D3D_CONFIG', 'LD_PRELOAD', 'LD_AUDIT',
-                'VK_DRIVER_FILES', 'VK_ICD_FILENAMES'):
+                'VK_DRIVER_FILES', 'VK_ICD_FILENAMES', 'PULSE_SERVER', 'PULSE_SINK',
+                'PULSE_SOURCE', 'PULSE_COOKIE', 'PULSE_CLIENTCONFIG', 'PULSE_RUNTIME_PATH', 'PULSE_STATE_PATH'):
         env.pop(key, None)
     libraries = [runtime / 'lib']
     if not packaged:
@@ -85,20 +87,17 @@ def main():
     wine = runtime / 'run' if args.runtime else runtime / 'bin/wine'
     server = runtime / 'bin/wineserver'
     results = []
-    null_sink = None
     completed = False
-    sink_name = 'ge_wine_test_' + str(os.getpid())
-    env['PULSE_SINK'] = sink_name
+    audio = PulseAudioFixture(env, output, 20 * args.timeout_scale)
     report = output / 'linux-runtime-check.json'
     try:
         results.append(check('host-compat-syscall',
             [build.work / 'probes/linux-compat-syscall-probe'], env, output, 10))
-        # A null sink keeps unattended playback silent and provides a clocked audio device.
-        subprocess.run(['pulseaudio', '--start', '--exit-idle-time=-1'], capture_output=True, timeout=20)
-        pulse = subprocess.run(['pactl', 'load-module', 'module-null-sink', 'sink_name=' + sink_name],
-                               capture_output=True, text=True, timeout=20)
-        if pulse.returncode == 0:
-            null_sink = pulse.stdout.strip()
+        pulse = audio.start()
+        results.append(pulse)
+        print(json.dumps(pulse), flush=True)
+        if pulse['status'] != 'passed':
+            raise RuntimeError('Private PulseAudio startup failed; see pulseaudio.log')
         startup = check('wineboot', [wine, 'wineboot', '-u'], env, output, 180)
         results.append(startup)
         if startup['status'] == 'passed':
@@ -142,12 +141,12 @@ def main():
     finally:
         results.append(check('wineserver-stop', [server, '-k'], env, output, 20))
         results.append(check('wineserver-wait', [server, '-w'], env, output, 20))
-        if null_sink:
-            subprocess.run(['pactl', 'unload-module', null_sink], capture_output=True, timeout=20)
+        audio.close()
         passed = completed and bool(results) and all(r['status'] == 'passed' for r in results)
         write_json(report, {'result': 'passed' if passed else 'failed', 'quick': args.quick, 'timeout_scale': args.timeout_scale,
             'scope': 'Isolated Wine prefix, CPU translation when applicable, X display and software rendering',
             'optional_addons': 'Mono and Gecko disabled for native C/C++ probes',
+            'audio': 'Private D-Bus session, PulseAudio Unix socket and clocked null sink',
             'external_acceptance': ['native x86_64 kernel', 'hardware GPU', 'Wayland desktop', 'real games'],
             'tests': results})
         print('Report:', report)

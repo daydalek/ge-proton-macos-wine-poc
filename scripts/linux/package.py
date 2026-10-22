@@ -202,6 +202,7 @@ exec "$root/bin/wine" "$@"
         'scope': 'ELF architecture, relative search paths, symlinks, and dependencies on the build distro'})
     manifest = {'target': 'Ubuntu 24.04 x86_64', 'baseline': provenance['baseline'],
                 'windows_architectures': provenance['windows_architectures'],
+                'kernel_requirements': 'x86_64 execution with the Linux i386 compatibility syscall entry (int 0x80)',
                 'system_dependencies': 'glibc, GnuTLS, X11/Wayland, graphics and audio libraries from the host distro',
                 'system_fonts': ['Liberation', 'Noto CJK'],
                 'bundled_dependencies': ['FFmpeg'], 'patches': patch_plan(),

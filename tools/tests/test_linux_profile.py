@@ -2,6 +2,7 @@
 """Verify Linux keeps shared compatibility patches and rejects stale binaries."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import struct
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/linux'))
 from build import patch_plan, sha256_file, incremental_additions
 import verify as linux_verify
+from audio_fixture import PulseAudioFixture
 
 spec = importlib.util.spec_from_file_location('linux_package', ROOT / 'scripts/linux/package.py')
 package = importlib.util.module_from_spec(spec)
@@ -24,6 +26,31 @@ spec.loader.exec_module(package)
 
 
 class LinuxProfileTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'linux' and all(shutil.which(name) for name in
+        ('dbus-run-session', 'pulseaudio', 'pactl', 'paplay')), 'Linux audio tools are required')
+    def test_audio_servers_are_independent_and_play_clocked_silence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            first_output, second_output = output / 'first', output / 'second'
+            first_output.mkdir()
+            second_output.mkdir()
+            first = PulseAudioFixture(dict(os.environ), first_output)
+            second = PulseAudioFixture(dict(os.environ), second_output)
+            try:
+                self.assertEqual(first.start()['status'], 'passed', (first_output / 'pulseaudio.log').read_text())
+                self.assertEqual(second.start()['status'], 'passed', (second_output / 'pulseaudio.log').read_text())
+                self.assertNotEqual(first.server, second.server)
+                first.close()
+                result = subprocess.run(['pactl', '--server=' + second.server, 'list', 'short', 'sinks'],
+                    env=second.environment, capture_output=True, text=True, check=True, timeout=10)
+                self.assertIn(second.sink, result.stdout)
+                subprocess.run(['paplay', '--server=' + second.server, '--device=' + second.sink,
+                    '--raw', '--format=s16le', '--rate=8000', '--channels=1'],
+                    env=second.environment, input=bytes(3200), check=True, timeout=10)
+            finally:
+                first.close()
+                second.close()
+
     def test_pulse_readiness_uses_real_stream_state_and_handles_missing_stream(self):
         compiler = shutil.which('cc')
         if not compiler:
@@ -75,10 +102,12 @@ int main(void) {
         with patch.dict('os.environ', {'LD_PRELOAD': '/inherited/inject.so',
                                      'LD_AUDIT': '/inherited/audit.so',
                                      'WINE_D3D_CONFIG': 'renderer=gdi',
+                                     'PULSE_SERVER': 'tcp:inherited.example:4713',
+                                     'PULSE_CLIENTCONFIG': '/inherited/pulse.conf',
                                      'VK_DRIVER_FILES': '/inherited/driver.json'}):
             env = linux_verify.runtime_environment(SimpleNamespace(deps=Path('/deps')),
                 Path('/runtime'), Path('/validation'), packaged=True)
-        for key in ('LD_PRELOAD', 'LD_AUDIT', 'WINE_D3D_CONFIG'):
+        for key in ('LD_PRELOAD', 'LD_AUDIT', 'WINE_D3D_CONFIG', 'PULSE_SERVER', 'PULSE_CLIENTCONFIG'):
             self.assertNotIn(key, env)
         self.assertNotEqual(env.get('VK_DRIVER_FILES'), '/inherited/driver.json')
 

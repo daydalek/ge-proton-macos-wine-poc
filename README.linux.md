@@ -48,9 +48,13 @@ xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
 ```
 
 Reports and per-probe logs are kept under `validation/`. The suite uses a
-dedicated prefix and a PulseAudio null sink for silent unattended playback.
+dedicated prefix and a private PulseAudio server with its own D-Bus session,
+Unix socket and null sink for silent unattended playback. Readiness is checked
+before Wine starts; the suite owns and shuts down its audio processes.
 The host probe checks the i386 `int 0x80` syscall entry used by Linux WoW64.
 Its result is recorded alongside the Wine probes, including on translated CPUs.
+The host kernel and CPU execution environment must provide that compatibility
+entry for this CrossOver core.
 Mono and Gecko are disabled in this native C/C++ probe environment so their
 first-run download dialogs can be handled separately in desktop acceptance.
 The suite requests software OpenGL and selects the installed x86_64 Mesa
@@ -87,6 +91,10 @@ runtime directory to validate the packaged layout.
 
 An amd64 OrbStack machine on Apple Silicon uses CPU translation and an ARM64
 kernel. It is useful for build checks and software-rendered regression probes.
+A full x86_64 kernel VM also covers the Windows x86 execution and exception
+probes. System emulation needs a QEMU build containing the upstream
+[user-mode IRET/SMAP repair](https://github.com/qemu/qemu/commit/0bd385e7e3c33e987d7a8879918be6df7b111ac4);
+the local validation environment uses ARM64-native QEMU 10.2.1.
 Native x86_64 Linux desktop validation covers GPU drivers, Wayland/X11 session
 behavior, fullscreen/input, real game playback, and performance. Steam Proton
 compatibility-tool integration is a separate integration target from this
