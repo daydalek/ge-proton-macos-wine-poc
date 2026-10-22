@@ -80,6 +80,21 @@ class Build:
                     break
         return download_verified(item['url'], target, item['sha256'])
 
+    def record_source_notices(self, source, plan):
+        all_args, linux_args = [], []
+        for entry in plan:
+            if entry['applied']:
+                all_args += ['--patch', PROJECT / entry['path']]
+                if entry['path'] in self.profile.get('additional_patches', []):
+                    linux_args += ['--patch', PROJECT / entry['path']]
+        command = [sys.executable, PROJECT / 'scripts/source-notices.py', '--source', source]
+        self.run(command + all_args, 'source-notices.log')
+        if linux_args:
+            self.run(command + ['--platform', 'linux', '--date', self.profile['modification_date'], *linux_args],
+                     'linux-source-notices.log')
+            # Refresh the shared inventory hashes after the Linux notices are added.
+            self.run(command + all_args, 'source-notices.log')
+
     def prepare(self):
         plan = patch_plan()
         inputs = {'source_sha256': self.lock['source_sha256'], 'patches': plan}
@@ -98,13 +113,8 @@ class Build:
                         patch = PROJECT / entry['path']
                         self.run(['git', 'apply', '--check', patch], 'patch-check.log', cwd=self.source)
                         self.run(['git', 'apply', patch], 'patch-apply.log', cwd=self.source)
-                notice_args = []
-                for entry in plan:
-                    if entry['applied']:
-                        notice_args += ['--patch', PROJECT / entry['path']]
-                self.run([sys.executable, PROJECT / 'scripts/source-notices.py', '--source', self.source,
-                          *notice_args], 'source-notices.log')
                 write_json(marker, inputs)
+            self.record_source_notices(self.source, plan)
             return
         item = {'archive': 'crossover-sources-26.3.0.tar.gz', 'url': self.lock['source_url'],
                 'sha256': self.lock['source_sha256']}
@@ -117,15 +127,12 @@ class Build:
         extract_tar(archive, scratch, members=['sources/wine'])
         tree = scratch / 'sources/wine'
         self.run(['git', 'init', '-q', tree], 'source-init.log')
-        notice_args = []
         for entry in plan:
             if entry['applied']:
                 patch = PROJECT / entry['path']
                 self.run(['git', 'apply', '--check', patch], 'patch-check.log', cwd=tree)
                 self.run(['git', 'apply', patch], 'patch-apply.log', cwd=tree)
-                notice_args += ['--patch', patch]
-        self.run([sys.executable, PROJECT / 'scripts/source-notices.py', '--source', tree, *notice_args],
-                 'source-notices.log')
+        self.record_source_notices(tree, plan)
         self.source.parent.mkdir(parents=True, exist_ok=True)
         tree.rename(self.source)
         write_json(marker, inputs)
@@ -198,6 +205,7 @@ class Build:
         modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/ntdll.so',
                    'lib/wine/x86_64-unix/win32u.so', 'lib/wine/x86_64-unix/winedmo.so',
                    'lib/wine/i386-windows/ntdll.dll', 'lib/wine/x86_64-windows/ntdll.dll']
+        modules += ['lib/wine/' + arch + '-windows/quartz.dll' for arch in ('i386', 'x86_64')]
         write_json(self.stage / 'build-provenance.json', {
             'target': self.profile['target'], 'baseline': self.profile['baseline'],
             'windows_architectures': self.profile['windows_architectures'],
