@@ -16,7 +16,8 @@ from build import Build, PROJECT, write_json
 def runtime_environment(build, runtime, output, packaged=False):
     env = dict(os.environ)
     for key in ('WINEDLLPATH', 'WINELOADER', 'WINESERVER', 'WINEARCH', 'WAYLAND_DISPLAY',
-                'WINEDLLOVERRIDES', 'WINED3DMETAL'):
+                'WINEDLLOVERRIDES', 'WINED3DMETAL', 'WINE_D3D_CONFIG', 'LD_PRELOAD', 'LD_AUDIT',
+                'VK_DRIVER_FILES', 'VK_ICD_FILENAMES'):
         env.pop(key, None)
     libraries = [runtime / 'lib']
     if not packaged:
@@ -24,6 +25,11 @@ def runtime_environment(build, runtime, output, packaged=False):
     env.update(WINEPREFIX=str(output / 'prefix'), WINEDEBUG='-all',
                LD_LIBRARY_PATH=':'.join(map(str, libraries)),
                LIBGL_ALWAYS_SOFTWARE='1', WINEDLLOVERRIDES='winemenubuilder.exe=d')
+    driver_dir = Path('/usr/share/vulkan/icd.d')
+    for name in ('lvp_icd.x86_64.json', 'lvp_icd.json'):
+        if (driver_dir / name).is_file():
+            env['VK_DRIVER_FILES'] = env['VK_ICD_FILENAMES'] = str(driver_dir / name)
+            break
     return env
 
 

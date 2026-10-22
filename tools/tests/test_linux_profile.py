@@ -8,6 +8,7 @@ import struct
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/linux'))
@@ -20,6 +21,17 @@ spec.loader.exec_module(package)
 
 
 class LinuxProfileTests(unittest.TestCase):
+    def test_runtime_environment_clears_inherited_renderer_and_loader_overrides(self):
+        with patch.dict('os.environ', {'LD_PRELOAD': '/inherited/inject.so',
+                                     'LD_AUDIT': '/inherited/audit.so',
+                                     'WINE_D3D_CONFIG': 'renderer=gdi',
+                                     'VK_DRIVER_FILES': '/inherited/driver.json'}):
+            env = linux_verify.runtime_environment(SimpleNamespace(deps=Path('/deps')),
+                Path('/runtime'), Path('/validation'), packaged=True)
+        for key in ('LD_PRELOAD', 'LD_AUDIT', 'WINE_D3D_CONFIG'):
+            self.assertNotIn(key, env)
+        self.assertNotEqual(env.get('VK_DRIVER_FILES'), '/inherited/driver.json')
+
     def test_ne_bitmap_fonts_are_preserved_by_runtime_preparation(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

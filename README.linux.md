@@ -42,11 +42,15 @@ xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
 
 Reports and per-probe logs are kept under `validation/`. The suite uses a
 dedicated prefix and a PulseAudio null sink for silent unattended playback.
+The suite requests software OpenGL and selects the installed x86_64 Mesa
+Lavapipe Vulkan driver. Inherited renderer and loader overrides are cleared.
 
 The Linux PE toolchain is the official LLVM-MinGW 20260616 UCRT release.
 FFmpeg is built from the same locked source as macOS with broad built-in
 software playback. GnuTLS and desktop/device libraries come from Ubuntu.
 The package therefore requires compatible host distro libraries.
+The prerequisite script installs Noto CJK fonts so the Linux font fallback
+can render Chinese and Japanese text in visual novels.
 
 ## Packaging
 
@@ -60,6 +64,9 @@ ELF dependency report, patch manifest and checksums. The runtime includes
 FFmpeg libraries, licenses, and a `run` launcher with a user-writable prefix.
 ELF library search paths use `$ORIGIN` relative paths. The source archive
 contains the prepared Wine source, locked input archives and project recipes.
+The ELF report records each module's GLIBC symbol versions and the build host's
+libc version. The initial runtime target is Ubuntu 24.04; distribution coverage
+requires the corresponding host-library and runtime acceptance checks.
 Repeat `verify.py` with `--runtime /path/to/wine-linux-x86_64` after moving the
 runtime directory to validate the packaged layout.
 

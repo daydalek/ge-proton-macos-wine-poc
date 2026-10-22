@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import struct
@@ -94,7 +95,11 @@ def validate_elf(root, env):
         linked = subprocess.run(['ldd', str(path)], env=env, capture_output=True, text=True)
         if 'not found' in linked.stdout + linked.stderr:
             raise ValueError('Missing runtime dependency: ' + str(path) + '\n' + linked.stdout)
+        versions = subprocess.check_output(['readelf', '--version-info', str(path)], text=True)
+        glibc = sorted(set(re.findall(r'\bGLIBC_(\d+(?:\.\d+)+)\b', versions)),
+                       key=lambda value: tuple(map(int, value.split('.'))))
         records.append({'file': path.relative_to(root).as_posix(), 'sha256': sha256_file(path),
+                        'glibc_symbol_versions': glibc,
                         'needed': re.findall(r'\(NEEDED\).*?\[(.*?)\]', dynamic)})
     if not records:
         raise ValueError('Runtime contains no ELF binaries')
@@ -193,10 +198,12 @@ exec "$root/bin/wine" "$@"
                     '--library-dir', str(runtime / 'lib'),
                     '--output', str(output / 'linux-ffmpeg-capabilities.json')], env=env, check=True)
     write_json(output / 'linux-static-check.json', {'result': 'passed', 'elf_files': elf, 'pe_files': pe,
+        'build_host_libc': list(platform.libc_ver()),
         'scope': 'ELF architecture, relative search paths, symlinks, and dependencies on the build distro'})
-    manifest = {'target': 'Ubuntu 24.04+ x86_64', 'baseline': provenance['baseline'],
+    manifest = {'target': 'Ubuntu 24.04 x86_64', 'baseline': provenance['baseline'],
                 'windows_architectures': provenance['windows_architectures'],
                 'system_dependencies': 'glibc, GnuTLS, X11/Wayland, graphics and audio libraries from the host distro',
+                'system_fonts': ['Liberation', 'Noto CJK'],
                 'bundled_dependencies': ['FFmpeg'], 'patches': patch_plan(),
                 'toolchain': provenance['toolchain'],
                 'ffmpeg_source': next(item for item in build.dependencies if item['archive'] == 'ffmpeg.tar.gz'),
