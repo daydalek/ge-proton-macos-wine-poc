@@ -193,7 +193,8 @@ class Build:
                   '--with-pulse', '--with-alsa', '--with-vulkan', '--with-opengl', '--disable-tests'],
                  'wine-configure.log', cwd=build, env=env)
         self.run(['make', '-j' + str(self.jobs)], 'wine-build.log', cwd=build, env=env)
-        self.run(['make', 'install'], 'wine-install.log', cwd=build, env=env)
+        # Wine's install-lib target installs the complete application runtime.
+        self.run(['make', 'install-lib'], 'wine-install.log', cwd=build, env=env)
         modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/ntdll.so',
                    'lib/wine/x86_64-unix/win32u.so', 'lib/wine/x86_64-unix/winedmo.so',
                    'lib/wine/i386-windows/ntdll.dll', 'lib/wine/x86_64-windows/ntdll.dll']

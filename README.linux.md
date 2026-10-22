@@ -36,6 +36,9 @@ SHA-256 verified. `--archive-cache /path/to/existing/work` can reuse verified
 CrossOver and dependency archives from the macOS build. Prepared source inputs
 and append-only patch additions are recorded in the work directory.
 Logs are saved under the work directory's `logs/` folder.
+Wine is fully compiled and staged with its `install-lib` target. This installs
+the application runtime; developer import libraries and headers stay outside
+the release payload.
 
 Run the isolated regression suite under a virtual X display:
 
