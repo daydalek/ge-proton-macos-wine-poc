@@ -14,6 +14,8 @@ selected. macOS driver patches stay in the prepared source and retain their
 platform-specific activation conditions.
 The Linux profile appends a PulseAudio integration patch for CrossOver's
 audio-stream model and udev linkage, preserving GE's smooth-playback timing.
+It also appends a Quartz position repair: no-position requests retain the graph
+clock snapshot, and repeated pauses account for each running interval once.
 Append-only patch additions can reuse an existing build tree; changes to an
 earlier patch or the source baseline require a fresh work directory.
 
@@ -35,6 +37,8 @@ python3 scripts/linux/build-probes.py --work-dir "$POC_LINUX_WORK_DIR"
 SHA-256 verified. `--archive-cache /path/to/existing/work` can reuse verified
 CrossOver and dependency archives from the macOS build. Prepared source inputs
 and append-only patch additions are recorded in the work directory.
+Prepared sources include dated `LINUX_MODIFICATIONS.json` and per-file notices
+for Linux changes; the complete modification inventory records final file hashes.
 Logs are saved under the work directory's `logs/` folder.
 Wine is fully compiled and staged with its `install-lib` target. This installs
 the application runtime; developer import libraries and headers stay outside
@@ -86,6 +90,21 @@ libc version. The initial runtime target is Ubuntu 24.04; distribution coverage
 requires the corresponding host-library and runtime acceptance checks.
 Repeat `verify.py` with `--runtime /path/to/wine-linux-x86_64` after moving the
 runtime directory to validate the packaged layout.
+
+## Frontend runtime contract
+
+`linux-release-manifest.json` declares `run` as the Wine entrypoint and
+`bin/wineserver` as the Unix server entrypoint. A Linux frontend supplies its
+Bottle directory through `WINEPREFIX` and uses the launcher for Windows commands:
+
+```bash
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-x86_64/run cmd /c ver
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-x86_64/bin/wineserver -k
+```
+
+The prefix architecture is win64; both i386 and x86_64 Windows programs run
+through new WoW64. Whisky's Linux runtime adapter can consume these entrypoints
+and inject its driver into the existing `RuntimeService` bridge interface.
 
 ## Validation scope
 
