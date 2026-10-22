@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Check the actual x86_64 FFmpeg dylibs, without launching Wine or games."""
+"""Check the actual x86_64 FFmpeg libraries, without launching Wine or games."""
 import argparse
 import ctypes
 import json
@@ -40,8 +40,9 @@ def validate(report):
 
 
 def inspect(directory):
-    codec = ctypes.CDLL(str(directory / 'libavcodec.dylib'))
-    format_lib = ctypes.CDLL(str(directory / 'libavformat.dylib'))
+    suffix = '.dylib' if platform.system() == 'Darwin' else '.so'
+    codec = ctypes.CDLL(str(directory / ('libavcodec' + suffix)))
+    format_lib = ctypes.CDLL(str(directory / ('libavformat' + suffix)))
 
     def string(library, name):
         function = getattr(library, name)
@@ -92,9 +93,11 @@ def main():
     parser.add_argument('--library-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    if platform.system() != 'Darwin':
-        parser.error('Requires macOS and the x86_64 runtime libraries')
+    if platform.system() not in ('Darwin', 'Linux'):
+        parser.error('Requires macOS or Linux and the x86_64 runtime libraries')
     if platform.machine() not in ('x86_64', 'AMD64'):
+        if platform.system() == 'Linux':
+            parser.error('Run in x86_64 Linux to inspect the Linux runtime libraries')
         # Xcode Command Line Tools supply a universal Python; a Homebrew
         # interpreter may be arm64-only and cannot load the runtime dylibs.
         subprocess.run(['/usr/bin/arch', '-x86_64', '/usr/bin/python3',

@@ -16,6 +16,8 @@
 
 支持 **Valve Wine (GE-Proton 11-7)** 与 **CrossOver Wine 26.3** 两个源码基线。
 
+Linux x86_64 的共享补丁构建、依赖安装、隔离回归与打包入口见 [Linux 构建说明](README.linux.md)。Linux 支持的实际验证范围以对应构建报告为准。
+
 ---
 
 ## 项目结构
