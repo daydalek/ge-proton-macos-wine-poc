@@ -61,7 +61,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--runtime', type=Path, help='Packaged runtime; default is the installed build stage')
-    parser.add_argument('--quick', action='store_true', help='Startup and exception probes only')
+    parser.add_argument('--quick', action='store_true', help='Startup, exception and syscall probes')
     args = parser.parse_args()
     if not os.environ.get('DISPLAY'):
         parser.error('Run with xvfb-run -a or provide a Linux desktop DISPLAY')
@@ -89,8 +89,8 @@ def main():
         results.append(startup)
         if startup['status'] == 'passed':
             results.append(run_case('cmd', [wine, 'cmd', '/c', 'ver'], env, output))
-            names = ['exception-probe'] if args.quick else [
-                'exception-probe', 'crypto-probe', 'directory-compat-probe', 'hotpatch-probe',
+            names = ['exception-probe', 'syscall-boolean-probe'] if args.quick else [
+                'exception-probe', 'syscall-boolean-probe', 'crypto-probe', 'directory-compat-probe', 'hotpatch-probe',
                 'command-line-probe', 'device-notify-probe', 'dbghelp-probe', 'fullscreen-state-probe']
             for bits in ('x64', 'x86'):
                 for name in names:

@@ -17,6 +17,7 @@ PROBES = {
     'child-window-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'repeated-seek-probe': ['-municode', '-static', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'exception-probe': [],
+    'syscall-boolean-probe': [],
     'directory-compat-probe': [],
     'hotpatch-probe': ['-lgdi32', '-luser32'],
     'reconnect-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
