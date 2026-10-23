@@ -132,10 +132,12 @@ gh workflow run build-release.yml --ref codex/linux-support \
   -f linux_release_tag=v0.1.6-linux-amd64
 ```
 
-`compile_only=true` compiles the Wine core, Windows probes and deterministic
+`compile_only=true` installs build dependencies and compiles the Wine core, Windows probes and deterministic
 regression harnesses, checks PE/ELF files, dependency resolution, FFmpeg inventory,
 privacy and checksums, and defers Wine/media execution. The default mode keeps
 both runtime probe stages. The package manifest and prerelease notes record the
-selected validation mode. A nonempty Linux release tag publishes the checked
+selected validation mode. Runtime font/audio/display tools are installed in the
+full validation mode; CI uses the canonical Ubuntu archive with bounded download
+retries and timeouts. A nonempty Linux release tag publishes the checked
 assets under a new immutable `vMAJOR.MINOR.PATCH-linux-amd64` tag; the publisher
 verifies the recipe commit and uploaded asset digests before publishing.

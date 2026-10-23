@@ -34,7 +34,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - run: bash scripts/linux/install-deps.sh
+      - name: Install build and selected validation dependencies
+        timeout-minutes: 15
+        run: |
+          if [ "$COMPILE_ONLY" = 1 ]; then
+            bash scripts/linux/install-deps.sh --compile-only
+          else
+            bash scripts/linux/install-deps.sh
+          fi
       - name: Build shared Wine patch stack for Linux
         env:
           POC_LINUX_WORK_DIR: ${{ runner.temp }}/wine-linux
