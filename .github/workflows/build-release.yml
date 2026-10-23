@@ -11,6 +11,18 @@ on:
         description: 'Legacy released-core packaging check only; does not build or verify current FFmpeg codecs'
         type: boolean
         default: false
+      linux_only:
+        description: 'Build the Linux runtime only'
+        type: boolean
+        default: false
+      compile_only:
+        description: 'With linux_only: compile and statically inspect; defer Wine/media execution'
+        type: boolean
+        default: false
+      linux_release_tag:
+        description: 'Optional new Linux-only prerelease tag, e.g. v0.1.6-linux-amd64'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -28,7 +40,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: |
-          python3 -m unittest discover -s tools/tests -p 'test_*.py'
+          if [ "${{ inputs.compile_only }}" = true ] && [ "${{ inputs.linux_only }}" != true ]; then
+            echo 'Select linux_only=true for compile_only builds.' >&2
+            exit 1
+          fi
+          if [ "${{ inputs.compile_only }}" = true ]; then
+            python3 -m compileall -q scripts tools/tests
+            python3 tools/tests/test_winedmo_seek_generation.py --compile-only
+            python3 tools/tests/test_quartz_no_position.py --compile-only
+          else
+            python3 -m unittest discover -s tools/tests -p 'test_*.py'
+          fi
           python3 scripts/release-check.py --public-history
           python3 - <<'PY'
           import ast
@@ -40,7 +62,7 @@ jobs:
 
   build:
     needs: source-check
-    if: (github.event_name == 'workflow_dispatch' && !inputs.libraries_only) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.libraries_only && !inputs.linux_only) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ fromJSON(vars.MACOS_BUILD_RUNNER_JSON || '"xcode-27"') }}
     timeout-minutes: 240
     env:
@@ -76,7 +98,12 @@ jobs:
   build-linux:
     needs: source-check
     if: (github.event_name == 'workflow_dispatch' && !inputs.libraries_only) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-linux.yml
+    with:
+      compile_only: ${{ inputs.compile_only || false }}
+      release_tag: ${{ inputs.linux_release_tag || '' }}
 
   verify-libraries:
     needs: source-check

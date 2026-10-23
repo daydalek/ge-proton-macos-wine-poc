@@ -2,7 +2,23 @@ name: Build Linux Wine
 
 on:
   workflow_dispatch:
+    inputs:
+      compile_only:
+        description: 'Build and statically verify artifacts; defer Wine and media execution'
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Optional new Linux release tag, e.g. v0.1.6-linux-amd64'
+        type: string
+        default: ''
   workflow_call:
+    inputs:
+      compile_only:
+        type: boolean
+        default: false
+      release_tag:
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -13,6 +29,7 @@ jobs:
     timeout-minutes: 240
     env:
       POC_JOBS: '4'
+      COMPILE_ONLY: ${{ inputs.compile_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -22,16 +39,29 @@ jobs:
         env:
           POC_LINUX_WORK_DIR: ${{ runner.temp }}/wine-linux
         run: |
-          python3 -m unittest discover -s tools/tests
+          python3 scripts/release-check.py
+          if [ "$COMPILE_ONLY" = 1 ]; then
+            python3 -m compileall -q scripts tools/tests
+            python3 tools/tests/test_winedmo_seek_generation.py --compile-only
+            python3 tools/tests/test_quartz_no_position.py --compile-only
+          else
+            python3 -m unittest discover -s tools/tests
+          fi
           python3 scripts/linux/build.py all
           python3 scripts/linux/build-probes.py --work-dir "$POC_LINUX_WORK_DIR"
           LD_LIBRARY_PATH="$POC_LINUX_WORK_DIR/deps/lib" python3 scripts/ci/check-ffmpeg.py \
             --library-dir "$POC_LINUX_WORK_DIR/deps/lib" --output "$POC_LINUX_WORK_DIR/ffmpeg-capabilities.json"
-          xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py --work-dir "$POC_LINUX_WORK_DIR"
-          python3 scripts/linux/package.py --work-dir "$POC_LINUX_WORK_DIR" --output outputs/linux
+          mode=compile-only
+          if [ "$COMPILE_ONLY" = 0 ]; then
+            mode=runtime
+            xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py --work-dir "$POC_LINUX_WORK_DIR"
+          fi
+          python3 scripts/linux/package.py --work-dir "$POC_LINUX_WORK_DIR" --output outputs/linux --validation-mode "$mode"
           mv outputs/linux/wine-linux-amd64 "$RUNNER_TEMP/relocated-wine"
-          xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
-            --work-dir "$POC_LINUX_WORK_DIR" --runtime "$RUNNER_TEMP/relocated-wine"
+          if [ "$COMPILE_ONLY" = 0 ]; then
+            xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
+              --work-dir "$POC_LINUX_WORK_DIR" --runtime "$RUNNER_TEMP/relocated-wine"
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wine-linux-amd64
@@ -50,3 +80,25 @@ jobs:
             ${{ runner.temp }}/wine-linux/validation/*/linux-runtime-check.json
             ${{ runner.temp }}/wine-linux/ffmpeg-capabilities.json
           if-no-files-found: warn
+
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wine-linux-amd64
+          path: outputs/linux
+      - name: Publish the checked Linux prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RECIPE_REVISION: ${{ github.sha }}
+        run: python3 scripts/linux/publish.py --directory outputs/linux --tag "$RELEASE_TAG" --commit "$RECIPE_REVISION"

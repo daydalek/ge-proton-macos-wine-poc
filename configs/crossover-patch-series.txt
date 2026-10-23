@@ -20,3 +20,4 @@ patches/crossover/wined3d-backend-selection.patch
 patches/crossover/kernelbase-legacy-directory-info.patch
 patches/crossover/i386-hotpatch-prologue.patch
 patches/crossover/winedmo-repeated-seek.patch
+patches/crossover/winedmo-seek-generation.patch

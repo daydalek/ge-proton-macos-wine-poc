@@ -11,6 +11,10 @@ The project-authored `patches/crossover/i386-hotpatch-prologue.patch` adapts
 Clang i386 `DECLSPEC_HOTPATCH` code generation and `winebuild --builtin` to emit
 traditional Windows `90 90 90 90 90 | 8b ff` hotpatch prologues.
 
+The project-authored `patches/crossover/winedmo-seek-generation.patch` extends
+the repeated-seek OP synchronization repair with generation checks for video
+clock waits, packet enqueue and EOS handling during rapid forward/backward seeks.
+
 | Upstream | Version / provenance | Use |
 | --- | --- | --- |
 | [Wine](https://gitlab.winehq.org/wine/wine), [source mirror](https://github.com/wine-mirror/wine) | wine-11.0; syscall parameter-normalization wrappers ported from commit f43402c | Upstream Wine implementation and baseline build; the ported wrappers normalize small integer syscall arguments whose upper bits the Win64 ABI leaves undefined but clang-built Unix code assumes extended; retain source AUTHORS and license files |

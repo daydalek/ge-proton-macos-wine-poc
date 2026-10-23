@@ -14,7 +14,7 @@ selected. macOS driver patches stay in the prepared source and retain their
 platform-specific activation conditions.
 The Linux profile appends a PulseAudio integration patch for CrossOver's
 audio-stream model and udev linkage, preserving GE's smooth-playback timing.
-It also appends a Quartz position repair: no-position requests retain the graph
+It also appends Quartz no-position transition handling and a position repair: no-position requests retain the graph
 clock snapshot, and repeated pauses account for each running interval once.
 Append-only patch additions can reuse an existing build tree; changes to an
 earlier patch or the source baseline require a fresh work directory.
@@ -121,3 +121,21 @@ Native x86_64 Linux desktop validation covers GPU drivers, Wayland/X11 session
 behavior, fullscreen/input, real game playback, and performance. Steam Proton
 compatibility-tool integration is a separate integration target from this
 standalone Wine runtime.
+
+## Linux CI prereleases
+
+The registered release workflow supports Linux-only builds from this branch:
+
+```bash
+gh workflow run build-release.yml --ref codex/linux-support \
+  -f linux_only=true -f compile_only=true \
+  -f linux_release_tag=v0.1.6-linux-amd64
+```
+
+`compile_only=true` compiles the Wine core, Windows probes and deterministic
+regression harnesses, checks PE/ELF files, dependency resolution, FFmpeg inventory,
+privacy and checksums, and defers Wine/media execution. The default mode keeps
+both runtime probe stages. The package manifest and prerelease notes record the
+selected validation mode. A nonempty Linux release tag publishes the checked
+assets under a new immutable `vMAJOR.MINOR.PATCH-linux-amd64` tag; the publisher
+verifies the recipe commit and uploaded asset digests before publishing.

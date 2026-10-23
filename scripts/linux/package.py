@@ -148,6 +148,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--validation-mode', choices=('pending', 'compile-only', 'runtime'),
+                        default='pending', help='Record the validation requested by the build workflow')
     args = parser.parse_args()
     build = Build(args.work_dir, 1)
     provenance = validate_provenance(build.stage)
@@ -202,7 +204,10 @@ exec "$root/bin/wine" "$@"
     write_json(output / 'linux-static-check.json', {'result': 'passed', 'elf_files': elf, 'pe_files': pe,
         'build_host_libc': list(platform.libc_ver()),
         'scope': 'ELF architecture, relative search paths, symlinks, and dependencies on the build distro'})
-    manifest = {'target': 'Ubuntu 24.04 x86_64', 'baseline': provenance['baseline'],
+    manifest = {'recipe_revision': subprocess.check_output(
+                    ['git', 'rev-parse', 'HEAD'], cwd=PROJECT, text=True).strip(),
+                'validation_mode': args.validation_mode,
+                'target': 'Ubuntu 24.04 x86_64', 'baseline': provenance['baseline'],
                 'windows_architectures': provenance['windows_architectures'],
                 'prefix_architecture': 'win64',
                 'runtime_asset': 'wine-linux-amd64.tar.gz',
@@ -214,7 +219,9 @@ exec "$root/bin/wine" "$@"
                 'bundled_dependencies': ['FFmpeg'], 'patches': patch_plan(),
                 'toolchain': provenance['toolchain'],
                 'ffmpeg_source': next(item for item in build.dependencies if item['archive'] == 'ffmpeg.tar.gz'),
-                'validation': 'See the separate linux-runtime-check.json; desktop/GPU/game acceptance is external'}
+                'validation': ('Compilation, PE/ELF, dependency and archive checks; runtime probes deferred'
+                               if args.validation_mode == 'compile-only' else
+                               'See the separate linux-runtime-check.json; desktop/GPU/game acceptance is external')}
     write_json(output / 'linux-release-manifest.json', manifest)
     with tarfile.open(output / 'wine-linux-amd64.tar.gz', 'w:gz') as tf:
         tf.add(runtime, arcname=runtime.name, filter=archive_filter)

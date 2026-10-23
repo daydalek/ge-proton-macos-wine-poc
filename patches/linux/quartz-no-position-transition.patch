@@ -1,0 +1,218 @@
+Subject: quartz: retain running filter state for no-position requests
+License: LGPL-2.1-or-later
+Modification date: 2026-10-24
+
+Forward NoPositioning requests and ReturnTime values while preserving the
+running state of the graph. Pausing and restarting every renderer for a
+position query can re-publish cached EOS notifications and advance the graph
+to its stop position. Actual current/stop positioning retains Pause/Run.
+
+--- a/dlls/quartz/filtergraph.c
++++ b/dlls/quartz/filtergraph.c
+@@ -2693,201 +2693,204 @@
+         }
+     }
+ 
+     LeaveCriticalSection(&graph->cs);
+ 
+     TRACE("Returning %s (%s seconds).\n", wine_dbgstr_longlong(*stop), debugstr_time(*stop));
+     return hr;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_GetCurrentPosition(IMediaSeeking *iface, LONGLONG *current)
+ {
+     struct filter_graph *graph = impl_from_IMediaSeeking(iface);
+     LONGLONG ret = graph->current_pos;
+ 
+     TRACE("graph %p, current %p.\n", graph, current);
+ 
+     if (!current)
+         return E_POINTER;
+ 
+     EnterCriticalSection(&graph->cs);
+ 
+     if (graph->state == State_Running && !graph->needs_async_run && graph->refClock)
+     {
+         REFERENCE_TIME time;
+         IReferenceClock_GetTime(graph->refClock, &time);
+         if (time)
+         {
+             ret += time - graph->stream_start;
+             if (ret > graph->stream_stop)
+                 ret = graph->stream_stop;
+         }
+     }
+ 
+     LeaveCriticalSection(&graph->cs);
+ 
+     TRACE("Returning %s (%s seconds).\n", wine_dbgstr_longlong(ret), debugstr_time(ret));
+     *current = ret;
+ 
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_ConvertTimeFormat(IMediaSeeking *iface, LONGLONG *pTarget,
+         const GUID *pTargetFormat, LONGLONG Source, const GUID *pSourceFormat)
+ {
+     struct filter_graph *This = impl_from_IMediaSeeking(iface);
+ 
+     TRACE("(%p/%p)->(%p, %s, 0x%s, %s)\n", This, iface, pTarget,
+         debugstr_guid(pTargetFormat), wine_dbgstr_longlong(Source), debugstr_guid(pSourceFormat));
+ 
+     if (!pSourceFormat)
+         pSourceFormat = &This->timeformatseek;
+ 
+     if (!pTargetFormat)
+         pTargetFormat = &This->timeformatseek;
+ 
+     if (IsEqualGUID(pTargetFormat, pSourceFormat))
+         *pTarget = Source;
+     else
+         FIXME("conversion %s->%s not supported\n", debugstr_guid(pSourceFormat), debugstr_guid(pTargetFormat));
+ 
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_SetPositions(IMediaSeeking *iface, LONGLONG *current_ptr,
+         DWORD current_flags, LONGLONG *stop_ptr, DWORD stop_flags)
+ {
+     struct filter_graph *graph = impl_from_IMediaSeeking(iface);
+     HRESULT hr = E_NOTIMPL, filter_hr;
+     struct filter *filter;
+     FILTER_STATE state;
++    BOOL positioning = (current_flags & AM_SEEKING_PositioningBitsMask)
++            || (stop_flags & AM_SEEKING_PositioningBitsMask);
+ 
+     TRACE("graph %p, current %s, current_flags %#lx, stop %s, stop_flags %#lx.\n", graph,
+             current_ptr ? wine_dbgstr_longlong(*current_ptr) : "<null>", current_flags,
+             stop_ptr ? wine_dbgstr_longlong(*stop_ptr): "<null>", stop_flags);
+     if (current_ptr)
+         TRACE("Setting current position to %s (%s seconds).\n",
+                 wine_dbgstr_longlong(*current_ptr), debugstr_time(*current_ptr));
+     if (stop_ptr)
+         TRACE("Setting stop position to %s (%s seconds).\n",
+                 wine_dbgstr_longlong(*stop_ptr), debugstr_time(*stop_ptr));
+ 
+     if ((current_flags & 0x7) != AM_SEEKING_AbsolutePositioning
+             && (current_flags & 0x7) != AM_SEEKING_NoPositioning)
+         FIXME("Unhandled current_flags %#lx.\n", current_flags & 0x7);
+ 
+     if ((stop_flags & 0x7) != AM_SEEKING_NoPositioning
+             && (stop_flags & 0x7) != AM_SEEKING_AbsolutePositioning)
+         FIXME("Unhandled stop_flags %#lx.\n", stop_flags & 0x7);
+ 
+     EnterCriticalSection(&graph->cs);
+ 
++    /* No-position requests still forward ReturnTime, while retaining filter state. */
+     state = graph->state;
+-    if (state == State_Running && !graph->needs_async_run)
++    if (positioning && state == State_Running && !graph->needs_async_run)
+         IMediaControl_Pause(&graph->IMediaControl_iface);
+ 
+     LIST_FOR_EACH_ENTRY(filter, &graph->filters, struct filter, entry)
+     {
+         LONGLONG current = current_ptr ? *current_ptr : 0, stop = stop_ptr ? *stop_ptr : 0;
+ 
+         update_seeking(filter);
+         if (!filter->seeking)
+             continue;
+ 
+         filter_hr = IMediaSeeking_SetPositions(filter->seeking, &current,
+                 current_flags | AM_SEEKING_ReturnTime, &stop, stop_flags);
+         if (SUCCEEDED(filter_hr))
+         {
+             hr = S_OK;
+ 
+             if (current_ptr && (current_flags & AM_SEEKING_ReturnTime))
+                 *current_ptr = current;
+             if (stop_ptr && (stop_flags & AM_SEEKING_ReturnTime))
+                 *stop_ptr = stop;
+             /* Keep the graph clock snapshot for no-position requests. */
+             if ((current_flags & 0x7) != AM_SEEKING_NoPositioning)
+                 graph->current_pos = current;
+         }
+         else if (filter_hr != E_NOTIMPL)
+         {
+             LeaveCriticalSection(&graph->cs);
+             return filter_hr;
+         }
+     }
+ 
+     if ((current_flags & 0x7) != AM_SEEKING_NoPositioning && graph->refClock)
+     {
+         IReferenceClock_GetTime(graph->refClock, &graph->stream_start);
+         graph->stream_elapsed = 0;
+     }
+ 
+-    if (state == State_Running && !graph->needs_async_run)
++    if (positioning && state == State_Running && !graph->needs_async_run)
+         IMediaControl_Run(&graph->IMediaControl_iface);
+ 
+     LeaveCriticalSection(&graph->cs);
+     return hr;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_GetPositions(IMediaSeeking *iface,
+         LONGLONG *current, LONGLONG *stop)
+ {
+     struct filter_graph *graph = impl_from_IMediaSeeking(iface);
+     HRESULT hr = S_OK;
+ 
+     TRACE("graph %p, current %p, stop %p.\n", graph, current, stop);
+ 
+     if (current)
+         hr = IMediaSeeking_GetCurrentPosition(iface, current);
+     if (SUCCEEDED(hr) && stop)
+         hr = IMediaSeeking_GetStopPosition(iface, stop);
+ 
+     return hr;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_GetAvailable(IMediaSeeking *iface, LONGLONG *pEarliest,
+         LONGLONG *pLatest)
+ {
+     struct filter_graph *This = impl_from_IMediaSeeking(iface);
+ 
+     FIXME("(%p/%p)->(%p, %p): stub !!!\n", This, iface, pEarliest, pLatest);
+ 
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_SetRate(IMediaSeeking *iface, double dRate)
+ {
+     struct filter_graph *This = impl_from_IMediaSeeking(iface);
+ 
+     FIXME("(%p/%p)->(%f): stub !!!\n", This, iface, dRate);
+ 
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_GetRate(IMediaSeeking *iface, double *pdRate)
+ {
+     struct filter_graph *This = impl_from_IMediaSeeking(iface);
+ 
+     FIXME("(%p/%p)->(%p): stub !!!\n", This, iface, pdRate);
+ 
+     if (!pdRate)
+         return E_POINTER;
+ 
+     *pdRate = 1.0;
+ 
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI MediaSeeking_GetPreroll(IMediaSeeking *iface, LONGLONG *pllPreroll)
+ {
+     struct filter_graph *This = impl_from_IMediaSeeking(iface);
+ 
+     FIXME("(%p/%p)->(%p): stub !!!\n", This, iface, pllPreroll);
+ 
+     return S_OK;
+ }
+ 
+ 
+ static const IMediaSeekingVtbl IMediaSeeking_VTable =
+ {
+     MediaSeeking_QueryInterface,
+     MediaSeeking_AddRef,
+     MediaSeeking_Release,
