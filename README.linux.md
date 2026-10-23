@@ -81,14 +81,17 @@ python3 scripts/linux/package.py --work-dir "$POC_LINUX_WORK_DIR" \
 ```
 
 The fresh output directory receives the runtime, corresponding source archive,
-ELF dependency report, patch manifest and checksums. The runtime includes
+ELF dependency report, patch manifest and checksums. Release assets carry the
+`-linux-amd64` suffix (`wine-linux-amd64.tar.gz`, `wine-linux-amd64-sources.tar.gz`,
+`SHA256SUMS-linux-amd64`) so they can share a GitHub release with the macOS
+Libraries packages. The runtime includes
 FFmpeg libraries, licenses, and a `run` launcher with a user-writable prefix.
 ELF library search paths use `$ORIGIN` relative paths. The source archive
 contains the prepared Wine source, locked input archives and project recipes.
 The ELF report records each module's GLIBC symbol versions and the build host's
 libc version. The initial runtime target is Ubuntu 24.04; distribution coverage
 requires the corresponding host-library and runtime acceptance checks.
-Repeat `verify.py` with `--runtime /path/to/wine-linux-x86_64` after moving the
+Repeat `verify.py` with `--runtime /path/to/wine-linux-amd64` after moving the
 runtime directory to validate the packaged layout.
 
 ## Frontend runtime contract
@@ -98,8 +101,8 @@ runtime directory to validate the packaged layout.
 Bottle directory through `WINEPREFIX` and uses the launcher for Windows commands:
 
 ```bash
-WINEPREFIX=/path/to/Bottle /path/to/wine-linux-x86_64/run cmd /c ver
-WINEPREFIX=/path/to/Bottle /path/to/wine-linux-x86_64/bin/wineserver -k
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-amd64/run cmd /c ver
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-amd64/bin/wineserver -k
 ```
 
 The prefix architecture is win64; both i386 and x86_64 Windows programs run

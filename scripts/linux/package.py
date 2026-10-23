@@ -153,7 +153,9 @@ def main():
     provenance = validate_provenance(build.stage)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    runtime = output / 'wine-linux-x86_64'
+    # Release assets carry the -linux-amd64 suffix so they can share a release
+    # with the macOS Libraries packages.
+    runtime = output / 'wine-linux-amd64'
     shutil.copytree(build.stage, runtime, symlinks=True)
     for directory in (runtime / 'include', runtime / 'lib/pkgconfig'):
         if directory.exists():
@@ -203,6 +205,8 @@ exec "$root/bin/wine" "$@"
     manifest = {'target': 'Ubuntu 24.04 x86_64', 'baseline': provenance['baseline'],
                 'windows_architectures': provenance['windows_architectures'],
                 'prefix_architecture': 'win64',
+                'runtime_asset': 'wine-linux-amd64.tar.gz',
+                'source_asset': 'wine-linux-amd64-sources.tar.gz',
                 'entrypoints': {'wine': 'run', 'loader': 'bin/wine', 'wineserver': 'bin/wineserver'},
                 'kernel_requirements': 'x86_64 execution with the Linux i386 compatibility syscall entry (int 0x80)',
                 'system_dependencies': 'glibc, GnuTLS, X11/Wayland, graphics and audio libraries from the host distro',
@@ -212,9 +216,9 @@ exec "$root/bin/wine" "$@"
                 'ffmpeg_source': next(item for item in build.dependencies if item['archive'] == 'ffmpeg.tar.gz'),
                 'validation': 'See the separate linux-runtime-check.json; desktop/GPU/game acceptance is external'}
     write_json(output / 'linux-release-manifest.json', manifest)
-    with tarfile.open(output / 'wine-linux-x86_64.tar.gz', 'w:gz') as tf:
+    with tarfile.open(output / 'wine-linux-amd64.tar.gz', 'w:gz') as tf:
         tf.add(runtime, arcname=runtime.name, filter=archive_filter)
-    with tarfile.open(output / 'wine-linux-sources.tar.gz', 'w:gz') as tf:
+    with tarfile.open(output / 'wine-linux-amd64-sources.tar.gz', 'w:gz') as tf:
         tf.add(build.source, arcname='prepared/wine', filter=archive_filter)
         for path in sorted((build.work / 'archives').iterdir()):
             tf.add(path, arcname='archives/' + path.name, filter=archive_filter)
@@ -223,9 +227,9 @@ exec "$root/bin/wine" "$@"
             path = PROJECT / name
             if path.is_file():
                 tf.add(path, arcname='project/' + name, filter=archive_filter)
-    (output / 'SHA256SUMS').write_text(''.join(
+    (output / 'SHA256SUMS-linux-amd64').write_text(''.join(
         f'{sha256_file(path)}  {path.name}\n' for path in sorted(output.iterdir())
-        if path.is_file() and path.name != 'SHA256SUMS'))
+        if path.is_file() and path.name != 'SHA256SUMS-linux-amd64'))
     print(output)
 
 

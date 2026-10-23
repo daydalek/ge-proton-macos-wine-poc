@@ -2,6 +2,7 @@ name: Build Linux Wine
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -28,15 +29,16 @@ jobs:
             --library-dir "$POC_LINUX_WORK_DIR/deps/lib" --output "$POC_LINUX_WORK_DIR/ffmpeg-capabilities.json"
           xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py --work-dir "$POC_LINUX_WORK_DIR"
           python3 scripts/linux/package.py --work-dir "$POC_LINUX_WORK_DIR" --output outputs/linux
-          mv outputs/linux/wine-linux-x86_64 "$RUNNER_TEMP/relocated-wine"
+          mv outputs/linux/wine-linux-amd64 "$RUNNER_TEMP/relocated-wine"
           xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
             --work-dir "$POC_LINUX_WORK_DIR" --runtime "$RUNNER_TEMP/relocated-wine"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wine-linux-x86_64
+          name: wine-linux-amd64
           path: outputs/linux/*
           if-no-files-found: error
           compression-level: 0
+          retention-days: 14
       - name: Preserve diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
