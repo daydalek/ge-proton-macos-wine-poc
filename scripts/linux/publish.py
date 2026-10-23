@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tempfile
 
 REQUIRED = {'wine-linux-amd64.tar.gz', 'wine-linux-amd64-sources.tar.gz',
             'linux-release-manifest.json', 'linux-static-check.json',
@@ -64,6 +63,23 @@ def api(path, **kwargs):
     return json.loads(raw) if raw else None
 
 
+def find_release(base, tag):
+    release = api(base + '/releases/tags/' + tag, missing=True)
+    if release:
+        return release
+    # Draft releases can be absent from the by-tag REST endpoint. Resolve the
+    # authorized release listing, then use its stable numeric ID for reads.
+    page = 1
+    while True:
+        releases = api(base + '/releases?per_page=100&page=' + str(page))
+        for release in releases:
+            if release['tag_name'] == tag:
+                return api(base + '/releases/' + str(release['id']))
+        if len(releases) < 100:
+            return None
+        page += 1
+
+
 def verify_uploaded(release, records):
     assets = {a['name']: a for a in release['assets'] if a['state'] == 'uploaded'}
     for name, digest in records.items():
@@ -97,7 +113,7 @@ def main():
     else:
         gh('api', '--method', 'POST', base + '/git/refs', payload={
             'ref': 'refs/tags/' + args.tag, 'sha': args.commit})
-    release = api(base + '/releases/tags/' + args.tag, missing=True)
+    release = find_release(base, args.tag)
     if release and not release['draft']:
         verify_uploaded(release, records)
         print(release['html_url'])
@@ -113,19 +129,23 @@ def main():
                 'Validation: build, static checks and the workflow runtime probe stages. '
                 'Hardware GPU, desktop and real-game acceptance remain separate.\n'))
     files = [str(directory / name) for name in sorted(records)]
-    if release:
+    if release is None:
+        release = json.loads(gh('api', '--method', 'POST', base + '/releases', payload={
+            'tag_name': args.tag, 'target_commitish': args.commit,
+            'name': args.tag + ' — Linux amd64', 'body': notes,
+            'draft': True, 'prerelease': True}))
+    try:
+        verify_uploaded(release, records)
+    except ValueError:
         gh('release', 'upload', args.tag, '--repo', args.repo, '--clobber', *files)
-    else:
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / 'notes.md'
-            path.write_text(notes)
-            gh('release', 'create', args.tag, '--repo', args.repo, '--verify-tag',
-               '--draft', '--prerelease', '--title', args.tag + ' — Linux amd64',
-               '--notes-file', str(path), *files)
-    release = api(base + '/releases/tags/' + args.tag)
+    release_path = base + '/releases/' + str(release['id'])
+    release = api(release_path)
     verify_uploaded(release, records)
-    gh('release', 'edit', args.tag, '--repo', args.repo, '--draft=false', '--prerelease')
-    print(release['html_url'])
+    published = json.loads(gh('api', '--method', 'PATCH', release_path, payload={
+        'draft': False, 'prerelease': True, 'body': notes}))
+    if published['draft']:
+        raise ValueError('Release remains a draft')
+    print(published['html_url'])
 
 
 if __name__ == '__main__':
