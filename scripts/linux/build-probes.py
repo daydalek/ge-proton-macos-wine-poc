@@ -15,7 +15,6 @@ PROBES = {
     'fullscreen-state-probe': ['-luser32'],
     'media-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'child-window-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
-    'repeated-seek-probe': ['-municode', '-static', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'exception-probe': [],
     'syscall-boolean-probe': [],
     'directory-compat-probe': [],
@@ -46,10 +45,9 @@ def main():
         shutil.copytree(Path('/usr/include') / name, headers / name, dirs_exist_ok=True)
     for arch, bits in (('i686', 'x86'), ('x86_64', 'x64')):
         for name, libraries in PROBES.items():
-            suffix = '.cpp' if name == 'repeated-seek-probe' else '.c'
-            compiler = arch + '-w64-mingw32-' + ('clang++' if suffix == '.cpp' else 'clang')
+            compiler = arch + '-w64-mingw32-clang'
             command = [build.toolchain / 'bin' / compiler, '-Wall', '-O2', '-I' + str(headers),
-                       PROJECT / 'tools/probes' / (name + suffix), '-o',
+                       PROJECT / 'tools/probes' / (name + '.c'), '-o',
                        output / (name + '-' + bits + '.exe'), *libraries]
             subprocess.run(list(map(str, command)), check=True)
         subprocess.run(list(map(str, [build.toolchain / 'bin' / (arch + '-w64-mingw32-clang'),

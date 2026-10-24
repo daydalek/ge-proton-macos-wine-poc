@@ -13,9 +13,6 @@ for target in i686 x86_64; do
       "$kit/crypto-probe.c" -o "$kit/crypto-probe-$bits.exe" -lbcrypt -lsecur32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 \
       "$kit/fullscreen-state-probe.c" -o "$kit/fullscreen-state-probe-$bits.exe" -luser32
-    "$toolchain/$target-w64-mingw32-clang++" -Wall -Wextra -O2 -municode -static \
-      "$kit/repeated-seek-probe.cpp" -o "$kit/repeated-seek-probe-$bits.exe" \
-      -lole32 -loleaut32 -lstrmiids -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/media-probe.c" -o "$kit/media-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid
