@@ -1,0 +1,214 @@
+Subject: winedmo: retire stale packets and EOS waits across rapid seeks
+License: LGPL-2.1-or-later
+Modification date: 2026-10-24
+
+Keep repeated absolute seeks and downstream flushing from the OP sync repair.
+Tag video-clock waits, packet enqueue, EOS publication and EOF waits with the
+seek generation. A short forward/backward seek may finish before a worker
+observes the transient flushing flag; the generation makes that transition
+persistent and prevents old work from blocking or ending the new segment.
+Use the shared generation predicate and condition variable for EOS waits.
+
+--- a/dlls/winedmo/winedmo_quartz_parser.c
++++ b/dlls/winedmo/winedmo_quartz_parser.c
+@@ -186,7 +186,6 @@
+ 
+     /* held during IMemInputPin_Receive; seeking acquires to serialize */
+     CRITICAL_SECTION flushing_cs;
+-    CONDITION_VARIABLE eos_cv;
+ 
+     bool eos;       /* demuxer reached end for this stream */
+     bool eos_sent;  /* EndOfStream sent downstream */
+@@ -315,7 +314,7 @@
+         DWORD sleep_ms;
+ 
+         EnterCriticalSection(&filter->streaming_cs);
+-        if (!filter->streaming || filter->flushing)
++        if (!filter->streaming || filter->flushing || pkt->generation != filter->read_flush_generation)
+         {
+             LeaveCriticalSection(&filter->streaming_cs);
+             break;
+@@ -687,7 +686,6 @@
+     {
+         if (dmo_parser_source_is_active(filter->sources[i]))
+         {
+-            WakeConditionVariable(&filter->sources[i]->eos_cv);
+             WakeConditionVariable(&filter->sources[i]->queue_cv);
+             WakeConditionVariable(&filter->sources[i]->queue_space_cv);
+             LeaveCriticalSection(&filter->sources[i]->flushing_cs);
+@@ -1017,7 +1015,6 @@
+ 
+     InitializeCriticalSectionEx(&pin->flushing_cs, 0, RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO);
+     pin->flushing_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": pin.flushing_cs");
+-    InitializeConditionVariable(&pin->eos_cv);
+     CopyMediaType(&pin->stream_mt, mt);
+     pin->selected = IsEqualGUID(&mt->majortype, &MEDIATYPE_Video)
+             || !dmo_parser_has_selected_stream_type(filter, &mt->majortype);
+@@ -1031,12 +1028,13 @@
+  * Demux thread — reads from winedmo and routes to per-stream queues
+  * ======================================================================== */
+ 
+-static void dmo_parser_source_send_eos(struct dmo_parser_source *pin);
+-
+-static void dmo_parser_wait_for_seek_or_stop(struct dmo_parser *filter)
++static void dmo_parser_source_send_eos(struct dmo_parser_source *pin, unsigned int generation);
++
++static void dmo_parser_wait_for_seek_or_stop(struct dmo_parser *filter, unsigned int generation)
+ {
+     EnterCriticalSection(&filter->streaming_cs);
+-    while (filter->streaming && !filter->flushing)
++    /* Updated 2026-10-24: retain the generation when a seek finishes before this wait. */
++    while (filter->streaming && !filter->flushing && generation == filter->read_flush_generation)
+         SleepConditionVariableCS(&filter->flushing_cv, &filter->streaming_cs, INFINITE);
+     LeaveCriticalSection(&filter->streaming_cs);
+ }
+@@ -1188,19 +1186,27 @@
+ 
+                     pin = filter->sources[i];
+                     EnterCriticalSection(&pin->queue_cs);
++                    EnterCriticalSection(&filter->streaming_cs);
++                    if (!filter->streaming || filter->flushing || flush_generation != filter->read_flush_generation)
++                    {
++                        LeaveCriticalSection(&filter->streaming_cs);
++                        LeaveCriticalSection(&pin->queue_cs);
++                        break;
++                    }
+                     pin->eos = true;
+                     queued_packets = pin->queued_packets;
+                     send_eos = list_empty(&pin->packet_queue);
++                    LeaveCriticalSection(&filter->streaming_cs);
+                     LeaveCriticalSection(&pin->queue_cs);
+                     WARN("Stream %u EOF, queued packets %u, send_eos %u, peer %p.\n",
+                             i, queued_packets, send_eos, pin->pin.pin.peer);
+                     WakeConditionVariable(&pin->queue_cv);
+ 
+                     if (send_eos)
+-                        dmo_parser_source_send_eos(pin);
++                        dmo_parser_source_send_eos(pin, flush_generation);
+                 }
+ 
+-                dmo_parser_wait_for_seek_or_stop(filter);
++                dmo_parser_wait_for_seek_or_stop(filter, flush_generation);
+                 continue;
+             }
+             else
+@@ -1269,8 +1275,17 @@
+         pkt->duration = output.rtTimelength;
+ 
+         EnterCriticalSection(&pin->queue_cs);
++        EnterCriticalSection(&filter->streaming_cs);
++        if (!filter->streaming || filter->flushing || flush_generation != filter->read_flush_generation)
++        {
++            LeaveCriticalSection(&filter->streaming_cs);
++            LeaveCriticalSection(&pin->queue_cs);
++            dmo_packet_free(pkt);
++            continue;
++        }
+         list_add_tail(&pin->packet_queue, &pkt->entry);
+         ++pin->queued_packets;
++        LeaveCriticalSection(&filter->streaming_cs);
+         LeaveCriticalSection(&pin->queue_cs);
+         WakeConditionVariable(&pin->queue_cv);
+     }
+@@ -1279,10 +1294,16 @@
+     return 0;
+ }
+ 
+-static void dmo_parser_source_send_eos(struct dmo_parser_source *pin)
+-{
++static void dmo_parser_source_send_eos(struct dmo_parser_source *pin, unsigned int generation)
++{
++    struct dmo_parser *filter = dmo_impl_from_strmbase_filter(pin->pin.pin.filter);
++    bool current;
++
+     EnterCriticalSection(&pin->flushing_cs);
+-    if (!pin->eos_sent && pin->pin.pin.peer)
++    EnterCriticalSection(&filter->streaming_cs);
++    current = filter->streaming && !filter->flushing && generation == filter->read_flush_generation;
++    LeaveCriticalSection(&filter->streaming_cs);
++    if (current && !pin->eos_sent && pin->pin.pin.peer)
+     {
+         WARN("Pin %p sending EndOfStream to peer %p.\n", pin, pin->pin.pin.peer);
+         IPin_EndOfStream(pin->pin.pin.peer);
+@@ -1354,6 +1375,7 @@
+     for (;;)
+     {
+         struct dmo_packet *pkt;
++        unsigned int flush_generation;
+         bool eos_now;
+ 
+         /* Wait for streaming to resume if flushing. */
+@@ -1388,15 +1410,17 @@
+ 
+         if (eos_now)
+         {
++            EnterCriticalSection(&filter->streaming_cs);
++            flush_generation = filter->read_flush_generation;
++            eos_now = filter->streaming && !filter->flushing;
++            LeaveCriticalSection(&filter->streaming_cs);
+             LeaveCriticalSection(&pin->queue_cs);
++            if (!eos_now)
++                continue;
+ 
+             WARN("Stream thread for pin %p reached drained EOS.\n", pin);
+-            dmo_parser_source_send_eos(pin);
+-
+-            /* Sleep until a seek resets things. */
+-            EnterCriticalSection(&pin->flushing_cs);
+-            SleepConditionVariableCS(&pin->eos_cv, &pin->flushing_cs, INFINITE);
+-            LeaveCriticalSection(&pin->flushing_cs);
++            dmo_parser_source_send_eos(pin, flush_generation);
++            dmo_parser_wait_for_seek_or_stop(filter, flush_generation);
+             continue;
+         }
+ 
+@@ -1455,7 +1479,7 @@
+                     LeaveCriticalSection(&pin->queue_cs);
+                     LeaveCriticalSection(&pin->flushing_cs);
+                     if (send_eos)
+-                        dmo_parser_source_send_eos(pin);
++                        dmo_parser_source_send_eos(pin, pkt->generation);
+                     dmo_packet_free(pkt);
+                     continue;
+                 }
+@@ -1504,7 +1528,7 @@
+             if (send_eos)
+             {
+                 LeaveCriticalSection(&pin->flushing_cs);
+-                dmo_parser_source_send_eos(pin);
++                dmo_parser_source_send_eos(pin, pkt->generation);
+                 dmo_packet_free(pkt);
+                 continue;
+             }
+@@ -1640,7 +1664,6 @@
+     {
+         WakeConditionVariable(&filter->sources[i]->queue_cv);
+         WakeConditionVariable(&filter->sources[i]->queue_space_cv);
+-        WakeConditionVariable(&filter->sources[i]->eos_cv);
+     }
+     WakeAllConditionVariable(&filter->flushing_cv);
+ 
+@@ -1668,7 +1691,6 @@
+     {
+         WakeConditionVariable(&filter->sources[i]->queue_cv);
+         WakeConditionVariable(&filter->sources[i]->queue_space_cv);
+-        WakeConditionVariable(&filter->sources[i]->eos_cv);
+     }
+ 
+     for (i = 0; i < filter->source_count; ++i)
+@@ -1709,7 +1731,6 @@
+         struct dmo_parser_source *pin = filter->sources[i];
+         WakeConditionVariable(&pin->queue_cv);
+         WakeConditionVariable(&pin->queue_space_cv);
+-        WakeConditionVariable(&pin->eos_cv);
+     }
+ 
+     /* Wait for demux thread. */
+@@ -1729,7 +1750,6 @@
+         IMemAllocator_Decommit(pin->pin.pAllocator);
+         if (pin->thread)
+         {
+-            WakeConditionVariable(&pin->eos_cv);
+             WakeConditionVariable(&pin->queue_cv);
+             WakeConditionVariable(&pin->queue_space_cv);
+             WaitForSingleObject(pin->thread, INFINITE);

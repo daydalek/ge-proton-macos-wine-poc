@@ -113,14 +113,27 @@ int wmain(int argc, wchar_t **argv)
         if(!ok) ++failures;
         pump(1100);
     }
-    LONGLONG before = 0, after = 0, ignored = 123;
-    seek->GetCurrentPosition(&before);
-    hr = seek->SetPositions(&ignored, AM_SEEKING_NoPositioning, NULL, AM_SEEKING_NoPositioning);
-    control->Pause(); pump(150); control->Run(); pump(300);
-    seek->GetCurrentPosition(&after);
-    bool resume = SUCCEEDED(hr) && after >= before && after - before < 10000000;
-    printf("pause-resume/no-position %s before=%.6f after=%.6f\n",resume?"PASS":"FAIL",before/1e7,after/1e7);
-    if (!resume) ++failures;
+    for (unsigned int i = 0; i < 3; ++i)
+    {
+        LONGLONG before = 0, after = 0, ignored = 123;
+        seek->GetCurrentPosition(&before);
+        DWORD started = GetTickCount(), phase = started;
+        if (!i) hr = seek->SetPositions(&ignored, AM_SEEKING_NoPositioning, NULL, AM_SEEKING_NoPositioning);
+        DWORD position_ms = GetTickCount() - phase;
+        phase = GetTickCount();
+        HRESULT pause_hr = control->Pause();
+        DWORD pause_ms = GetTickCount() - phase;
+        pump(150); phase = GetTickCount();
+        HRESULT run_hr = control->Run();
+        DWORD run_ms = GetTickCount() - phase;
+        pump(300);
+        seek->GetCurrentPosition(&after);
+        bool resume = SUCCEEDED(hr) && SUCCEEDED(pause_hr) && SUCCEEDED(run_hr)
+                && after >= before && after - before < 10000000;
+        printf("pause-resume %u %s before=%.6f after=%.6f elapsed=%lu position_ms=%lu pause_ms=%lu run_ms=%lu\n",
+                i, resume?"PASS":"FAIL", before/1e7, after/1e7, GetTickCount()-started, position_ms, pause_ms, run_ms);
+        if (!resume) ++failures;
+    }
     control->Stop();
     video.arm(); audio.arm();
     LONGLONG zero=0;

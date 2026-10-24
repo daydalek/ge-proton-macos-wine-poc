@@ -1,5 +1,8 @@
 # GE-Proton macOS Wine PoC
 
+For the shared-patch Linux x86_64 build, isolated regression suite and packaging,
+see the [Linux build guide](README.linux.md). Validation scope is recorded in each build report.
+
 English | [简体中文](README.md)
 
 An experimental proof-of-concept (PoC) and patch suite that ports **GE-Proton's multimedia decoding and playback rework** to **Apple Silicon (macOS / Rosetta 2)**.

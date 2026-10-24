@@ -16,6 +16,8 @@
 
 支持 **Valve Wine (GE-Proton 11-7)** 与 **CrossOver Wine 26.3** 两个源码基线。
 
+Linux x86_64 的共享补丁构建、依赖安装、隔离回归与打包入口见 [Linux 构建说明](README.linux.md)。Linux 支持的实际验证范围以对应构建报告为准。
+
 ---
 
 ## 项目结构
@@ -167,9 +169,9 @@ export POC_WORK_DIR="$PWD/work"
 
 ## CI 构建与发布
 
-GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心。分支 push 和 PR 执行源码与语法检查；手动运行执行完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
+GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心；同时在 `ubuntu-24.04` 节点上并行构建 Linux amd64 运行时（见 [README.linux.md](README.linux.md)）。分支 push 和 PR 执行源码与语法检查；手动运行执行两平台完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
 
-每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。CI 编译 CrossOver 26.3 Wine＋GE 多媒体与全屏修复核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
+每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要；Linux 侧统一添加 `-linux-amd64` 后缀，提供 `wine-linux-amd64.tar.gz`、`wine-linux-amd64-sources.tar.gz`、`linux-release-manifest.json` 等资产与 `SHA256SUMS-linux-amd64` 校验。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 使用已校验的官方 macOS 二进制归档。CI 编译 CrossOver 26.3 Wine＋GE 多媒体与全屏修复核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
 
 先从 Actions 手动执行一次构建，确认产物后创建版本标签：
 

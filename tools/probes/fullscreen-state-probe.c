@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later
- * Exercise the exclusive-present-rectangle ABI in this project's macOS builds.
+ * Exercise the exclusive-present-rectangle ABI in this project's Wine builds.
  * The escape code and call index are Wine-specific, pinned by the Wine 11
  * and CrossOver Wine source baselines.
  */
@@ -46,6 +46,7 @@ int main(void)
 {
     HMODULE user = LoadLibraryA("win32u.dll"), gdi = LoadLibraryA("gdi32.dll");
     RECT present = {0, 0, 2000, 1200}, client;
+    LONG expected_width, expected_height;
     HWND window;
 
     setbuf(stdout, NULL);
@@ -60,10 +61,12 @@ int main(void)
     SetWindowPos(window, NULL, 0, 0, 640, 360, SWP_NOZORDER | SWP_NOACTIVATE);
     check_present_rect(window, 1, "fullscreen logical resize retains present rect");
     GetClientRect(window, &client);
+    expected_width = GetModuleHandleW(L"winemac.drv") ? 2000 : 640;
+    expected_height = GetModuleHandleW(L"winemac.drv") ? 1200 : 360;
     printf("fullscreen hit-test geometry: %s (%ldx%ld)\n",
-            client.right == 2000 && client.bottom == 1200 ? "PASS" : "FAIL",
+            client.right == expected_width && client.bottom == expected_height ? "PASS" : "FAIL",
             client.right, client.bottom);
-    if (client.right != 2000 || client.bottom != 1200) ++failures;
+    if (client.right != expected_width || client.bottom != expected_height) ++failures;
     DestroyWindow(window);
 
     window = CreateWindowA("STATIC", "Fullscreen state probe", WS_OVERLAPPEDWINDOW,

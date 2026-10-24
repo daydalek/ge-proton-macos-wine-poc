@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-15",
+  "date": "2026-10-24",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -2170,10 +2170,71 @@
         "Copyright 2010 Aric Stewart for CodeWeavers",
         "Copyright 2019-2020 Zebediah Figura"
       ]
+    },
+    {
+      "patch": "patches/linux/crossover-pulse-build.patch",
+      "source_file": "dlls/winepulse.drv/pulse.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine per-file header",
+      "source_origin": "CrossOver 26.3 GE media source with Linux PulseAudio adaptation",
+      "source_sha256": "c2409c2fa589e353cdd4cfa73dddeaeb77b9675c82bdbd02f1da15bf451e41e1",
+      "copyright_notices": [
+        "Copyright 2011-2012 Maarten Lankhorst",
+        "Copyright 2010-2011 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2011 Andrew Eikum for CodeWeavers",
+        "Copyright 2022 Huw Davies"
+      ]
+    },
+    {
+      "patch": "patches/linux/crossover-pulse-build.patch",
+      "source_file": "dlls/winepulse.drv/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata",
+      "source_origin": "CrossOver 26.3 GE media source with Linux PulseAudio adaptation",
+      "source_sha256": "825911fa40df5ea9703f503ff4436af79d29de96c12893be535cf7a008b3359e",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/linux/quartz-pause-position.patch",
+      "source_file": "dlls/quartz/filtergraph.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared CrossOver source before Linux position repair",
+      "source_sha256": "cefd45c97c36b24b9efa17236eaff184611df7bdda9a5b5cd3be52cc604f54fe",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer",
+        "Copyright 2004 Christian Costa"
+      ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-seek-generation.patch",
+      "source_file": "dlls/winedmo/winedmo_quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "685decff29303c1005b9d20a22d25bc30a751d149908b8c7c75cb4f865ab1b64",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
+    {
+      "patch": "patches/linux/quartz-no-position-transition.patch",
+      "source_file": "dlls/quartz/filtergraph.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared CrossOver source before Linux position repair",
+      "source_sha256": "24b1d6d9f99d1936a9a3dd324e91bdbce9e5ff84c85de0e7fb6bc2cf797a5583",
+      "copyright_notices": [
+        "Copyright 2002 Lionel Ulmer",
+        "Copyright 2004 Christian Costa"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 189,
+    "LGPL-2.1-or-later": 194,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2199,6 +2260,10 @@
     "patches/crossover/wined3d-backend-selection.patch": "673b9c1500141747716cf5d81f58e727ccb070534b1940c908f2830205354821",
     "patches/crossover/kernelbase-legacy-directory-info.patch": "33aed0fc1cc34814b343bba8ba49c966c277646e10da1cdbc50a6d954d31818b",
     "patches/crossover/i386-hotpatch-prologue.patch": "cbe167d01ceeaff24fd1faf81d808856865b7b5c6a79466870cf7800cff86c0e",
-    "patches/crossover/winedmo-repeated-seek.patch": "356a262982330c71a6847c2088a25f912fc33b84d3f21538294566c2e3543b34"
+    "patches/crossover/winedmo-repeated-seek.patch": "356a262982330c71a6847c2088a25f912fc33b84d3f21538294566c2e3543b34",
+    "patches/linux/crossover-pulse-build.patch": "6bc8c58824516d2501ffda1ccabb2d5c810ca178173bd6a60cf62f6173a5bfe4",
+    "patches/linux/quartz-pause-position.patch": "974ea8187dc61b9a310df210f4d5c9aff32f9a9f007e4e9c6de861b9d5a1b189",
+    "patches/crossover/winedmo-seek-generation.patch": "a0d453fd8e1c6f072982eedf53523727e5532d71d2aa7dbbca72ac9ebe49d988",
+    "patches/linux/quartz-no-position-transition.patch": "9a61eae8fd2f5bcc0784903f74fe677c1d9ea3bff920da2c971314430787dc7c"
   }
 }

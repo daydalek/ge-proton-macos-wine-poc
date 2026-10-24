@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 
+static char probe_font[LF_FACESIZE] = "Arial";
+
 typedef HFONT (WINAPI *create_font_indirect_a_fn)(const LOGFONTA *);
 typedef DWORD (WINAPI *get_glyph_outline_a_fn)(HDC, UINT, UINT, LPGLYPHMETRICS, DWORD, LPVOID, const MAT2 *);
 typedef INT   (WINAPI *enum_font_families_ex_a_fn)(HDC, LPLOGFONTA, FONTENUMPROCA, LPARAM, DWORD);
@@ -250,7 +252,7 @@ static int exercise_baseline_apis(BYTE req_charset, UINT glyph_char,
     memset(&lf, 0, sizeof(lf));
     lf.lfHeight = -16;
     lf.lfCharSet = req_charset;
-    strcpy(lf.lfFaceName, "Arial");
+    strcpy(lf.lfFaceName, probe_font);
 
     hfont = CreateFontIndirectA(&lf);
     if (!hfont) failures++;
@@ -308,8 +310,15 @@ static int exercise_baseline_apis(BYTE req_charset, UINT glyph_char,
 int main(void)
 {
     int failures = 0;
+    char configured_font[LF_FACESIZE];
+    DWORD font_length;
 
     setvbuf(stdout, NULL, _IONBF, 0);
+    font_length = GetEnvironmentVariableA("WINE_PROBE_FONT", configured_font, sizeof(configured_font));
+    if (font_length >= sizeof(configured_font))
+        return 2;
+    if (font_length) strcpy(probe_font, configured_font);
+    printf("HOTPATCH_FONT %s\n", probe_font);
     failures += exercise_baseline_apis(DEFAULT_CHARSET, 'A', "raw-create", "raw-title", "raw-menu");
 
 #ifndef _WIN64
@@ -347,7 +356,7 @@ int main(void)
         memset(&lf_test, 0, sizeof(lf_test));
         lf_test.lfHeight = -12;
         lf_test.lfCharSet = SHIFTJIS_CHARSET;
-        strcpy(lf_test.lfFaceName, "Arial");
+        strcpy(lf_test.lfFaceName, probe_font);
 
         failures += exercise_baseline_apis(SHIFTJIS_CHARSET, 0x8140, "hooked-create", "hooked-title", "hooked-menu");
         if (last_created_charset != GB2312_CHARSET)
@@ -358,7 +367,7 @@ int main(void)
             /* Intra-DLL callers must also traverse the hotpatched entry points. */
             HFONT hf = CreateFontA(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET,
                                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                                   DEFAULT_PITCH, "Arial");
+                                   DEFAULT_PITCH, probe_font);
             if (!hf) failures++;
             else DeleteObject(hf);
 
@@ -367,7 +376,7 @@ int main(void)
             if (!hdc) failures++;
             else
             {
-                EnumFontFamiliesA(hdc, "Arial", enum_font_cb, (LPARAM)&enum_count);
+                EnumFontFamiliesA(hdc, probe_font, enum_font_cb, (LPARAM)&enum_count);
                 DeleteDC(hdc);
                 if (enum_count <= 0) failures++;
             }

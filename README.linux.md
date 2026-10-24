@@ -1,0 +1,143 @@
+# Linux Wine runtime
+
+The Linux target uses the same CrossOver 26.3.0 source archive and GE-Proton11-7
+multimedia patch stack as the macOS runtime. It builds an x86_64 Unix core with
+i386 and x86_64 Windows modules using new WoW64. The initial distribution target
+is Ubuntu 24.04 amd64, with X11, Wayland, ALSA, PulseAudio and Vulkan enabled.
+
+`configs/crossover-patch-series.txt` remains the shared patch authority.
+`configs/linux-build.json` records Linux toolchain inputs and two platform
+exclusions: macOS Steam command-line defaults and D3DMetal DLL routing.
+The generic CommandLineAppend implementation, directory-hook compatibility,
+i386 hotpatch rewriter, repeated-seek repair, and all other shared fixes remain
+selected. macOS driver patches stay in the prepared source and retain their
+platform-specific activation conditions.
+The Linux profile appends a PulseAudio integration patch for CrossOver's
+audio-stream model and udev linkage, preserving GE's smooth-playback timing.
+It also appends Quartz no-position transition handling and a position repair: no-position requests retain the graph
+clock snapshot, and repeated pauses account for each running interval once.
+Append-only patch additions can reuse an existing build tree; changes to an
+earlier patch or the source baseline require a fresh work directory.
+
+## Build
+
+Run these commands inside Ubuntu amd64. On Apple Silicon, an OrbStack machine
+can be created with `orb create --arch amd64 ubuntu:24.04 ubuntu-amd64`.
+Use the Linux filesystem for the working directory.
+
+```bash
+bash scripts/linux/install-deps.sh
+export POC_LINUX_WORK_DIR="$HOME/.cache/ge-wine-linux"
+export POC_JOBS=4
+python3 scripts/linux/build.py all
+python3 scripts/linux/build-probes.py --work-dir "$POC_LINUX_WORK_DIR"
+```
+
+`build.py prepare`, `deps`, and `wine` expose individual stages. Downloads are
+SHA-256 verified. `--archive-cache /path/to/existing/work` can reuse verified
+CrossOver and dependency archives from the macOS build. Prepared source inputs
+and append-only patch additions are recorded in the work directory.
+Prepared sources include dated `LINUX_MODIFICATIONS.json` and per-file notices
+for Linux changes; the complete modification inventory records final file hashes.
+Logs are saved under the work directory's `logs/` folder.
+Wine is fully compiled and staged with its `install-lib` target. This installs
+the application runtime; developer import libraries and headers stay outside
+the release payload.
+
+Run the isolated regression suite under a virtual X display:
+
+```bash
+xvfb-run -a -s '-screen 0 1280x720x24' python3 scripts/linux/verify.py \
+  --work-dir "$POC_LINUX_WORK_DIR"
+```
+
+Reports and per-probe logs are kept under `validation/`. The suite uses a
+dedicated prefix and a private PulseAudio server with its own D-Bus session,
+Unix socket and null sink for silent unattended playback. Readiness is checked
+before Wine starts; the suite owns and shuts down its audio processes.
+The host probe checks the i386 `int 0x80` syscall entry used by Linux WoW64.
+Its result is recorded alongside the Wine probes, including on translated CPUs.
+The host kernel and CPU execution environment must provide that compatibility
+entry for this CrossOver core.
+Mono and Gecko are disabled in this native C/C++ probe environment so their
+first-run download dialogs can be handled separately in desktop acceptance.
+The suite requests software OpenGL and selects the installed x86_64 Mesa
+Lavapipe Vulkan driver. Inherited renderer and loader overrides are cleared.
+Full-system emulation can use `--timeout-scale 4` to allow longer test deadlines;
+the report records the selected multiplier. The default multiplier is 1.
+
+The Linux PE toolchain is the official LLVM-MinGW 20260616 UCRT release.
+FFmpeg is built from the same locked source as macOS with broad built-in
+software playback. GnuTLS and desktop/device libraries come from Ubuntu.
+The package therefore requires compatible host distro libraries.
+The prerequisite script installs Noto CJK fonts so the Linux font fallback
+can render Chinese and Japanese text in visual novels.
+
+## Packaging
+
+```bash
+python3 scripts/linux/package.py --work-dir "$POC_LINUX_WORK_DIR" \
+  --output "$HOME/wine-linux-release"
+```
+
+The fresh output directory receives the runtime, corresponding source archive,
+ELF dependency report, patch manifest and checksums. Release assets carry the
+`-linux-amd64` suffix (`wine-linux-amd64.tar.gz`, `wine-linux-amd64-sources.tar.gz`,
+`SHA256SUMS-linux-amd64`) so they can share a GitHub release with the macOS
+Libraries packages. The runtime includes
+FFmpeg libraries, licenses, and a `run` launcher with a user-writable prefix.
+ELF library search paths use `$ORIGIN` relative paths. The source archive
+contains the prepared Wine source, locked input archives and project recipes.
+The ELF report records each module's GLIBC symbol versions and the build host's
+libc version. The initial runtime target is Ubuntu 24.04; distribution coverage
+requires the corresponding host-library and runtime acceptance checks.
+Repeat `verify.py` with `--runtime /path/to/wine-linux-amd64` after moving the
+runtime directory to validate the packaged layout.
+
+## Frontend runtime contract
+
+`linux-release-manifest.json` declares `run` as the Wine entrypoint and
+`bin/wineserver` as the Unix server entrypoint. A Linux frontend supplies its
+Bottle directory through `WINEPREFIX` and uses the launcher for Windows commands:
+
+```bash
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-amd64/run cmd /c ver
+WINEPREFIX=/path/to/Bottle /path/to/wine-linux-amd64/bin/wineserver -k
+```
+
+The prefix architecture is win64; both i386 and x86_64 Windows programs run
+through new WoW64. Whisky's Linux runtime adapter can consume these entrypoints
+and inject its driver into the existing `RuntimeService` bridge interface.
+
+## Validation scope
+
+An amd64 OrbStack machine on Apple Silicon uses CPU translation and an ARM64
+kernel. It is useful for build checks and software-rendered regression probes.
+A full x86_64 kernel VM also covers the Windows x86 execution and exception
+probes. System emulation needs a QEMU build containing the upstream
+[user-mode IRET/SMAP repair](https://github.com/qemu/qemu/commit/0bd385e7e3c33e987d7a8879918be6df7b111ac4);
+the local validation environment uses ARM64-native QEMU 10.2.1.
+Native x86_64 Linux desktop validation covers GPU drivers, Wayland/X11 session
+behavior, fullscreen/input, real game playback, and performance. Steam Proton
+compatibility-tool integration is a separate integration target from this
+standalone Wine runtime.
+
+## Linux CI prereleases
+
+The registered release workflow supports Linux-only builds from this branch:
+
+```bash
+gh workflow run build-release.yml --ref codex/linux-support \
+  -f linux_only=true -f compile_only=true \
+  -f linux_release_tag=v0.1.6-linux-amd64
+```
+
+`compile_only=true` installs build dependencies and compiles the Wine core, Windows probes and deterministic
+regression harnesses, checks PE/ELF files, dependency resolution, FFmpeg inventory,
+privacy and checksums, and defers Wine/media execution. The default mode keeps
+both runtime probe stages. The package manifest and prerelease notes record the
+selected validation mode. Runtime font/audio/display tools are installed in the
+full validation mode; CI uses the canonical Ubuntu archive with bounded download
+retries and timeouts. A nonempty Linux release tag publishes the checked
+assets under a new immutable `vMAJOR.MINOR.PATCH-linux-amd64` tag; the publisher
+verifies the recipe commit and uploaded asset digests before publishing.

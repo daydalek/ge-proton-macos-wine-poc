@@ -25,6 +25,8 @@ for target in i686 x86_64; do
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
       "$kit/exception-probe.c" -o "$kit/exception-probe-$bits.exe"
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
+      "$kit/syscall-boolean-probe.c" -o "$kit/syscall-boolean-probe-$bits.exe"
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
       "$kit/directory-compat-probe.c" -o "$kit/directory-compat-probe-$bits.exe"
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
       "$kit/hotpatch-probe.c" -o "$kit/hotpatch-probe-$bits.exe" -lgdi32 -luser32

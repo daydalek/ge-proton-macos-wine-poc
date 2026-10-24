@@ -1,0 +1,24 @@
+{
+  "target": "linux-x86_64",
+  "baseline": "CrossOver 26.3.0 + GE-Proton11-7 media",
+  "modification_date": "2026-10-24",
+  "windows_architectures": [
+    "i386",
+    "x86_64"
+  ],
+  "toolchain": {
+    "archive": "llvm-mingw-linux.tar.xz",
+    "directory": "llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64",
+    "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64.tar.xz",
+    "sha256": "534b92e067b22a6b4441f48ae9240a3341b17825d04d577eab0cf85c44b4deda"
+  },
+  "platform_exclusions": {
+    "patches/crossover/steam-auto-args.patch": "macOS Steam CEF defaults; Linux retains CommandLineAppend support with user-selected values",
+    "patches/crossover/wined3d-backend-selection.patch": "macOS D3DMetal forwarder routing; Linux uses the standard Wine graphics DLL layout"
+  },
+  "additional_patches": [
+    "patches/linux/crossover-pulse-build.patch",
+    "patches/linux/quartz-pause-position.patch",
+    "patches/linux/quartz-no-position-transition.patch"
+  ]
+}
