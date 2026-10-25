@@ -34,7 +34,7 @@ cd "$port/build"
   --disable-tests --prefix="$port/stage" > "$port/configure.log" 2>&1
 case "$mode" in
   media)
-    make -j"$POC_JOBS" dlls/quartz/all dlls/ddraw/all dlls/winedmo/all \
+    make -j"$POC_JOBS" dlls/quartz/all dlls/ddraw/all dlls/winedmo/all dlls/wmp/all \
       dlls/qasf/all dlls/wmadmod/all dlls/wmvcore/all dlls/mf/all \
       dlls/mfmediaengine/all dlls/mfplat/all dlls/mfreadwrite/all \
       dlls/mfsrcsnk/all dlls/msauddecmft/all > "$port/build-media.log" 2>&1

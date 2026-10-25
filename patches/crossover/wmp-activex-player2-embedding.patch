@@ -1,0 +1,877 @@
+Subject: wmp: support IWMPPlayer2 ActiveX hosts and embedded video playback
+License: LGPL-2.1-or-later
+Modification date: 2026-10-25
+
+ActiveX hosts query IWMPPlayer2, configure the control, and may set the
+same client site again after in-place activation. Provide the IDL-generated
+interface and preserve the active child window across this repeated site
+binding. Track enabled/context-menu and playback state, support pause and
+idempotent close, and parent/resize the DirectShow video window with the
+control.
+
+For embedded playback with winemac.drv, pre-add VMR9 so video owns a
+Direct3D child surface alongside the host's graphics surface. Other drivers
+retain normal DirectShow renderer selection. Selection depends on the
+active driver and hosting mode and applies to all matching applications.
+
+The standalone WMP probe exercises interface properties, ATL site rebinding,
+child-window visibility, playback progress, and repeated close on x86/x64.
+Playback requires a caller-supplied video path. Native WMP skins, fullscreen,
+and true windowless video remain outside this patch's implementation scope.
+
+--- a/include/wmp.idl
++++ b/include/wmp.idl
+@@ -1088,6 +1088,39 @@
+     };
+ 
+     [
++      odl,
++      uuid(0e6b01d1-d407-4c85-bf5f-1c01f6150280),
++      dual,
++      oleautomation
++    ]
++    interface IWMPPlayer2 : IWMPCore {
++        [id(0x00000013), propget]
++        HRESULT enabled([out, retval] VARIANT_BOOL* pbEnabled);
++        [id(0x00000013), propput]
++        HRESULT enabled([in] VARIANT_BOOL pbEnabled);
++        [id(0x00000015), propget]
++        HRESULT fullScreen([out, retval] VARIANT_BOOL* pbFullScreen);
++        [id(0x00000015), propput]
++        HRESULT fullScreen(VARIANT_BOOL pbFullScreen);
++        [id(0x00000016), propget]
++        HRESULT enableContextMenu([out, retval] VARIANT_BOOL* pbEnableContextMenu);
++        [id(0x00000016), propput]
++        HRESULT enableContextMenu(VARIANT_BOOL pbEnableContextMenu);
++        [id(0x00000017), propput]
++        HRESULT uiMode([in] BSTR pbstrMode);
++        [id(0x00000017), propget]
++        HRESULT uiMode([out, retval] BSTR* pbstrMode);
++        [id(0x0018), propget]
++        HRESULT stretchToFit([out, retval] VARIANT_BOOL *enabled);
++        [id(0x0018), propput]
++        HRESULT stretchToFit([in] VARIANT_BOOL enabled);
++        [id(0x0019), propget]
++        HRESULT windowlessVideo([out, retval] VARIANT_BOOL *enabled);
++        [id(0x0019), propput]
++        HRESULT windowlessVideo([in] VARIANT_BOOL enabled);
++    };
++
++    [
+         odl,
+         uuid(82a2986c-0293-4fd0-b279-b21b86c058be),
+         oleautomation
+@@ -1485,7 +1518,7 @@
+      {
+         [default] interface IWMPPlayer4;
+         /* interface IWMPPlayer3; */
+-        /* interface IWMPPlayer2; */
++        interface IWMPPlayer2;
+         interface IWMPPlayer;
+         interface IWMPControls;
+         interface IWMPSettings;
+--- a/dlls/wmp/wmp_private.h
++++ b/dlls/wmp/wmp_private.h
+@@ -21,6 +21,7 @@
+ #include "windows.h"
+ #include "ole2.h"
+ #include "dshow.h"
++#include "ocidl.h"
+ #include "wmp.h"
+ 
+ #define TID_LIST \
+@@ -77,8 +78,10 @@
+     IOleInPlaceObjectWindowless IOleInPlaceObjectWindowless_iface;
+     IConnectionPointContainer IConnectionPointContainer_iface;
+     IOleControl IOleControl_iface;
++    IObjectWithSite IObjectWithSite_iface;
+     IWMPPlayer4 IWMPPlayer4_iface;
+     IWMPPlayer IWMPPlayer_iface;
++    IWMPPlayer2 IWMPPlayer2_iface;
+     IWMPSettings IWMPSettings_iface;
+     IWMPControls IWMPControls_iface;
+     IWMPNetwork IWMPNetwork_iface;
+@@ -106,9 +109,18 @@
+     IMediaEvent* media_event;
+     IMediaSeeking* media_seeking;
+     IBasicAudio* basic_audio;
++    IVideoWindow* video_window;
+ 
+     /* Async event notification */
+     HWND msg_window;
++
++    /* Playback & Display State */
++    WMPPlayState play_state;
++    WMPOpenState open_state;
++    VARIANT_BOOL stretch_to_fit;
++    VARIANT_BOOL windowless;
++    VARIANT_BOOL enable_context_menu;
++    VARIANT_BOOL enabled;
+ };
+ 
+ BOOL init_player(WindowsMediaPlayer*);
+--- a/dlls/wmp/oleobj.c
++++ b/dlls/wmp/oleobj.c
+@@ -61,7 +61,6 @@
+     switch(msg) {
+     case WM_PAINT: {
+         PAINTSTRUCT ps;
+-        HFONT font;
+         RECT rect;
+         HDC hdc;
+ 
+@@ -69,25 +68,15 @@
+ 
+         GetClientRect(hwnd, &rect);
+         hdc = BeginPaint(hwnd, &ps);
+-
+-        SelectObject(hdc, GetStockObject(DC_BRUSH));
+-        SetDCBrushColor(hdc, RGB(255,0,0));
+-        SetBkColor(hdc, RGB(255,0,0));
+-
+-        font = CreateFontA(25,0,0,0,400,0,0,0,ANSI_CHARSET,0,0,DEFAULT_QUALITY,DEFAULT_PITCH,NULL);
+-        SelectObject(hdc, font);
+-
+-        Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+-        DrawTextA(hdc, "FIXME: WMP", -1, &rect, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+-
+-        DeleteObject(font);
++        FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+         EndPaint(hwnd, &ps);
+         break;
+     }
++    case WM_ERASEBKGND:
++        return 1;
+     }
+ 
+     return DefWindowProcW(hwnd, msg, wParam, lParam);
+-
+ }
+ 
+ static ATOM wmp_class;
+@@ -144,7 +133,6 @@
+     hres = IOleClientSite_QueryInterface(This->client_site, &IID_IOleInPlaceSiteWindowless, (void**)&ipsite_windowless);
+     if(SUCCEEDED(hres)) {
+         hres = IOleInPlaceSiteWindowless_CanWindowlessActivate(ipsite_windowless);
+-        IOleInPlaceSiteWindowless_Release(ipsite_windowless);
+         if(hres == S_OK)
+             FIXME("Windowless activation not supported\n");
+         ipsiteex = (IOleInPlaceSiteEx*)ipsite_windowless;
+@@ -176,6 +164,15 @@
+     This->hwnd = create_wmp_window(This, &posrect);
+     if(!This->hwnd)
+         return E_FAIL;
++
++    EnableWindow(This->hwnd, This->enabled != VARIANT_FALSE);
++
++    if(This->video_window) {
++        IVideoWindow_put_Owner(This->video_window, (OAHWND)This->hwnd);
++        IVideoWindow_put_WindowStyle(This->video_window, WS_CHILD | WS_CLIPSIBLINGS);
++        IVideoWindow_SetWindowPosition(This->video_window, 0, 0, posrect.right-posrect.left, posrect.bottom-posrect.top);
++        IVideoWindow_put_Visible(This->video_window, OATRUE);
++    }
+ 
+     IOleClientSite_ShowObject(This->client_site);
+     return S_OK;
+@@ -261,9 +258,18 @@
+     }else if(IsEqualGUID(riid, &IID_IWMPPlayer4)) {
+         TRACE("(%p)->(IID_IWMPPlayer4 %p)\n", This, ppv);
+         *ppv = &This->IWMPPlayer4_iface;
++    }else if(IsEqualGUID(riid, &IID_IWMPPlayer2)) {
++        TRACE("(%p)->(IID_IWMPPlayer2 %p)\n", This, ppv);
++        *ppv = &This->IWMPPlayer2_iface;
+     }else if(IsEqualGUID(riid, &IID_IWMPPlayer)) {
+         TRACE("(%p)->(IID_IWMPPlayer %p)\n", This, ppv);
+         *ppv = &This->IWMPPlayer_iface;
++    }else if(IsEqualGUID(riid, &IID_IDispatch)) {
++        TRACE("(%p)->(IID_IDispatch %p)\n", This, ppv);
++        *ppv = &This->IWMPPlayer2_iface;
++    }else if(IsEqualGUID(riid, &IID_IObjectWithSite)) {
++        TRACE("(%p)->(IID_IObjectWithSite %p)\n", This, ppv);
++        *ppv = &This->IObjectWithSite_iface;
+     }else if(IsEqualGUID(riid, &IID_IWMPSettings)) {
+         TRACE("(%p)->(IID_IWMPSettings %p)\n", This, ppv);
+         *ppv = &This->IWMPSettings_iface;
+@@ -319,6 +325,10 @@
+     HRESULT hres;
+ 
+     TRACE("(%p)->(%p)\n", This, pClientSite);
++
++    /* ATL sets the site again through IObjectWithSite after activation. */
++    if (This->client_site == pClientSite)
++        return S_OK;
+ 
+     release_client_site(This);
+     if(!pClientSite)
+@@ -639,6 +649,11 @@
+        SetWindowPos(This->hwnd, NULL, lprcPosRect->left, lprcPosRect->top,
+                lprcPosRect->right-lprcPosRect->left, lprcPosRect->bottom-lprcPosRect->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
++       if(This->video_window) {
++           IVideoWindow_SetWindowPosition(This->video_window, 0, 0,
++                   lprcPosRect->right - lprcPosRect->left,
++                   lprcPosRect->bottom - lprcPosRect->top);
++       }
+     }
+ 
+     return S_OK;
+@@ -887,6 +902,73 @@
+     PersistStreamInit_InitNew
+ };
+ 
++static inline WindowsMediaPlayer *impl_from_IObjectWithSite(IObjectWithSite *iface)
++{
++    return CONTAINING_RECORD(iface, WindowsMediaPlayer, IObjectWithSite_iface);
++}
++
++static HRESULT WINAPI ObjectWithSite_QueryInterface(IObjectWithSite *iface, REFIID riid, void **ppv)
++{
++    WindowsMediaPlayer *This = impl_from_IObjectWithSite(iface);
++    return IOleObject_QueryInterface(&This->IOleObject_iface, riid, ppv);
++}
++
++static ULONG WINAPI ObjectWithSite_AddRef(IObjectWithSite *iface)
++{
++    WindowsMediaPlayer *This = impl_from_IObjectWithSite(iface);
++    return IOleObject_AddRef(&This->IOleObject_iface);
++}
++
++static ULONG WINAPI ObjectWithSite_Release(IObjectWithSite *iface)
++{
++    WindowsMediaPlayer *This = impl_from_IObjectWithSite(iface);
++    return IOleObject_Release(&This->IOleObject_iface);
++}
++
++static HRESULT WINAPI ObjectWithSite_SetSite(IObjectWithSite *iface, IUnknown *pUnkSite)
++{
++    WindowsMediaPlayer *This = impl_from_IObjectWithSite(iface);
++    IOleClientSite *client_site = NULL;
++
++    TRACE("(%p)->(%p)\n", This, pUnkSite);
++
++    if (pUnkSite) {
++        HRESULT hr = IUnknown_QueryInterface(pUnkSite, &IID_IOleClientSite, (void**)&client_site);
++        if (FAILED(hr))
++            return hr;
++    }
++
++    OleObject_SetClientSite(&This->IOleObject_iface, client_site);
++    if (client_site)
++        IOleClientSite_Release(client_site);
++
++    return S_OK;
++}
++
++static HRESULT WINAPI ObjectWithSite_GetSite(IObjectWithSite *iface, REFIID riid, void **ppvSite)
++{
++    WindowsMediaPlayer *This = impl_from_IObjectWithSite(iface);
++
++    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), ppvSite);
++
++    if (!ppvSite)
++        return E_POINTER;
++    if (!This->client_site) {
++        *ppvSite = NULL;
++        return E_FAIL;
++    }
++
++    return IOleClientSite_QueryInterface(This->client_site, riid, ppvSite);
++}
++
++static const IObjectWithSiteVtbl ObjectWithSiteVtbl = {
++    ObjectWithSite_QueryInterface,
++    ObjectWithSite_AddRef,
++    ObjectWithSite_Release,
++    ObjectWithSite_SetSite,
++    ObjectWithSite_GetSite
++};
++
+ HRESULT WINAPI WMPFactory_CreateInstance(IClassFactory *iface, IUnknown *outer,
+         REFIID riid, void **ppv)
+ {
+@@ -906,6 +988,7 @@
+     wmp->IPersistStreamInit_iface.lpVtbl = &PersistStreamInitVtbl;
+     wmp->IOleInPlaceObjectWindowless_iface.lpVtbl = &OleInPlaceObjectWindowlessVtbl;
+     wmp->IOleControl_iface.lpVtbl = &OleControlVtbl;
++    wmp->IObjectWithSite_iface.lpVtbl = &ObjectWithSiteVtbl;
+ 
+     wmp->ref = 1;
+ 
+--- a/dlls/wmp/player.c
++++ b/dlls/wmp/player.c
+@@ -34,6 +34,11 @@
+     DISPPARAMS dispparams;
+     VARIANTARG params[1];
+ 
++    if (type == DISPID_WMPCOREEVENT_PLAYSTATECHANGE)
++        wmp->play_state = (WMPPlayState)state;
++    else if (type == DISPID_WMPCOREEVENT_OPENSTATECHANGE)
++        wmp->open_state = (WMPOpenState)state;
++
+     dispparams.cArgs = 1;
+     dispparams.cNamedArgs = 0;
+     dispparams.rgdispidNamedArgs = NULL;
+@@ -129,8 +134,16 @@
+ static HRESULT WINAPI WMPPlayer4_close(IWMPPlayer4 *iface)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)\n", This);
+-    return E_NOTIMPL;
++    HRESULT hr = S_OK;
++
++    TRACE("(%p)\n", This);
++    if (This->filter_graph)
++        hr = IWMPControls_stop(&This->IWMPControls_iface);
++    if (This->media) {
++        IWMPMedia_Release(&This->media->IWMPMedia_iface);
++        This->media = NULL;
++    }
++    return hr;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_URL(IWMPPlayer4 *iface, BSTR *url)
+@@ -172,15 +185,21 @@
+ static HRESULT WINAPI WMPPlayer4_get_openState(IWMPPlayer4 *iface, WMPOpenState *pwmpos)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, pwmpos);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, pwmpos);
++    if (!pwmpos)
++        return E_POINTER;
++    *pwmpos = This->open_state;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_playState(IWMPPlayer4 *iface, WMPPlayState *pwmpps)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, pwmpps);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, pwmpps);
++    if (!pwmpps)
++        return E_POINTER;
++    *pwmpps = This->play_state;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_controls(IWMPPlayer4 *iface, IWMPControls **ppControl)
+@@ -368,15 +387,19 @@
+ static HRESULT WINAPI WMPPlayer4_get_enabled(IWMPPlayer4 *iface, VARIANT_BOOL *pbEnabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, pbEnabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, pbEnabled);
++    if (!pbEnabled) return E_POINTER;
++    *pbEnabled = This->enabled;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_put_enabled(IWMPPlayer4 *iface, VARIANT_BOOL enabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%x)\n", This, enabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%x)\n", This, enabled);
++    This->enabled = enabled ? VARIANT_TRUE : VARIANT_FALSE;
++    if (This->hwnd) EnableWindow(This->hwnd, This->enabled != VARIANT_FALSE);
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_fullScreen(IWMPPlayer4 *iface, VARIANT_BOOL *pbFullScreen)
+@@ -396,57 +419,68 @@
+ static HRESULT WINAPI WMPPlayer4_get_enableContextMenu(IWMPPlayer4 *iface, VARIANT_BOOL *pbEnableContextMenu)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, pbEnableContextMenu);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, pbEnableContextMenu);
++    if (!pbEnableContextMenu) return E_POINTER;
++    *pbEnableContextMenu = This->enable_context_menu;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_put_enableContextMenu(IWMPPlayer4 *iface, VARIANT_BOOL enable)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%x)\n", This, enable);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%x)\n", This, enable);
++    This->enable_context_menu = enable ? VARIANT_TRUE : VARIANT_FALSE;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_put_uiMode(IWMPPlayer4 *iface, BSTR mode)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%s)\n", This, debugstr_w(mode));
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%s)\n", This, debugstr_w(mode));
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_uiMode(IWMPPlayer4 *iface, BSTR *pbstrMode)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, pbstrMode);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, pbstrMode);
++    return return_bstr(L"none", pbstrMode);
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_stretchToFit(IWMPPlayer4 *iface, VARIANT_BOOL *enabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, enabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, enabled);
++    if (!enabled)
++        return E_POINTER;
++    *enabled = This->stretch_to_fit;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_put_stretchToFit(IWMPPlayer4 *iface, VARIANT_BOOL enabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%x)\n", This, enabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%x)\n", This, enabled);
++    This->stretch_to_fit = enabled;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_windowlessVideo(IWMPPlayer4 *iface, VARIANT_BOOL *enabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%p)\n", This, enabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%p)\n", This, enabled);
++    if (!enabled)
++        return E_POINTER;
++    *enabled = This->windowless;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_put_windowlessVideo(IWMPPlayer4 *iface, VARIANT_BOOL enabled)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
+-    FIXME("(%p)->(%x)\n", This, enabled);
+-    return E_NOTIMPL;
++    TRACE("(%p)->(%x)\n", This, enabled);
++    This->windowless = enabled;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPPlayer4_get_isRemote(IWMPPlayer4 *iface, VARIANT_BOOL *pvarfIsRemote)
+@@ -732,6 +766,294 @@
+     WMPPlayer_put_enableContextMenu,
+     WMPPlayer_put_uiMode,
+     WMPPlayer_get_uiMode,
++};
++
++static inline WindowsMediaPlayer *impl_from_IWMPPlayer2(IWMPPlayer2 *iface)
++{
++    return CONTAINING_RECORD(iface, WindowsMediaPlayer, IWMPPlayer2_iface);
++}
++
++static HRESULT WINAPI WMPPlayer2_QueryInterface(IWMPPlayer2 *iface, REFIID riid, void **ppv)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_QueryInterface(&This->IWMPPlayer4_iface, riid, ppv);
++}
++
++static ULONG WINAPI WMPPlayer2_AddRef(IWMPPlayer2 *iface)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_AddRef(&This->IWMPPlayer4_iface);
++}
++
++static ULONG WINAPI WMPPlayer2_Release(IWMPPlayer2 *iface)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_Release(&This->IWMPPlayer4_iface);
++}
++
++static HRESULT WINAPI WMPPlayer2_GetTypeInfoCount(IWMPPlayer2 *iface, UINT *pctinfo)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_GetTypeInfoCount(&This->IWMPPlayer4_iface, pctinfo);
++}
++
++static HRESULT WINAPI WMPPlayer2_GetTypeInfo(IWMPPlayer2 *iface, UINT iTInfo, LCID lcid, ITypeInfo **ppTInfo)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_GetTypeInfo(&This->IWMPPlayer4_iface, iTInfo, lcid, ppTInfo);
++}
++
++static HRESULT WINAPI WMPPlayer2_GetIDsOfNames(IWMPPlayer2 *iface, REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_GetIDsOfNames(&This->IWMPPlayer4_iface, riid, rgszNames, cNames, lcid, rgDispId);
++}
++
++static HRESULT WINAPI WMPPlayer2_Invoke(IWMPPlayer2 *iface, DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_Invoke(&This->IWMPPlayer4_iface, dispIdMember, riid, lcid, wFlags, pDispParams, pVarResult, pExcepInfo, puArgErr);
++}
++
++static HRESULT WINAPI WMPPlayer2_close(IWMPPlayer2 *iface)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_close(&This->IWMPPlayer4_iface);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_URL(IWMPPlayer2 *iface, BSTR *pbstrURL)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_URL(&This->IWMPPlayer4_iface, pbstrURL);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_URL(IWMPPlayer2 *iface, BSTR url)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_URL(&This->IWMPPlayer4_iface, url);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_openState(IWMPPlayer2 *iface, WMPOpenState *pwmpos)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_openState(&This->IWMPPlayer4_iface, pwmpos);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_playState(IWMPPlayer2 *iface, WMPPlayState *pwmpps)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_playState(&This->IWMPPlayer4_iface, pwmpps);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_controls(IWMPPlayer2 *iface, IWMPControls **ppControl)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_controls(&This->IWMPPlayer4_iface, ppControl);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_settings(IWMPPlayer2 *iface, IWMPSettings **ppSettings)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_settings(&This->IWMPPlayer4_iface, ppSettings);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_currentMedia(IWMPPlayer2 *iface, IWMPMedia **ppMedia)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_currentMedia(&This->IWMPPlayer4_iface, ppMedia);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_currentMedia(IWMPPlayer2 *iface, IWMPMedia *pMedia)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_currentMedia(&This->IWMPPlayer4_iface, pMedia);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_mediaCollection(IWMPPlayer2 *iface, IWMPMediaCollection **ppMediaCollection)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_mediaCollection(&This->IWMPPlayer4_iface, ppMediaCollection);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_playlistCollection(IWMPPlayer2 *iface, IWMPPlaylistCollection **ppPlaylistCollection)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_playlistCollection(&This->IWMPPlayer4_iface, ppPlaylistCollection);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_versionInfo(IWMPPlayer2 *iface, BSTR *version)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_versionInfo(&This->IWMPPlayer4_iface, version);
++}
++
++static HRESULT WINAPI WMPPlayer2_launchURL(IWMPPlayer2 *iface, BSTR url)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_launchURL(&This->IWMPPlayer4_iface, url);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_network(IWMPPlayer2 *iface, IWMPNetwork **ppQNI)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_network(&This->IWMPPlayer4_iface, ppQNI);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_currentPlaylist(IWMPPlayer2 *iface, IWMPPlaylist **ppPL)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_currentPlaylist(&This->IWMPPlayer4_iface, ppPL);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_currentPlaylist(IWMPPlayer2 *iface, IWMPPlaylist *pPL)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_currentPlaylist(&This->IWMPPlayer4_iface, pPL);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_cdromCollection(IWMPPlayer2 *iface, IWMPCdromCollection **ppCdromCollection)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_cdromCollection(&This->IWMPPlayer4_iface, ppCdromCollection);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_closedCaption(IWMPPlayer2 *iface, IWMPClosedCaption **ppClosedCaption)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_closedCaption(&This->IWMPPlayer4_iface, ppClosedCaption);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_isOnline(IWMPPlayer2 *iface, VARIANT_BOOL *pfOnline)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_isOnline(&This->IWMPPlayer4_iface, pfOnline);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_Error(IWMPPlayer2 *iface, IWMPError **ppError)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_Error(&This->IWMPPlayer4_iface, ppError);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_status(IWMPPlayer2 *iface, BSTR *pbstrStatus)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_Status(&This->IWMPPlayer4_iface, pbstrStatus);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_enabled(IWMPPlayer2 *iface, VARIANT_BOOL *pbEnabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_enabled(&This->IWMPPlayer4_iface, pbEnabled);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_enabled(IWMPPlayer2 *iface, VARIANT_BOOL enabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_enabled(&This->IWMPPlayer4_iface, enabled);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_fullScreen(IWMPPlayer2 *iface, VARIANT_BOOL *pbFullScreen)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_fullScreen(&This->IWMPPlayer4_iface, pbFullScreen);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_fullScreen(IWMPPlayer2 *iface, VARIANT_BOOL fullscreen)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_fullScreen(&This->IWMPPlayer4_iface, fullscreen);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_enableContextMenu(IWMPPlayer2 *iface, VARIANT_BOOL *pbEnableContextMenu)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_enableContextMenu(&This->IWMPPlayer4_iface, pbEnableContextMenu);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_enableContextMenu(IWMPPlayer2 *iface, VARIANT_BOOL enable)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_enableContextMenu(&This->IWMPPlayer4_iface, enable);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_uiMode(IWMPPlayer2 *iface, BSTR mode)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_uiMode(&This->IWMPPlayer4_iface, mode);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_uiMode(IWMPPlayer2 *iface, BSTR *pbstrMode)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_uiMode(&This->IWMPPlayer4_iface, pbstrMode);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_stretchToFit(IWMPPlayer2 *iface, VARIANT_BOOL *enabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_stretchToFit(&This->IWMPPlayer4_iface, enabled);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_stretchToFit(IWMPPlayer2 *iface, VARIANT_BOOL enabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_stretchToFit(&This->IWMPPlayer4_iface, enabled);
++}
++
++static HRESULT WINAPI WMPPlayer2_get_windowlessVideo(IWMPPlayer2 *iface, VARIANT_BOOL *enabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_get_windowlessVideo(&This->IWMPPlayer4_iface, enabled);
++}
++
++static HRESULT WINAPI WMPPlayer2_put_windowlessVideo(IWMPPlayer2 *iface, VARIANT_BOOL enabled)
++{
++    WindowsMediaPlayer *This = impl_from_IWMPPlayer2(iface);
++    return WMPPlayer4_put_windowlessVideo(&This->IWMPPlayer4_iface, enabled);
++}
++
++static IWMPPlayer2Vtbl WMPPlayer2Vtbl = {
++    WMPPlayer2_QueryInterface,
++    WMPPlayer2_AddRef,
++    WMPPlayer2_Release,
++    WMPPlayer2_GetTypeInfoCount,
++    WMPPlayer2_GetTypeInfo,
++    WMPPlayer2_GetIDsOfNames,
++    WMPPlayer2_Invoke,
++    WMPPlayer2_close,
++    WMPPlayer2_get_URL,
++    WMPPlayer2_put_URL,
++    WMPPlayer2_get_openState,
++    WMPPlayer2_get_playState,
++    WMPPlayer2_get_controls,
++    WMPPlayer2_get_settings,
++    WMPPlayer2_get_currentMedia,
++    WMPPlayer2_put_currentMedia,
++    WMPPlayer2_get_mediaCollection,
++    WMPPlayer2_get_playlistCollection,
++    WMPPlayer2_get_versionInfo,
++    WMPPlayer2_launchURL,
++    WMPPlayer2_get_network,
++    WMPPlayer2_get_currentPlaylist,
++    WMPPlayer2_put_currentPlaylist,
++    WMPPlayer2_get_cdromCollection,
++    WMPPlayer2_get_closedCaption,
++    WMPPlayer2_get_isOnline,
++    WMPPlayer2_get_Error,
++    WMPPlayer2_get_status,
++    WMPPlayer2_get_enabled,
++    WMPPlayer2_put_enabled,
++    WMPPlayer2_get_fullScreen,
++    WMPPlayer2_put_fullScreen,
++    WMPPlayer2_get_enableContextMenu,
++    WMPPlayer2_put_enableContextMenu,
++    WMPPlayer2_put_uiMode,
++    WMPPlayer2_get_uiMode,
++    WMPPlayer2_get_stretchToFit,
++    WMPPlayer2_put_stretchToFit,
++    WMPPlayer2_get_windowlessVideo,
++    WMPPlayer2_put_windowlessVideo
+ };
+ 
+ 
+@@ -1479,6 +1801,23 @@
+                 (void **)&This->filter_graph);
+         update_state(This, DISPID_WMPCOREEVENT_OPENSTATECHANGE, wmposOpeningUnknownURL);
+ 
++        if (SUCCEEDED(hres) && This->hwnd && GetModuleHandleW(L"winemac.drv"))
++        {
++            IBaseFilter *renderer;
++            HRESULT renderer_hr;
++
++            /* VMR9 owns a Direct3D child surface. GDI presenters can be covered
++             * by the host game's OpenGL client surface on macOS. */
++            renderer_hr = CoCreateInstance(&CLSID_VideoMixingRenderer9, NULL,
++                    CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&renderer);
++            if (SUCCEEDED(renderer_hr))
++            {
++                renderer_hr = IGraphBuilder_AddFilter(This->filter_graph, renderer, L"WMP Video Renderer");
++                IBaseFilter_Release(renderer);
++            }
++            if (FAILED(renderer_hr))
++                WARN("Failed to add the embedded video renderer, hr %#lx.\n", renderer_hr);
++        }
+         if (SUCCEEDED(hres))
+             hres = IGraphBuilder_RenderFile(This->filter_graph, This->media->url, NULL);
+         if (SUCCEEDED(hres))
+@@ -1509,9 +1848,29 @@
+             hres = IGraphBuilder_QueryInterface(This->filter_graph, &IID_IBasicAudio, (void**)&This->basic_audio);
+         if (SUCCEEDED(hres))
+             hres = IWMPSettings_put_volume(&This->IWMPSettings_iface, This->volume);
++        if (SUCCEEDED(hres))
++        {
++            IVideoWindow *video_window = NULL;
++            if (SUCCEEDED(IGraphBuilder_QueryInterface(This->filter_graph, &IID_IVideoWindow, (void**)&video_window))) {
++                RECT rc = {0};
++                if (This->hwnd) {
++                    GetClientRect(This->hwnd, &rc);
++                    IVideoWindow_put_Owner(video_window, (OAHWND)This->hwnd);
++                    IVideoWindow_put_WindowStyle(video_window, WS_CHILD | WS_CLIPSIBLINGS);
++                    IVideoWindow_SetWindowPosition(video_window, 0, 0, rc.right - rc.left, rc.bottom - rc.top);
++                    IVideoWindow_put_Visible(video_window, OATRUE);
++                }
++                This->video_window = video_window;
++            }
++        }
+ 
+         if (FAILED(hres))
+         {
++            if (This->video_window)
++            {
++                IVideoWindow_Release(This->video_window);
++                This->video_window = NULL;
++            }
+             if (This->filter_graph)
+             {
+                 IGraphBuilder_Release(This->filter_graph);
+@@ -1569,6 +1928,12 @@
+     if (!This->filter_graph) {
+         return NS_S_WMPCORE_COMMAND_NOT_AVAILABLE;
+     }
++    if (This->video_window) {
++        IVideoWindow_put_Visible(This->video_window, OAFALSE);
++        IVideoWindow_put_Owner(This->video_window, 0);
++        IVideoWindow_Release(This->video_window);
++        This->video_window = NULL;
++    }
+     if (This->media_control) {
+         hres = IMediaControl_Stop(This->media_control);
+         IMediaControl_Release(This->media_control);
+@@ -1597,8 +1962,15 @@
+ static HRESULT WINAPI WMPControls_pause(IWMPControls *iface)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPControls(iface);
+-    FIXME("(%p)\n", This);
+-    return E_NOTIMPL;
++    HRESULT hres = S_OK;
++    TRACE("(%p)\n", This);
++    if (!This->filter_graph || !This->media_control)
++        return NS_S_WMPCORE_COMMAND_NOT_AVAILABLE;
++
++    hres = IMediaControl_Pause(This->media_control);
++    if (SUCCEEDED(hres))
++        update_state(This, DISPID_WMPCOREEVENT_PLAYSTATECHANGE, wmppsPaused);
++    return hres;
+ }
+ 
+ static HRESULT WINAPI WMPControls_fastForward(IWMPControls *iface)
+@@ -2260,9 +2632,18 @@
+ 
+     wmp->IWMPPlayer4_iface.lpVtbl = &WMPPlayer4Vtbl;
+     wmp->IWMPPlayer_iface.lpVtbl = &WMPPlayerVtbl;
++    wmp->IWMPPlayer2_iface.lpVtbl = &WMPPlayer2Vtbl;
+     wmp->IWMPSettings_iface.lpVtbl = &WMPSettingsVtbl;
+     wmp->IWMPControls_iface.lpVtbl = &WMPControlsVtbl;
+     wmp->IWMPNetwork_iface.lpVtbl = &WMPNetworkVtbl;
++
++    wmp->video_window = NULL;
++    wmp->play_state = wmppsUndefined;
++    wmp->open_state = wmposUndefined;
++    wmp->stretch_to_fit = VARIANT_TRUE;
++    wmp->windowless = VARIANT_FALSE;
++    wmp->enable_context_menu = VARIANT_TRUE;
++    wmp->enabled = VARIANT_TRUE;
+ 
+     name = SysAllocString(L"Playlist1");
+     if (SUCCEEDED(create_playlist(name, NULL, 0, &playlist)))
+@@ -2280,6 +2661,10 @@
+ void destroy_player(WindowsMediaPlayer *wmp)
+ {
+     IWMPControls_stop(&wmp->IWMPControls_iface);
++    if (wmp->video_window) {
++        IVideoWindow_Release(wmp->video_window);
++        wmp->video_window = NULL;
++    }
+     if (wmp->media)
+         IWMPMedia_Release(&wmp->media->IWMPMedia_iface);
+     if (wmp->playlist)

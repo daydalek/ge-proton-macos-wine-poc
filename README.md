@@ -121,6 +121,28 @@ CrossOver 核心补丁支持 Whisky 已有的 `WINED3DMETAL=0`：将 `dxgi`、`d
 
 `llvm-mingw`（Clang + LLD）在 `-fms-hotpatch` 下为 32 位 PE 函数生成 `66 90` 入口，并由链接器以 `0xcc` 填充节间空隙。`patches/crossover/i386-hotpatch-prologue.patch` 将 Clang i386 的 `DECLSPEC_HOTPATCH` 映射为 `__patchable_function_entry__(8, 6)` 与 `__noinline__`，由 `winebuild --builtin` 将带五字节 `0x90` 预留区的 `66 90` 入口改写为传统 `8b ff`（`mov edi, edi`），并为 `CreateFontIndirectA`、`GetGlyphOutlineA`、`EnumFontFamiliesExA`、`AppendMenuA`（连同已有的 `CreateWindowExA`、`SetWindowTextA`）补齐热补丁标注，兼容依赖 `90 90 90 90 90 | 8b ff` 入口假设的旧式汉化与注入组件。
 
+#### WMP ActiveX 内嵌播放
+
+`patches/crossover/wmp-activex-player2-embedding.patch` 为 ActiveX 宿主提供
+IDL 生成的 `IWMPPlayer2` 接口、播放器属性与状态、暂停和关闭处理，以及重复
+设置站点时的窗口保留。DirectShow 视频窗口跟随控件父窗口和尺寸。
+macOS 内嵌播放优先使用 VMR9 独立视频表面；其他驱动沿用 DirectShow 默认选择。
+补丁按宿主模式和驱动选择行为，可用于采用相同 WMP 接口的应用。
+
+`full` 和 `media` 构建均包含 `wmp.dll`。通过以下探针检查接口、ATL 内嵌窗口和
+静音播放；视频参数由调用者提供，建议使用超过 5 秒的文件：
+
+```sh
+bash tools/probes/build-probes.sh
+wine tools/probes/wmp-probe-x86.exe
+wine tools/probes/wmp-probe-x86.exe --embed
+wine tools/probes/wmp-probe-x86.exe --embed 'Z:\path\to\video.wmv'
+```
+
+x64 验证使用 `wmp-probe-x64.exe`。返回码 0 表示探针通过；实际应用的画面、
+同步和帧间隔需要在宿主内验证。当前实现范围为窗口化视频播放，完整 WMP 皮肤、
+全屏和真正的无窗口视频另需实现。
+
 ---
 
 ## 打包与发布检查

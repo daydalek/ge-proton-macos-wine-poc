@@ -2231,10 +2231,54 @@
         "Copyright 2002 Lionel Ulmer",
         "Copyright 2004 Christian Costa"
       ]
+    },
+    {
+      "patch": "patches/crossover/wmp-activex-player2-embedding.patch",
+      "source_file": "dlls/wmp/wmp_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "51f9f8b6e3afc40f6c0b2d94dde2bcca6fc29c3d1046b3c1094d33eb5a2da064",
+      "copyright_notices": [
+        "Copyright 2014 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/wmp-activex-player2-embedding.patch",
+      "source_file": "dlls/wmp/oleobj.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "b36e39b093984deb6e3d64b6b66da8f97e6a98c278a3c375b87e014190503329",
+      "copyright_notices": [
+        "Copyright 2014 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/wmp-activex-player2-embedding.patch",
+      "source_file": "dlls/wmp/player.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "3522ea6b8559e371d7c2c135a7ae4a613e14e9e465277be16454f357e8fe2ecf",
+      "copyright_notices": [
+        "Copyright 2014 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/wmp-activex-player2-embedding.patch",
+      "source_file": "include/wmp.idl",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source before this patch",
+      "source_sha256": "246fc13617029eef8b5f933c6a1ec8d0b0f9213811dd4554cc327f03f592ec46",
+      "copyright_notices": [
+        "Copyright 2014 Jacek Caban for CodeWeavers"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 194,
+    "LGPL-2.1-or-later": 198,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2264,6 +2308,7 @@
     "patches/linux/crossover-pulse-build.patch": "6bc8c58824516d2501ffda1ccabb2d5c810ca178173bd6a60cf62f6173a5bfe4",
     "patches/linux/quartz-pause-position.patch": "974ea8187dc61b9a310df210f4d5c9aff32f9a9f007e4e9c6de861b9d5a1b189",
     "patches/crossover/winedmo-seek-generation.patch": "a0d453fd8e1c6f072982eedf53523727e5532d71d2aa7dbbca72ac9ebe49d988",
-    "patches/linux/quartz-no-position-transition.patch": "9a61eae8fd2f5bcc0784903f74fe677c1d9ea3bff920da2c971314430787dc7c"
+    "patches/linux/quartz-no-position-transition.patch": "9a61eae8fd2f5bcc0784903f74fe677c1d9ea3bff920da2c971314430787dc7c",
+    "patches/crossover/wmp-activex-player2-embedding.patch": "6fd0f0f466b7e628c0292bf047aff0f19d7c88528d8ca62e67697b03d5f98894"
   }
 }

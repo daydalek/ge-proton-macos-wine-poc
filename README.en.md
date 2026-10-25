@@ -152,6 +152,30 @@ entries preceded by five `0x90` bytes to `8b ff` (`mov edi, edi`) during
 `EnumFontFamiliesExA`, and `AppendMenuA` alongside the existing `CreateWindowExA`
 and `SetWindowTextA` hotpatch markers.
 
+#### WMP ActiveX embedded playback
+
+`patches/crossover/wmp-activex-player2-embedding.patch` adds an IDL-generated
+`IWMPPlayer2` interface, player properties and state, pause/close handling, and
+preserves the activated window when a host sets the same site again. The
+DirectShow video window follows the control's parent and size. Embedded playback
+on macOS prefers a VMR9 child surface; other drivers retain normal DirectShow
+renderer selection. Behavior is selected by hosting mode and driver.
+
+Both `full` and `media` builds include `wmp.dll`. The probe checks interfaces,
+ATL embedding and silent playback. Supply a video longer than five seconds:
+
+```sh
+bash tools/probes/build-probes.sh
+wine tools/probes/wmp-probe-x86.exe
+wine tools/probes/wmp-probe-x86.exe --embed
+wine tools/probes/wmp-probe-x86.exe --embed 'Z:\path\to\video.wmv'
+```
+
+Use `wmp-probe-x64.exe` for x64 coverage. Exit code 0 indicates probe success.
+Visual presentation, synchronization and frame pacing require host-application
+validation. The implementation covers windowed video playback; full WMP skins,
+fullscreen and true windowless video remain separate implementation work.
+
 ---
 
 ## Packaging and release checks
