@@ -7,6 +7,9 @@ toolchain="$POC_LLVM_MINGW/bin"
 poc_require_path "$toolchain/i686-w64-mingw32-clang" "run scripts/build-deps.sh"
 for target in i686 x86_64; do
     case "$target" in i686) bits=x86;; x86_64) bits=x64;; esac
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -Werror -O2 -municode \
+      "$kit/media-vfs-lifetime-probe.c" -o "$kit/media-vfs-lifetime-probe-$bits.exe" \
+      -lole32 -lstrmiids -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -O2 \
       "$kit/backend-switch-probe.c" -o "$kit/backend-switch-probe-$bits.exe" -ldxguid -luser32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 \

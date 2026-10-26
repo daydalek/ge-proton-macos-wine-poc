@@ -1,0 +1,203 @@
+Subject: quartz: retain media probe handles until source loading completes
+License: LGPL-2.1-or-later
+
+Archive-backed Win32 file hooks can release their decoded stream cache when
+its last handle closes. Quartz probes the media type before loading a source
+filter, leaving a close/reopen gap that can invalidate the stream. A later
+IAsyncReader::SyncRead can then return S_FALSE and graph construction can fail
+with VFW_E_CANNOT_RENDER even though the original media is valid.
+
+Allow get_media_type callers to take ownership of its probe handle, including
+on an unsuccessful type match. RenderFile retains that handle across source
+selection and the ASF fallback. AddSourceFilter retains it until the source
+has loaded. Both release it on every success and failure exit. FileSource_Load
+continues using a short-lived probe because it already owns the stream handle.
+
+This applies to archive-backed VFS hooks regardless of application name or
+media path. It complements quartz-filesource-vfs-fallback.patch, which handles
+legacy file-size APIs and synchronous I/O. This patch targets the repository's
+prepared CrossOver source and its existing ASF selection changes.
+
+--- a/dlls/quartz/filesource.c
++++ b/dlls/quartz/filesource.c
+@@ -196,7 +196,8 @@
+     return !memcmp(header, asf_header_guid, sizeof(header));
+ }
+ 
+-BOOL get_media_type(const WCHAR *filename, GUID *majortype, GUID *subtype, GUID *source_clsid)
++BOOL get_media_type(const WCHAR *filename, GUID *majortype, GUID *subtype, GUID *source_clsid,
++        HANDLE *ret_file)
+ {
+     WCHAR extensions_path[278] = L"Media Type\\Extensions\\";
+     DWORD majortype_idx, size;
+@@ -204,6 +205,8 @@
+     HKEY parent_key;
+     HANDLE file;
+ 
++    if (ret_file) *ret_file = INVALID_HANDLE_VALUE;
++
+     if ((ext = wcsrchr(filename, '.')))
+     {
+         WCHAR guidstr[39];
+@@ -235,6 +238,10 @@
+         WARN("Failed to open file %s, error %lu.\n", debugstr_w(filename), GetLastError());
+         return FALSE;
+     }
++
++    /* Keep archive-backed streams alive until the source filter has opened its
++     * own handle. Some legacy VFS hooks discard cached data at the last close. */
++    if (ret_file) *ret_file = file;
+ 
+     if (is_asf_stream(file))
+     {
+@@ -248,13 +255,13 @@
+         if (source_clsid)
+             *source_clsid = CLSID_WMAsfReader;
+ 
+-        CloseHandle(file);
++        if (!ret_file) CloseHandle(file);
+         return TRUE;
+     }
+ 
+     if (RegOpenKeyExW(HKEY_CLASSES_ROOT, L"Media Type", 0, KEY_READ, &parent_key))
+     {
+-        CloseHandle(file);
++        if (!ret_file) CloseHandle(file);
+         return FALSE;
+     }
+ 
+@@ -322,7 +329,7 @@
+                 RegCloseKey(subtype_key);
+                 RegCloseKey(majortype_key);
+                 RegCloseKey(parent_key);
+-                CloseHandle(file);
++                if (!ret_file) CloseHandle(file);
+                 return TRUE;
+             }
+ 
+@@ -334,7 +341,7 @@
+     }
+ 
+     RegCloseKey(parent_key);
+-    CloseHandle(file);
++    if (!ret_file) CloseHandle(file);
+     return FALSE;
+ }
+ 
+@@ -549,7 +556,7 @@
+     if (!pmt)
+     {
+         CopyMediaType(&This->mt, &default_mt);
+-        if (get_media_type(pszFileName, &This->mt.majortype, &This->mt.subtype, NULL))
++        if (get_media_type(pszFileName, &This->mt.majortype, &This->mt.subtype, NULL, NULL))
+         {
+             TRACE("Found major type %s, subtype %s.\n",
+                     debugstr_guid(&This->mt.majortype), debugstr_guid(&This->mt.subtype));
+--- a/dlls/quartz/filtergraph.c
++++ b/dlls/quartz/filtergraph.c
+@@ -1691,6 +1691,7 @@
+     struct filter_graph *graph = impl_from_IFilterGraph2(iface);
+     IFileSourceFilter *filesource;
+     IBaseFilter *filter;
++    HANDLE probe_file = INVALID_HANDLE_VALUE;
+     HRESULT hr;
+     GUID clsid;
+ 
+@@ -1702,7 +1703,7 @@
+ 
+     if (source_clsid)
+         clsid = *source_clsid;
+-    else if (!get_media_type(filename, NULL, NULL, &clsid))
++    else if (!get_media_type(filename, NULL, NULL, &clsid, &probe_file))
+         clsid = CLSID_AsyncReader;
+     TRACE("Using source filter %s.\n", debugstr_guid(&clsid));
+ 
+@@ -1710,14 +1711,14 @@
+             &IID_IBaseFilter, (void **)&filter)))
+     {
+         WARN("Failed to create filter, hr %#lx.\n", hr);
+-        return hr;
++        goto done;
+     }
+ 
+     if (FAILED(hr = IBaseFilter_QueryInterface(filter, &IID_IFileSourceFilter, (void **)&filesource)))
+     {
+         WARN("Failed to get IFileSourceFilter, hr %#lx.\n", hr);
+         IBaseFilter_Release(filter);
+-        return hr;
++        goto done;
+     }
+ 
+     hr = IFileSourceFilter_Load(filesource, filename, NULL);
+@@ -1726,18 +1727,22 @@
+     {
+         WARN("Failed to load file, hr %#lx.\n", hr);
+         IBaseFilter_Release(filter);
+-        return hr;
++        goto done;
+     }
+ 
+     if (FAILED(hr = IFilterGraph2_AddFilter(iface, filter, filter_name)))
+     {
+         IBaseFilter_Release(filter);
+-        return hr;
++        goto done;
+     }
+ 
+     if (ret_filter)
+         *ret_filter = filter;
+-    return S_OK;
++    hr = S_OK;
++
++done:
++    if (probe_file != INVALID_HANDLE_VALUE) CloseHandle(probe_file);
++    return hr;
+ }
+ 
+ static BOOL filter_in_snapshot(IBaseFilter *filter, IBaseFilter **snapshot, unsigned int count)
+@@ -1861,6 +1866,7 @@
+         LPCWSTR lpcwstrPlayList)
+ {
+     struct filter_graph *graph = impl_from_IFilterGraph2(iface);
++    HANDLE probe_file = INVALID_HANDLE_VALUE;
+     GUID source_clsid;
+     HRESULT hr;
+ 
+@@ -1869,19 +1875,23 @@
+     if (lpcwstrPlayList != NULL)
+         return E_INVALIDARG;
+ 
+-    if (get_media_type(lpcwstrFile, NULL, NULL, &source_clsid)
++    if (get_media_type(lpcwstrFile, NULL, NULL, &source_clsid, &probe_file)
+             && IsEqualGUID(&source_clsid, &CLSID_WMAsfReader))
+     {
+         TRACE("Trying async reader before ASF source reader for %s.\n", debugstr_w(lpcwstrFile));
+ 
+         hr = render_file_with_source_filter(iface, lpcwstrFile, &CLSID_AsyncReader);
+         if (hr == S_OK)
+-            return hr;
++            goto done;
+ 
+         TRACE("Async reader failed with %#lx; falling back to ASF source reader.\n", hr);
+     }
+ 
+-    return render_file_with_source_filter(iface, lpcwstrFile, NULL);
++    hr = render_file_with_source_filter(iface, lpcwstrFile, NULL);
++
++done:
++    if (probe_file != INVALID_HANDLE_VALUE) CloseHandle(probe_file);
++    return hr;
+ }
+ 
+ static HRESULT WINAPI FilterGraph2_AddSourceFilter(IFilterGraph2 *iface,
+--- a/dlls/quartz/quartz_private.h
++++ b/dlls/quartz/quartz_private.h
+@@ -77,7 +77,7 @@
+ extern const char * qzdebugstr_guid(const GUID * id);
+ extern void video_unregister_windowclass(void);
+ 
+-BOOL get_media_type(const WCHAR *filename, GUID *majortype, GUID *subtype, GUID *source_clsid);
++BOOL get_media_type(const WCHAR *filename, GUID *majortype, GUID *subtype, GUID *source_clsid, HANDLE *ret_file);
+ 
+ struct video_window
+ {
