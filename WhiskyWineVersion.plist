@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>downloadURL</key>
-	<string>https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.8/Libraries.tar.gz</string>
+	<string>https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.9/Libraries.tar.gz</string>
 	<key>dxvkVersion</key>
 	<string>1.10.3</string>
 	<key>gptkCapable</key>
 	<true/>
 	<key>sha256</key>
-	<string>187d94bd2fc2d479f6241fb3281a0d0b4812289d963612b784716ff4a27faa33</string>
+	<string>cd6808b3d9e0eb5fc2f5187483844ea296f5cb03b02b11e426617c1a77607961</string>
 	<key>version</key>
 	<dict>
 		<key>major</key>
@@ -17,7 +17,7 @@
 		<key>minor</key>
 		<integer>0</integer>
 		<key>patch</key>
-		<integer>39</integer>
+		<integer>41</integer>
 	</dict>
 </dict>
 </plist>
