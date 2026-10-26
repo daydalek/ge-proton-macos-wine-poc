@@ -60,3 +60,46 @@ native Windows behavior, and upstream Wine integration need their own evidence.
 The patch is based on this repository's prepared CrossOver source and existing
 ASF source-selection changes. A clean upstream submission requires rebasing
 and a separately distributable synthetic VFS fixture.
+
+## Repeat-load coverage
+
+`repeat-render` and `repeat-source` run three complete create/use/release rounds
+in one process, loading the optional hook once. They cover resources released
+between independent graphs. A successful first graph alone does not establish
+repeat-load compatibility.
+
+Follow-up investigation found that the specific translation DLL also omits a
+reference-count increment when reusing an unloaded cache descriptor. With the
+Wine probe-lifetime patch, round one passes and later source reads return
+`S_FALSE`. A checksum-scoped local correction to that DLL passed three source
+and three render rounds. This application-specific defect is separate from
+the generic probe-handle ownership patch; the proprietary DLL is an external
+fixture. The user confirmed repeated in-game playback after skipping and reloading on 2026-10-26.
+
+### Reproducing the version-specific DLL correction
+
+The local repair is reproducible with `scripts/patch-eustia-vfs.py`:
+
+```sh
+python3 scripts/patch-eustia-vfs.py /path/to/original/Game.dll /path/to/Game.dll.repaired
+```
+
+The tool requires original SHA-256
+`699e1c51f74b46a8f34397203a4da0318808fcd7393815abda7f570ffc046648`
+and verifies output SHA-256
+`5b5677650f304c49338b2b54afe6af5a4f050959bf81b14a67d43d70f614fcab`.
+It creates a new output exclusively; preserve the original and exit the game
+before installing the output as `Game.dll`. Restore the original for rollback.
+The generated binary is locally modified, including any signature validity;
+its output hash identifies the verified repair. The repository contains the
+repair recipe and regression tools; users supply their own licensed DLL.
+
+At RVA `0x5e2d`, a trampoline preserves the new-descriptor allocation branch
+and adds the missing reference for an existing unloaded descriptor through
+the original helper at RVA `0x33f0`. It uses verified padding at RVA `0x25f00`
+and extends the `.text` virtual size to cover that code. All branches are
+relative. This correction applies exclusively to the hash above.
+
+Automated same-process comparisons: the original DLL fails later rounds of
+both repeat modes; the corrected DLL passes all three rounds of each mode.
+The user additionally confirmed the in-game skip/read-save/replay sequence.

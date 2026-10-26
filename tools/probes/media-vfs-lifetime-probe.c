@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later
- * Usage: probe.exe render|source|missing <absolute media path> [hook DLL]
+ * Usage: probe.exe render|source|missing|repeat-render|repeat-source <path> [hook DLL]
  * For hooks gated on the executable name, use the expected basename in an
  * isolated directory containing the hook's read-only resource fixtures.
  * Creates a graph without starting playback. source verifies a readable pin.
@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <wchar.h>
 
-int wmain(int argc, wchar_t **argv)
+static int run_once(const wchar_t *mode, const wchar_t *filename)
 {
     IGraphBuilder *graph = NULL;
     IBaseFilter *source = NULL;
@@ -20,26 +20,16 @@ int wmain(int argc, wchar_t **argv)
     HRESULT hr;
     int result = 1;
 
-    if (argc < 3 || argc > 4
-            || (wcscmp(argv[1], L"render") && wcscmp(argv[1], L"source")
-                && wcscmp(argv[1], L"missing")))
-    {
-        fputs("Usage: probe.exe render|source|missing <absolute media path> [hook DLL]\n", stderr);
-        return 2;
-    }
-    if (argc == 4 && !LoadLibraryW(argv[3])) return 3;
-    hr = CoInitialize(NULL);
-    if (FAILED(hr)) return 4;
     hr = CoCreateInstance(&CLSID_FilterGraph, NULL, CLSCTX_INPROC_SERVER,
             &IID_IGraphBuilder, (void **)&graph);
     printf("FilterGraph=%08lx\n", (unsigned long)hr);
     if (FAILED(hr)) goto done;
 
-    if (!wcscmp(argv[1], L"source"))
+    if (!wcscmp(mode, L"source"))
     {
         BYTE bytes[32] = {0};
         unsigned int i;
-        hr = IGraphBuilder_AddSourceFilter(graph, argv[2], L"Source", &source);
+        hr = IGraphBuilder_AddSourceFilter(graph, filename, L"Source", &source);
         printf("AddSourceFilter=%08lx\n", (unsigned long)hr);
         if (FAILED(hr)) goto done;
         hr = IBaseFilter_EnumPins(source, &pins);
@@ -55,9 +45,9 @@ int wmain(int argc, wchar_t **argv)
     }
     else
     {
-        hr = IGraphBuilder_RenderFile(graph, argv[2], NULL);
+        hr = IGraphBuilder_RenderFile(graph, filename, NULL);
         printf("RenderFile=%08lx\n", (unsigned long)hr);
-        result = !wcscmp(argv[1], L"missing") ? SUCCEEDED(hr) : hr != S_OK;
+        result = !wcscmp(mode, L"missing") ? SUCCEEDED(hr) : hr != S_OK;
     }
 done:
     if (reader) IAsyncReader_Release(reader);
@@ -65,6 +55,38 @@ done:
     if (pins) IEnumPins_Release(pins);
     if (source) IBaseFilter_Release(source);
     if (graph) IGraphBuilder_Release(graph);
+    return result;
+}
+
+int wmain(int argc, wchar_t **argv)
+{
+    const wchar_t *mode;
+    unsigned int i, rounds = 1;
+    int result = 0;
+
+    if (argc < 3 || argc > 4) return 2;
+    mode = argv[1];
+    if (!wcscmp(mode, L"repeat-render") || !wcscmp(mode, L"repeat-source"))
+    {
+        mode += 7;
+        rounds = 3;
+    }
+    if (wcscmp(mode, L"render") && wcscmp(mode, L"source") && wcscmp(mode, L"missing"))
+    {
+        fputs("Usage: probe.exe render|source|missing|repeat-render|repeat-source <path> [hook DLL]\n", stderr);
+        return 2;
+    }
+    if (argc == 4 && !LoadLibraryW(argv[3])) return 3;
+    if (FAILED(CoInitialize(NULL))) return 4;
+    for (i = 0; i < rounds; ++i)
+    {
+        int current;
+        printf("ROUND=%u\n", i + 1);
+        current = run_once(mode, argv[2]);
+        printf("ROUND_RESULT=%d\n", current);
+        fflush(stdout);
+        result |= current;
+    }
     CoUninitialize();
     return result;
 }
