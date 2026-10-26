@@ -1,0 +1,583 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-26
+Scope: Optional Anime4K and Real-CUGAN GDI presentation, exact frame-difference caching, and adaptive MetalFX/Real-CUGAN scheduling.
+Baseline: macos-metalfx-spatial.patch with the existing GDI fullscreen crop.
+Native algorithm libraries retain their own MIT and BSD licenses. Wine glue uses LGPL-2.1-or-later.
+
+diff --git a/dlls/winemac.drv/Makefile.in b/dlls/winemac.drv/Makefile.in
+--- a/dlls/winemac.drv/Makefile.in
++++ b/dlls/winemac.drv/Makefile.in
+@@ -25,6 +25,7 @@
+ 	cocoa_main.m \
+ 	cocoa_opengl.m \
+ 	cocoa_spatial.m \
++	cocoa_upscaler.m \
+ 	cocoa_status_item.m \
+ 	cocoa_window.m \
+ 	d3dmetal.c \
+diff --git a/dlls/winemac.drv/cocoa_upscaler.h b/dlls/winemac.drv/cocoa_upscaler.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_upscaler.h
+@@ -0,0 +1,36 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#import "cocoa_spatial.h"
++#include "wine_gdi_upscaler.h"
++#include "wine_gdi_frame_diff.h"
++#include "wine_gdi_upscale_policy.h"
++
++@interface WineGDIUpscaler : NSObject
++{
++    WineSpatialScaler *metalFX;
++    unsigned algorithm;
++    void *context;
++    BOOL inFlight, failed;
++    NSData *latestInput, *resultInput;
++    NSMutableData *capture;
++    CGContextRef captureBitmap;
++    NSUInteger captureWidth, captureHeight;
++    NSUInteger inferenceCount, cacheHitCount;
++    NSUInteger fastInferenceCount;
++    BOOL neuralFailed, fastFailed, stabilityTimerPending;
++    struct wgdi_stability stability;
++    NSData *fastInput;
++    CGImageRef fastResult;
++    NSUInteger fastWidth, fastHeight;
++    NSUInteger fastInputWidth, fastInputHeight;
++    CGImageRef result;
++    NSUInteger latestWidth, latestHeight, latestOutputWidth, latestOutputHeight;
++    NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
++}
+++ (BOOL) enabled;
++- (NSUInteger) inferenceCount;
++- (NSUInteger) cacheHitCount;
++- (NSUInteger) neuralInferenceCount;
++- (NSUInteger) fastInferenceCount;
++- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++                 needsDisplay:(void (^)(void))needsDisplay;
++@end
+diff --git a/dlls/winemac.drv/cocoa_upscaler.m b/dlls/winemac.drv/cocoa_upscaler.m
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_upscaler.m
+@@ -0,0 +1,272 @@
++/*
++ * Optional GDI upscaler selection and asynchronous neural presentation.
++ * Copyright 2026 GE-Proton macOS Wine PoC contributors
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++#import "cocoa_upscaler.h"
++#include <dlfcn.h>
++#include <stdlib.h>
++#include <string.h>
++
++enum { UPSCALE_OFF = 0, UPSCALE_METALFX = 3, UPSCALE_ADAPTIVE = 4 };
++
++static unsigned selected_algorithm(void)
++{
++    static unsigned selected;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        const char *mode = getenv("WINE_GDI_UPSCALER");
++        if (mode)
++        {
++            if (!strcmp(mode, "metalfx")) selected = UPSCALE_METALFX;
++            else if (!strcmp(mode, "anime4k")) selected = WGDI_ANIME4K;
++            else if (!strcmp(mode, "realcugan")) selected = WGDI_REALCUGAN;
++            else if (!strcmp(mode, "adaptive")) selected = UPSCALE_ADAPTIVE;
++            else if (strcmp(mode, "off")) NSLog(@"Wine GDI upscaler: unknown mode; using standard presentation");
++        }
++        else
++        {
++            const char *legacy = getenv("WINE_METALFX");
++            if (legacy && !strcmp(legacy, "spatial")) selected = UPSCALE_METALFX;
++        }
++    });
++    return selected;
++}
++
++/* One global worker bounds concurrent neural inference across views. Each view
++ * keeps one active job and one latest input snapshot; no frame queue grows. */
++static dispatch_queue_t inference_queue(void)
++{
++    static dispatch_queue_t queue;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        queue = dispatch_queue_create("wine.gdi.upscalers", DISPATCH_QUEUE_SERIAL);
++        dispatch_set_target_queue(queue, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
++    });
++    return queue;
++}
++
++static const struct wgdi_upscaler_api *backend_api(NSString **resources)
++{
++    static const struct wgdi_upscaler_api *api;
++    static NSString *directory;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        Dl_info info;
++        if (!dladdr((const void *)backend_api, &info)) return;
++        NSString *driver = [NSString stringWithUTF8String:info.dli_fname];
++        NSString *library = [[driver stringByDeletingLastPathComponent]
++                            stringByAppendingPathComponent:@"libwinegdiupscalers.dylib"];
++        const char *override = getenv("WINE_GDI_UPSCALER_LIBRARY");
++        if (override && override[0] == '/') library = [NSString stringWithUTF8String:override];
++        void *handle = dlopen(library.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
++        if (!handle) return;
++        const struct wgdi_upscaler_api *(*get_api)(uint32_t) = dlsym(handle, "wgdi_upscaler_get_api");
++        if (get_api) api = get_api(WGDI_UPSCALER_ABI);
++        if (api && (api->size != sizeof(*api) || api->abi_version != WGDI_UPSCALER_ABI ||
++                    !api->create || !api->process || !api->destroy)) api = NULL;
++        if (api) directory = [[[library stringByDeletingLastPathComponent]
++                              stringByAppendingPathComponent:@"gdi-upscalers"] copy];
++        /* Keep the library loaded: worker tasks and context destructors retain
++         * function pointers into it for the lifetime of the Wine process. */
++    });
++    if (resources) *resources = directory;
++    return api;
++}
++
++@implementation WineGDIUpscaler
++
+++ (BOOL) enabled { return selected_algorithm() != UPSCALE_OFF; }
++
++- (id) init
++{
++    self = [super init];
++    if (!self) return nil;
++    algorithm = selected_algorithm();
++    if (algorithm == UPSCALE_METALFX || algorithm == UPSCALE_ADAPTIVE)
++    {
++        metalFX = [[WineSpatialScaler alloc] init];
++        if (!metalFX && algorithm == UPSCALE_METALFX) { [self release]; return nil; }
++    }
++    return self;
++}
++
++- (void) dealloc
++{
++    [metalFX release];
++    [latestInput release];
++    [resultInput release];
++    [fastInput release];
++    CGContextRelease(captureBitmap);
++    [capture release];
++    CGImageRelease(result);
++    CGImageRelease(fastResult);
++    if (context)
++    {
++        void *retired = context;
++        const struct wgdi_upscaler_api *api = backend_api(NULL);
++        dispatch_async(inference_queue(), ^{ api->destroy(retired); });
++    }
++    [super dealloc];
++}
++
++- (NSUInteger) inferenceCount { return inferenceCount + fastInferenceCount; }
++- (NSUInteger) cacheHitCount { return cacheHitCount; }
++- (NSUInteger) neuralInferenceCount { return inferenceCount; }
++- (NSUInteger) fastInferenceCount { return fastInferenceCount; }
++
++- (NSTimeInterval) frameTime { return NSProcessInfo.processInfo.systemUptime; }
++
++- (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++{
++    if (!metalFX || fastFailed) return NULL;
++    if (fastResult && fastWidth == width && fastHeight == height &&
++        fastInputWidth == latestWidth && fastInputHeight == latestHeight && [fastInput isEqualToData:latestInput])
++    {
++        ++cacheHitCount;
++        return CGImageRetain(fastResult);
++    }
++    ++fastInferenceCount;
++    CGImageRef scaled = [metalFX copyScaledImage:image width:width height:height];
++    if (!scaled) { fastFailed = YES; return NULL; }
++    CGImageRelease(fastResult);
++    fastResult = scaled;
++    [fastInput release];
++    fastInput = [latestInput retain];
++    fastWidth = width; fastHeight = height;
++    fastInputWidth = latestWidth; fastInputHeight = latestHeight;
++    return CGImageRetain(fastResult);
++}
++
++- (void) requestStableRedisplay:(void (^)(void))needsDisplay after:(double)remaining
++{
++    if (stabilityTimerPending || !needsDisplay) return;
++    stabilityTimerPending = YES;
++    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(remaining * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++        stabilityTimerPending = NO;
++        needsDisplay();
++    });
++}
++
++- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++                 needsDisplay:(void (^)(void))needsDisplay
++{
++    NSAssert([NSThread isMainThread], @"Wine GDI upscaler presentation requires the main thread");
++    if (failed || !image || algorithm == UPSCALE_OFF) return NULL;
++    NSUInteger iw = CGImageGetWidth(image), ih = CGImageGetHeight(image);
++    if (!iw || !ih || iw > 8192 || ih > 8192 || iw * ih > 32 * 1024 * 1024 ||
++        width <= iw || height <= ih || width > 8192 || height > 8192 ||
++        width * height > 32 * 1024 * 1024) return NULL;
++    BOOL neuralSize = iw <= 4096 && ih <= 4096 && iw * ih <= 2 * 1024 * 1024 &&
++                      width <= iw * 2 && height <= ih * 2;
++    if (algorithm != UPSCALE_METALFX && algorithm != UPSCALE_ADAPTIVE && !neuralSize) return NULL;
++    if (iw != captureWidth || ih != captureHeight)
++    {
++        CGContextRelease(captureBitmap);
++        [capture release];
++        capture = [[NSMutableData alloc] initWithLength:iw * ih * 4];
++        CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++        captureBitmap = CGBitmapContextCreate(capture.mutableBytes, iw, ih, 8, iw * 4, space,
++                                              kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
++        CGColorSpaceRelease(space);
++        if (!captureBitmap) { failed = YES; return NULL; }
++        CGContextSetBlendMode(captureBitmap, kCGBlendModeCopy);
++        captureWidth = iw; captureHeight = ih;
++    }
++    CGContextDrawImage(captureBitmap, CGRectMake(0, 0, iw, ih), image);
++    struct wgdi_image previous = {(uint8_t *)latestInput.bytes, latestInput.length,
++                                  latestWidth * 4, latestWidth, latestHeight};
++    struct wgdi_image current = {capture.mutableBytes, capture.length, iw * 4, iw, ih};
++    BOOL frameChanged = !wgdi_frames_equal(&previous, &current);
++    BOOL geometryChanged = latestOutputWidth != width || latestOutputHeight != height;
++    if (frameChanged)
++    {
++        [latestInput release];
++        latestInput = [capture copy];
++    }
++    latestWidth = iw; latestHeight = ih;
++    latestOutputWidth = width; latestOutputHeight = height;
++    if (algorithm == UPSCALE_METALFX) return [self copyFastImage:image width:width height:height];
++    if (algorithm == UPSCALE_ADAPTIVE)
++    {
++        double remaining = wgdi_stability_observe(&stability, frameChanged || geometryChanged, [self frameTime]);
++        if (remaining > 0 || !neuralSize || neuralFailed)
++        {
++            if (neuralSize && !neuralFailed) [self requestStableRedisplay:needsDisplay after:remaining];
++            return [self copyFastImage:image width:width height:height];
++        }
++    }
++    /* Exact byte equality ties a completed neural image to the current Wine
++     * surface. An older dialogue/frame can never be overlaid on a newer one. */
++    if (result && resultWidth == iw && resultHeight == ih &&
++        resultOutputWidth == width && resultOutputHeight == height &&
++        [resultInput isEqualToData:latestInput])
++    {
++        ++cacheHitCount;
++        return CGImageRetain(result);
++    }
++    if (inFlight)
++        return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++    ++inferenceCount;
++    inFlight = YES;
++    NSData *jobInput = latestInput;
++    dispatch_async(inference_queue(), ^{
++        @autoreleasepool
++        {
++            NSString *resources = nil;
++            const struct wgdi_upscaler_api *api = backend_api(&resources);
++            char error[512] = "native upscaler library unavailable or ABI mismatch";
++            if (api && !context)
++            {
++                struct wgdi_options options = {sizeof(options), algorithm == UPSCALE_ADAPTIVE ? WGDI_REALCUGAN : algorithm,
++                                               resources.fileSystemRepresentation, 2};
++                context = api->create(&options, error, sizeof(error));
++                if (context) NSLog(@"Wine GDI upscaler: %@ initialized", algorithm == WGDI_ANIME4K ? @"Anime4K" : @"Real-CUGAN");
++            }
++            CGImageRef completed = NULL;
++            if (context)
++            {
++                NSMutableData *output = [NSMutableData dataWithLength:width * height * 4];
++                struct wgdi_image input = {(uint8_t *)jobInput.bytes, jobInput.length, iw * 4, iw, ih};
++                struct wgdi_image destination = {output.mutableBytes, output.length, width * 4, width, height};
++                if (!api->process(context, &input, &destination, error, sizeof(error)))
++                {
++                    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)output);
++                    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++                    if (provider && colorSpace)
++                        completed = CGImageCreate(width, height, 8, 32, width * 4, colorSpace,
++                            kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst, provider, NULL,
++                            FALSE, kCGRenderingIntentDefault);
++                    if (colorSpace) CGColorSpaceRelease(colorSpace);
++                    if (provider) CGDataProviderRelease(provider);
++                    if (!completed) strlcpy(error, "output CGImage allocation failed", sizeof(error));
++                }
++            }
++            NSString *message = completed ? nil : [NSString stringWithUTF8String:error];
++            dispatch_async(dispatch_get_main_queue(), ^{
++                inFlight = NO;
++                if (completed)
++                {
++                    CGImageRelease(result);
++                    result = completed;
++                    [resultInput release];
++                    resultInput = [jobInput retain];
++                    resultWidth = iw; resultHeight = ih;
++                    resultOutputWidth = width; resultOutputHeight = height;
++                }
++                else
++                {
++                    if (algorithm == UPSCALE_ADAPTIVE) neuralFailed = YES;
++                    else failed = YES;
++                    NSString *fallback = algorithm == UPSCALE_ADAPTIVE && metalFX && !fastFailed
++                        ? @"MetalFX" : @"standard GDI";
++                    NSLog(@"Wine GDI upscaler: %@ failed (%@); using %@ presentation",
++                          algorithm == WGDI_ANIME4K ? @"Anime4K" : @"Real-CUGAN", message, fallback);
++                }
++                if (needsDisplay) needsDisplay();
++            });
++        }
++    });
++    return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++}
++@end
+diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -32,7 +32,7 @@
+ #import "cocoa_app.h"
+ #import "cocoa_event.h"
+ #import "cocoa_opengl.h"
+-#import "cocoa_spatial.h"
++#import "cocoa_upscaler.h"
+ #import "d3dmetal_objc.h" /* CW HACK 22435 */
+ 
+ #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+@@ -376,9 +376,9 @@
+     int backingSize[2];
+ 
+     WineMetalView *_metalView;
+-    WineSpatialScaler *_spatialScaler;
+-    CALayer *_spatialLayer;
+-    BOOL _spatialUnavailable;
++    WineGDIUpscaler *_gdiUpscaler;
++    CALayer *_upscaleLayer;
++    BOOL _upscaleUnavailable;
+ 
+ @public void *d3dmetal_client_surface;   /* CW HACK 22435 */
+ }
+@@ -506,9 +506,9 @@
+         [pendingGlContexts release];
+         CGImageRelease(colorImage);
+         CGImageRelease(shapeImage);
+-        [_spatialLayer removeFromSuperlayer];
+-        [_spatialLayer release];
+-        [_spatialScaler release];
++        [_upscaleLayer removeFromSuperlayer];
++        [_upscaleLayer release];
++        [_gdiUpscaler release];
+         [super dealloc];
+     }
+ 
+@@ -525,7 +525,7 @@
+     - (void) viewDidChangeBackingProperties
+     {
+         [super viewDidChangeBackingProperties];
+-        if ([WineSpatialScaler enabled]) [self setNeedsDisplay:YES];
++        if ([WineGDIUpscaler enabled]) [self setNeedsDisplay:YES];
+     }
+ 
+     - (void) updateLayer
+@@ -535,7 +535,7 @@
+         CGRect imageRect;
+         CALayer* layer = [self layer];
+ 
+-        _spatialLayer.hidden = YES;
++        _upscaleLayer.hidden = YES;
+ 
+         if ([window contentView] != self)
+             return;
+@@ -571,7 +571,7 @@
+             /* The original surface keeps its Wine pixel coordinates. Only the
+              * presentation sublayer receives a physical-resolution image. */
+             if (!_everHadGLContext && ![self hasGLDescendant] && !_metalView &&
+-                !shapeImage && !window.usePerPixelAlpha && [WineSpatialScaler enabled])
++                !shapeImage && !window.usePerPixelAlpha && [WineGDIUpscaler enabled])
+             {
+                 CGFloat sourceScale = layer.contentsScale;
+                 CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
+@@ -586,27 +586,28 @@
+                 NSUInteger height = (NSUInteger)floor(physical.size.height);
+                 if (width > CGImageGetWidth(image) && height > CGImageGetHeight(image))
+                 {
+-                    if (!_spatialScaler && !_spatialUnavailable)
++                    if (!_gdiUpscaler && !_upscaleUnavailable)
+                     {
+-                        _spatialScaler = [[WineSpatialScaler alloc] init];
+-                        _spatialUnavailable = !_spatialScaler;
++                        _gdiUpscaler = [[WineGDIUpscaler alloc] init];
++                        _upscaleUnavailable = !_gdiUpscaler;
+                     }
+-                    CGImageRef scaled = [_spatialScaler copyScaledImage:image width:width height:height];
++                    CGImageRef scaled = [_gdiUpscaler copyScaledImage:image width:width height:height
++                        needsDisplay:^{ [self setNeedsDisplay:YES]; }];
+                     if (scaled)
+                     {
+-                        if (!_spatialLayer)
++                        if (!_upscaleLayer)
+                         {
+-                            _spatialLayer = [[CALayer alloc] init];
+-                            _spatialLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
++                            _upscaleLayer = [[CALayer alloc] init];
++                            _upscaleLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
+                                 @"position": [NSNull null], @"hidden": [NSNull null] };
+-                            _spatialLayer.contentsGravity = kCAGravityResize;
+-                            _spatialLayer.opaque = YES;
+-                            [layer addSublayer:_spatialLayer];
++                            _upscaleLayer.contentsGravity = kCAGravityResize;
++                            _upscaleLayer.opaque = YES;
++                            [layer addSublayer:_upscaleLayer];
+                         }
+-                        _spatialLayer.frame = target;
+-                        _spatialLayer.contentsScale = width / target.size.width;
+-                        _spatialLayer.contents = (id)scaled;
+-                        _spatialLayer.hidden = NO;
++                        _upscaleLayer.frame = target;
++                        _upscaleLayer.contentsScale = width / target.size.width;
++                        _upscaleLayer.contents = (id)scaled;
++                        _upscaleLayer.hidden = NO;
+                         CGImageRelease(scaled);
+                     }
+                 }
+@@ -662,7 +663,7 @@
+ 
+     - (void) addGLContext:(WineOpenGLContext*)context
+     {
+-        _spatialLayer.hidden = YES;
++        _upscaleLayer.hidden = YES;
+         BOOL hadContext = _everHadGLContext;
+         if (!glContexts)
+             glContexts = [[NSMutableArray alloc] init];
+@@ -759,7 +760,7 @@
+ 
+     - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device
+     {
+-        _spatialLayer.hidden = YES;
++        _upscaleLayer.hidden = YES;
+         if (_metalView) return _metalView;
+ 
+         WineMetalView* view = [[WineMetalView alloc] initWithFrame:[self bounds] device:device];
+diff --git a/dlls/winemac.drv/wine_gdi_frame_diff.h b/dlls/winemac.drv/wine_gdi_frame_diff.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/wine_gdi_frame_diff.h
+@@ -0,0 +1,33 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#ifndef WINE_GDI_FRAME_DIFF_H
++#define WINE_GDI_FRAME_DIFF_H
++#include "wine_gdi_upscaler.h"
++#include <string.h>
++
++/* Exact active-pixel frame comparison. Row padding has no visual meaning.
++ * Geometry is part of identity; one changed byte invalidates the frame cache,
++ * including isolated text/cursor changes that sampled hashes can overlook. */
++static inline int wgdi_frame_bounds_valid(const struct wgdi_image *image)
++{
++    size_t row;
++    if (!image || !image->pixels || !image->width || !image->height ||
++        image->width > 8192 || image->height > 8192 ||
++        image->width * image->height > 32u * 1024 * 1024) return 0;
++    row = (size_t)image->width * 4;
++    if (image->stride < row || image->buffer_bytes < row) return 0;
++    return image->height - 1 <= (image->buffer_bytes - row) / image->stride;
++}
++
++static inline int wgdi_frames_equal(const struct wgdi_image *previous, const struct wgdi_image *current)
++{
++    size_t row, y;
++    if (!wgdi_frame_bounds_valid(previous) || !wgdi_frame_bounds_valid(current) ||
++        previous->width != current->width || previous->height != current->height) return 0;
++    row = (size_t)previous->width * 4;
++    if (previous->stride == row && current->stride == row)
++        return !memcmp(previous->pixels, current->pixels, row * previous->height);
++    for (y = 0; y < previous->height; ++y)
++        if (memcmp(previous->pixels + y * previous->stride, current->pixels + y * current->stride, row)) return 0;
++    return 1;
++}
++#endif
+diff --git a/dlls/winemac.drv/wine_gdi_upscale_policy.h b/dlls/winemac.drv/wine_gdi_upscale_policy.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/wine_gdi_upscale_policy.h
+@@ -0,0 +1,25 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#ifndef WINE_GDI_UPSCALE_POLICY_H
++#define WINE_GDI_UPSCALE_POLICY_H
++
++#define WGDI_STABLE_SECONDS 0.250
++struct wgdi_stability
++{
++    double changed_at;
++    int observed;
++};
++
++/* Monotonic seconds and exact frame/geometry changes determine readiness.
++ * A changed frame always starts a new quiet interval. */
++static inline double wgdi_stability_observe(struct wgdi_stability *state, int changed, double now)
++{
++    double remaining;
++    if (changed || !state->observed || now < state->changed_at)
++    {
++        state->changed_at = now;
++        state->observed = 1;
++    }
++    remaining = WGDI_STABLE_SECONDS - (now - state->changed_at);
++    return remaining > 0 ? remaining : 0;
++}
++#endif
+diff --git a/dlls/winemac.drv/wine_gdi_upscaler.h b/dlls/winemac.drv/wine_gdi_upscaler.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/wine_gdi_upscaler.h
+@@ -0,0 +1,49 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#ifndef WINE_GDI_UPSCALER_H
++#define WINE_GDI_UPSCALER_H
++#include <stddef.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define WGDI_UPSCALER_ABI 1u
++enum wgdi_algorithm { WGDI_ANIME4K = 1, WGDI_REALCUGAN = 2 };
++
++/* Opaque sRGB BGRA8, top row first. Padding bytes belong to the caller.
++ * The caller owns all pixels; process() retains zero caller pointers. */
++struct wgdi_image
++{
++    uint8_t *pixels;
++    size_t buffer_bytes;
++    size_t stride;
++    uint32_t width, height;
++};
++
++struct wgdi_options
++{
++    uint32_t size;
++    uint32_t algorithm;
++    const char *resource_directory;
++    uint32_t cpu_threads;
++};
++
++/* A context is confined to one worker. Every function catches C++ exceptions.
++ * create/process report errors through a caller-owned, NUL-terminated buffer.
++ * process returns 0 on success and -1 on failure, preserving Wine's fallback. */
++struct wgdi_upscaler_api
++{
++    uint32_t abi_version;
++    uint32_t size;
++    void *(*create)(const struct wgdi_options *, char *error, size_t error_size);
++    int (*process)(void *, const struct wgdi_image *, struct wgdi_image *, char *, size_t);
++    void (*destroy)(void *);
++};
++
++const struct wgdi_upscaler_api *wgdi_upscaler_get_api(uint32_t abi_version);
++
++#ifdef __cplusplus
++}
++#endif
++#endif

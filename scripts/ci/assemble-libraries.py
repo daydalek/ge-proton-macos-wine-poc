@@ -81,6 +81,10 @@ def main():
     for name in ('source-lock.json', 'dependency-lock.json', 'source-license-inventory.json',
                  'vulkan-generation-lock.json', 'crossover-source-lock.json', 'crossover-patch-series.txt', 'build.env'):
         shutil.copy2(poc / 'configs' / name, notices / 'configs' / name)
+    shutil.copy2(poc / 'native/gdi-upscalers/dependencies.json', notices / 'configs/gdi-upscalers-dependencies.json')
+    gdi_manifest = wine_stage / '.gdi-upscalers-build.json'
+    if gdi_manifest.is_file():
+        shutil.copy2(gdi_manifest, notices / 'gdi-upscalers-build.json')
 
     # Every shipped symlink must resolve within Libraries after installation.
     for path in lib.rglob('*'):

@@ -16,7 +16,10 @@ parser.add_argument('--date', dest='change_date', help='ISO modification date; r
 args = parser.parse_args()
 if args.platform == 'linux' and not args.change_date:
     parser.error('--date is required for Linux notices')
-change_date = args.change_date or '2026-10-12'
+patch_texts = [patch.read_text() for patch in args.patch]
+patch_dates = [value for text in patch_texts
+               for value in re.findall(r'^Modification date: (\d{4}-\d{2}-\d{2})\s*$', text, re.M)]
+change_date = args.change_date or max(['2026-10-12', *patch_dates])
 try:
     if date.fromisoformat(change_date).isoformat() != change_date:
         raise ValueError('Expected YYYY-MM-DD')
@@ -24,8 +27,7 @@ except ValueError:
     parser.error('--date must be an ISO date')
 source = args.source.resolve()
 paths = set()
-for patch in args.patch:
-    text = patch.read_text()
+for text in patch_texts:
     paths.update(re.findall(r'^\+\+\+ b/(.+)$', text, flags=re.M))
 prefixes = ('GE macOS Wine PoC modification notice:', 'GE Wine Linux modification notice:')
 marker = (prefixes[1] if args.platform == 'linux' else prefixes[0]) + ' ' + change_date
@@ -44,7 +46,7 @@ for name in sorted(paths):
     changes = 'Linux integration and platform adaptations' if args.platform == 'linux' else 'GE media integration and macOS adaptations'
     notice = marker + '; ' + changes + '. Original copyright and license retained. See ' + manifest_name + '.'
     if marker not in text:
-        if file.suffix in ('.c', '.h', '.idl', '.rc'):
+        if file.suffix in ('.c', '.h', '.m', '.mm', '.idl', '.rc'):
             prefix = '/* ' + notice + ' */\n'
             if text.split('\n', 1)[0].find('SPDX-License-Identifier:') >= 0:
                 first, remaining = text.split('\n', 1)

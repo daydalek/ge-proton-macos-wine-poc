@@ -17,6 +17,9 @@ clock waits, packet enqueue and EOS handling during rapid forward/backward seeks
 
 | Upstream | Version / provenance | Use |
 | --- | --- | --- |
+| [Anime4K](https://github.com/bloc97/Anime4K) | v4.0.1, `Anime4K_Upscale_CNN_x2_S.glsl`; digest in native/gdi-upscalers/dependencies.json | MIT; official four-convolution weights and depth-to-space shader ported to Metal; original shader and license retained under native/gdi-upscalers/vendor/anime4k |
+| [Real-CUGAN](https://github.com/bilibili/ailab/tree/main/Real-CUGAN), [ncnn conversion](https://github.com/nihui/realcugan-ncnn-vulkan) | ncnn conversion 20220728, models-se/up2x-no-denoise | MIT; bilibili's model and nihui's converted graph, FP32 full-frame CPU inference; licenses in licenses/RealCUGAN-*.txt |
+| [ncnn](https://github.com/Tencent/ncnn) | 20240410; locked source archive | BSD-3-Clause; statically linked CPU inference runtime for Real-CUGAN; license in licenses/ncnn-BSD-3-Clause.txt |
 | [Wine](https://gitlab.winehq.org/wine/wine), [source mirror](https://github.com/wine-mirror/wine) | wine-11.0; syscall parameter-normalization wrappers ported from commit f43402c | Upstream Wine implementation and baseline build; the ported wrappers normalize small integer syscall arguments whose upper bits the Win64 ABI leaves undefined but clang-built Unix code assumes extended; retain source AUTHORS and license files |
 | [CodeWeavers CrossOver FOSS sources](https://www.codeweavers.com/crossover/source) | 26.3.0; archive SHA-256 in configs/crossover-source-lock.json | CrossOver Wine base, macOS drivers and existing Rosetta thunk adaptation |
 | [ValveSoftware/wine](https://github.com/ValveSoftware/wine) | 46b29104e3741fe23bf5e2547196a253aab88c89 | GE PoC Wine base and prerequisite implementations |

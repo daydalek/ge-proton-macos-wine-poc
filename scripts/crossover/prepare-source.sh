@@ -23,9 +23,9 @@ commit 'Import official CrossOver 26.3.0 source'
 poc_load_crossover_patches
 notice_args=()
 for patch_name in "${POC_CROSSOVER_PATCHES[@]}"; do
-  git apply "$POC_PROJECT/$patch_name"
   notice_args+=(--patch "$POC_PROJECT/$patch_name")
 done
+python3 "$POC_PROJECT/scripts/apply-patch-series.py" --source "$source_dir" "${notice_args[@]}"
 python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" "${notice_args[@]}"
 git add .
 commit 'Port GE multimedia rework and macOS playback fixes'

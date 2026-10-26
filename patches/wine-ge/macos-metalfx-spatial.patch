@@ -1,0 +1,401 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-10-26
+Scope: Optional MetalFX Spatial upscaling for opaque GDI surfaces on Retina displays.
+Baseline: CrossOver 26.3 with macos-gdi-fullscreen-centering.patch.
+Original authors and per-file LGPL-2.1-or-later licenses remain applicable.
+
+diff --git a/dlls/winemac.drv/Makefile.in b/dlls/winemac.drv/Makefile.in
+--- a/dlls/winemac.drv/Makefile.in
++++ b/dlls/winemac.drv/Makefile.in
+@@ -24,6 +24,7 @@
+ 	cocoa_icon_utils.m \
+ 	cocoa_main.m \
+ 	cocoa_opengl.m \
++	cocoa_spatial.m \
+ 	cocoa_status_item.m \
+ 	cocoa_window.m \
+ 	d3dmetal.c \
+diff --git a/dlls/winemac.drv/cocoa_spatial.h b/dlls/winemac.drv/cocoa_spatial.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_spatial.h
+@@ -0,0 +1,26 @@
++/*
++ * Optional MetalFX Spatial presentation for opaque GDI surfaces.
++ * Copyright 2026 GE-Proton macOS Wine PoC contributors
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#import <AppKit/AppKit.h>
++#import <Metal/Metal.h>
++
++/* Instances belong to one WineContentView and are used on the main thread.
++ * copyScaledImage returns an immutable, owned image or NULL for fallback. */
++@interface WineSpatialScaler : NSObject
++{
++    id<MTLDevice> device;
++    id<MTLCommandQueue> queue;
++    id scaler;
++    id<MTLTexture> inputTexture, outputTexture;
++    id<MTLBuffer> upload, readback;
++    CGContextRef bitmap;
++    NSUInteger inputWidth, inputHeight, outputWidth, outputHeight;
++    NSUInteger uploadStride, readbackStride;
++    BOOL failed;
++}
+++ (BOOL) enabled;
++- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height;
++@end
+diff --git a/dlls/winemac.drv/cocoa_spatial.m b/dlls/winemac.drv/cocoa_spatial.m
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_spatial.m
+@@ -0,0 +1,229 @@
++/*
++ * Optional MetalFX Spatial presentation for opaque GDI surfaces.
++ * Copyright 2026 GE-Proton macOS Wine PoC contributors
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#import "cocoa_spatial.h"
++#include <dlfcn.h>
++#include <stdlib.h>
++#include <string.h>
++
++#if __has_include(<MetalFX/MetalFX.h>)
++#import <MetalFX/MetalFX.h>
++#define HAVE_METALFX_SPATIAL 1
++#endif
++
++/* Keep MetalFX optional at load time so the Wine driver retains its macOS 11
++ * deployment target. The descriptor is resolved after the runtime OS check. */
++static Class spatial_descriptor_class(void)
++{
++    static Class descriptor;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++#ifdef HAVE_METALFX_SPATIAL
++        if (@available(macOS 13.0, *))
++        {
++            if (dlopen("/System/Library/Frameworks/MetalFX.framework/MetalFX", RTLD_LAZY | RTLD_LOCAL))
++                descriptor = NSClassFromString(@"MTLFXSpatialScalerDescriptor");
++        }
++#endif
++    });
++    return descriptor;
++}
++
++static void release_image_bytes(void *info, const void *data, size_t size)
++{
++    (void)info;
++    (void)size;
++    free((void *)data);
++}
++
++@implementation WineSpatialScaler
++
+++ (BOOL) enabled
++{
++    static BOOL enabled;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        const char *mode = getenv("WINE_METALFX");
++        if (mode && !strcmp(mode, "spatial"))
++        {
++            enabled = !!spatial_descriptor_class();
++            if (!enabled) NSLog(@"Wine MetalFX: Spatial unavailable; using standard GDI presentation");
++        }
++    });
++    return enabled;
++}
++
++- (id) init
++{
++    self = [super init];
++    if (!self) return nil;
++#ifdef HAVE_METALFX_SPATIAL
++    if (@available(macOS 13.0, *))
++    {
++        device = MTLCreateSystemDefaultDevice();
++        if (device && [spatial_descriptor_class() supportsDevice:device])
++            queue = [device newCommandQueue];
++    }
++#endif
++    if (!queue)
++    {
++        NSLog(@"Wine MetalFX: GPU unavailable; using standard GDI presentation");
++        [self release];
++        return nil;
++    }
++    return self;
++}
++
++- (void) clearResources
++{
++    CGContextRelease(bitmap);
++    bitmap = NULL;
++    [scaler release];
++    scaler = nil;
++    [inputTexture release];
++    inputTexture = nil;
++    [outputTexture release];
++    outputTexture = nil;
++    [upload release];
++    upload = nil;
++    [readback release];
++    readback = nil;
++}
++
++- (void) dealloc
++{
++    [self clearResources];
++    [queue release];
++    [device release];
++    [super dealloc];
++}
++
++- (BOOL) configureInputWidth:(NSUInteger)iw height:(NSUInteger)ih
++                outputWidth:(NSUInteger)ow height:(NSUInteger)oh
++{
++    [self clearResources];
++#ifdef HAVE_METALFX_SPATIAL
++    if (@available(macOS 13.0, *))
++    {
++        MTLFXSpatialScalerDescriptor *descriptor = [[spatial_descriptor_class() alloc] init];
++        descriptor.inputWidth = iw;
++        descriptor.inputHeight = ih;
++        descriptor.outputWidth = ow;
++        descriptor.outputHeight = oh;
++        /* GDI CGImages carry sRGB encoded values. Unorm plus Perceptual avoids
++         * an extra sRGB texture decode before MetalFX's color processing. */
++        descriptor.colorTextureFormat = MTLPixelFormatBGRA8Unorm;
++        descriptor.outputTextureFormat = MTLPixelFormatBGRA8Unorm;
++        descriptor.colorProcessingMode = MTLFXSpatialScalerColorProcessingModePerceptual;
++        scaler = [descriptor newSpatialScalerWithDevice:device];
++        [descriptor release];
++        if (!scaler) return NO;
++
++        MTLTextureDescriptor *texture = [MTLTextureDescriptor
++            texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
++            width:iw height:ih mipmapped:NO];
++        texture.storageMode = MTLStorageModePrivate;
++        texture.usage = [scaler colorTextureUsage];
++        inputTexture = [device newTextureWithDescriptor:texture];
++        texture.width = ow;
++        texture.height = oh;
++        texture.usage = [scaler outputTextureUsage];
++        outputTexture = [device newTextureWithDescriptor:texture];
++
++        uploadStride = (iw * 4 + 255) & ~(NSUInteger)255;
++        readbackStride = (ow * 4 + 255) & ~(NSUInteger)255;
++        upload = [device newBufferWithLength:uploadStride * ih options:MTLResourceStorageModeShared];
++        readback = [device newBufferWithLength:readbackStride * oh options:MTLResourceStorageModeShared];
++        if (!inputTexture || !outputTexture || !upload || !readback) return NO;
++
++        CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++        bitmap = CGBitmapContextCreate(upload.contents, iw, ih, 8, uploadStride, space,
++                                      kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst);
++        CGColorSpaceRelease(space);
++        if (!bitmap) return NO;
++        CGContextSetBlendMode(bitmap, kCGBlendModeCopy);
++        inputWidth = iw;
++        inputHeight = ih;
++        outputWidth = ow;
++        outputHeight = oh;
++        NSLog(@"Wine MetalFX: GDI Spatial %lux%lu -> %lux%lu on %@",
++              (unsigned long)iw, (unsigned long)ih, (unsigned long)ow, (unsigned long)oh, device.name);
++        return YES;
++    }
++#endif
++    return NO;
++}
++
++- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++{
++    if (failed || !image) return NULL;
++    NSUInteger iw = CGImageGetWidth(image), ih = CGImageGetHeight(image);
++    /* Bound memory and arithmetic before allocating. A 1:1 or shrinking axis
++     * uses standard presentation; this path only performs genuine upscaling. */
++    if (!iw || !ih || width <= iw || height <= ih || width > 8192 || height > 8192 ||
++        width * height > 32 * 1024 * 1024) return NULL;
++
++    if (iw != inputWidth || ih != inputHeight || width != outputWidth || height != outputHeight)
++    {
++        if (![self configureInputWidth:iw height:ih outputWidth:width height:height])
++        {
++            failed = YES;
++            [self clearResources];
++            NSLog(@"Wine MetalFX: allocation failed; using standard GDI presentation");
++            return NULL;
++        }
++    }
++
++#ifdef HAVE_METALFX_SPATIAL
++    if (@available(macOS 13.0, *))
++    {
++        CGContextDrawImage(bitmap, CGRectMake(0, 0, iw, ih), image);
++        id<MTLCommandBuffer> commands = [queue commandBuffer];
++        id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
++        if (!commands || !blit) return NULL;
++        [blit copyFromBuffer:upload sourceOffset:0 sourceBytesPerRow:uploadStride
++              sourceBytesPerImage:uploadStride * ih sourceSize:MTLSizeMake(iw, ih, 1)
++              toTexture:inputTexture destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0, 0, 0)];
++        [blit endEncoding];
++        [scaler setColorTexture:inputTexture];
++        [scaler setOutputTexture:outputTexture];
++        [scaler setInputContentWidth:iw];
++        [scaler setInputContentHeight:ih];
++        [scaler encodeToCommandBuffer:commands];
++        blit = [commands blitCommandEncoder];
++        if (!blit) return NULL;
++        [blit copyFromTexture:outputTexture sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
++              sourceSize:MTLSizeMake(width, height, 1) toBuffer:readback destinationOffset:0
++              destinationBytesPerRow:readbackStride destinationBytesPerImage:readbackStride * height];
++        [blit endEncoding];
++        /* Reuse textures only after completion, and give Core Animation its own
++         * immutable copy. This intentionally favors correctness for GDI games. */
++        [commands commit];
++        [commands waitUntilCompleted];
++        if (commands.status != MTLCommandBufferStatusCompleted)
++        {
++            failed = YES;
++            NSLog(@"Wine MetalFX: GPU failure %@; using standard GDI presentation", commands.error);
++            return NULL;
++        }
++
++        size_t size = readbackStride * height;
++        void *bytes = malloc(size);
++        if (!bytes) return NULL;
++        memcpy(bytes, readback.contents, size);
++        CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, bytes, size, release_image_bytes);
++        if (!provider) { free(bytes); return NULL; }
++        CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++        CGImageRef result = CGImageCreate(width, height, 8, 32, readbackStride, space,
++            kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst, provider, NULL, FALSE, kCGRenderingIntentDefault);
++        CGColorSpaceRelease(space);
++        CGDataProviderRelease(provider);
++        return result;
++    }
++#endif
++    return NULL;
++}
++@end
+diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -32,6 +32,7 @@
+ #import "cocoa_app.h"
+ #import "cocoa_event.h"
+ #import "cocoa_opengl.h"
++#import "cocoa_spatial.h"
+ #import "d3dmetal_objc.h" /* CW HACK 22435 */
+ 
+ #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+@@ -375,6 +376,9 @@
+     int backingSize[2];
+ 
+     WineMetalView *_metalView;
++    WineSpatialScaler *_spatialScaler;
++    CALayer *_spatialLayer;
++    BOOL _spatialUnavailable;
+ 
+ @public void *d3dmetal_client_surface;   /* CW HACK 22435 */
+ }
+@@ -502,6 +506,9 @@
+         [pendingGlContexts release];
+         CGImageRelease(colorImage);
+         CGImageRelease(shapeImage);
++        [_spatialLayer removeFromSuperlayer];
++        [_spatialLayer release];
++        [_spatialScaler release];
+         [super dealloc];
+     }
+ 
+@@ -513,6 +520,12 @@
+     - (BOOL) wantsUpdateLayer
+     {
+         return YES /*!_everHadGLContext*/;
++    }
++
++    - (void) viewDidChangeBackingProperties
++    {
++        [super viewDidChangeBackingProperties];
++        if ([WineSpatialScaler enabled]) [self setNeedsDisplay:YES];
+     }
+ 
+     - (void) updateLayer
+@@ -521,6 +534,8 @@
+         CGImageRef image, maskedImage;
+         CGRect imageRect;
+         CALayer* layer = [self layer];
++
++        _spatialLayer.hidden = YES;
+ 
+         if ([window contentView] != self)
+             return;
+@@ -553,6 +568,49 @@
+         {
+             layer.position = surfaceRect.origin;
+             layer.contents = (id)image;
++            /* The original surface keeps its Wine pixel coordinates. Only the
++             * presentation sublayer receives a physical-resolution image. */
++            if (!_everHadGLContext && ![self hasGLDescendant] && !_metalView &&
++                !shapeImage && !window.usePerPixelAlpha && [WineSpatialScaler enabled])
++            {
++                CGFloat sourceScale = layer.contentsScale;
++                CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
++                                                CGImageGetHeight(image) / sourceScale);
++                if (!CGRectIsEmpty(window.fullscreenContentRect))
++                {
++                    target.origin.x = (layer.bounds.size.width - target.size.width) / 2;
++                    target.origin.y = (layer.bounds.size.height - target.size.height) / 2;
++                }
++                CGRect physical = [self convertRectToBacking:NSRectFromCGRect(target)];
++                NSUInteger width = (NSUInteger)floor(physical.size.width);
++                NSUInteger height = (NSUInteger)floor(physical.size.height);
++                if (width > CGImageGetWidth(image) && height > CGImageGetHeight(image))
++                {
++                    if (!_spatialScaler && !_spatialUnavailable)
++                    {
++                        _spatialScaler = [[WineSpatialScaler alloc] init];
++                        _spatialUnavailable = !_spatialScaler;
++                    }
++                    CGImageRef scaled = [_spatialScaler copyScaledImage:image width:width height:height];
++                    if (scaled)
++                    {
++                        if (!_spatialLayer)
++                        {
++                            _spatialLayer = [[CALayer alloc] init];
++                            _spatialLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
++                                @"position": [NSNull null], @"hidden": [NSNull null] };
++                            _spatialLayer.contentsGravity = kCAGravityResize;
++                            _spatialLayer.opaque = YES;
++                            [layer addSublayer:_spatialLayer];
++                        }
++                        _spatialLayer.frame = target;
++                        _spatialLayer.contentsScale = width / target.size.width;
++                        _spatialLayer.contents = (id)scaled;
++                        _spatialLayer.hidden = NO;
++                        CGImageRelease(scaled);
++                    }
++                }
++            }
+             CFRelease(image);
+             [window windowDidDrawContent];
+ 
+@@ -604,6 +662,7 @@
+ 
+     - (void) addGLContext:(WineOpenGLContext*)context
+     {
++        _spatialLayer.hidden = YES;
+         BOOL hadContext = _everHadGLContext;
+         if (!glContexts)
+             glContexts = [[NSMutableArray alloc] init];
+@@ -700,6 +759,7 @@
+ 
+     - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device
+     {
++        _spatialLayer.hidden = YES;
+         if (_metalView) return _metalView;
+ 
+         WineMetalView* view = [[WineMetalView alloc] initWithFrame:[self bounds] device:device];

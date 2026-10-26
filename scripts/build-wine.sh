@@ -24,14 +24,12 @@ poc_require_rosetta
 poc_note "Building $variant from $src (macOS >= $MACOSX_DEPLOYMENT_TARGET, $POC_JOBS jobs)"
 mkdir -p "$root/build/$variant" "$root/stage/$variant" "$root/logs/$variant"
 if test "$variant" = media; then
-  for patch_name in macos-platform.patch macos-vmr7-window.patch wow64-demuxer-cleanup.patch quartz-child-window-position.patch quartz-preserve-window-size.patch mpeg-audio-wave-format.patch rosetta-wow64-thunks.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch wine-upstream-syscall-wrappers.patch; do
+  apply_args=()
+  for patch_name in macos-platform.patch macos-vmr7-window.patch wow64-demuxer-cleanup.patch quartz-child-window-position.patch quartz-preserve-window-size.patch mpeg-audio-wave-format.patch rosetta-wow64-thunks.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch wine-upstream-syscall-wrappers.patch macos-gdi-fullscreen-centering.patch macos-metalfx-spatial.patch macos-gdi-upscalers.patch; do
   patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
-  if git -C "$src" apply --check "$patch_file" 2>/dev/null; then
-    git -C "$src" apply "$patch_file"
-  else
-    git -C "$src" apply --reverse --check "$patch_file"
-  fi
+  apply_args+=(--patch "$patch_file")
   done
+  "$POC_PYTHON" "$POC_PROJECT/scripts/apply-patch-series.py" --source "$src" "${apply_args[@]}"
   (cd "$src" && "$POC_TOOLS/bin/autoconf" && "$POC_TOOLS/bin/autoheader" && ./tools/make_requests) \
     > "$root/logs/$variant/regenerate.log" 2>&1
   XDG_CACHE_HOME="$root/cache" "$POC_PYTHON" "$src/dlls/winevulkan/make_vulkan" \
@@ -54,4 +52,8 @@ cd "$root/build/$variant"
   > "$root/logs/$variant/configure.log" 2>&1
 make -j"$POC_JOBS" > "$root/logs/$variant/build.log" 2>&1
 make install > "$root/logs/$variant/install.log" 2>&1
+if test "$variant" = media; then
+  "$POC_PYTHON" "$POC_PROJECT/scripts/build-gdi-upscalers.py" --stage "$root/stage/$variant" \
+    --work "$root/gdi-upscalers" --jobs "$POC_JOBS" > "$root/logs/$variant/gdi-upscalers.log" 2>&1
+fi
 echo "Installed: $root/stage/$variant"

@@ -31,6 +31,10 @@ archives.insert(0, {'archive': SETTINGS['POC_CROSSOVER_ARCHIVE'],
                    'url': crossover_lock['source_url'], 'sha256': crossover_lock['source_sha256']})
 archive_paths = {item['archive']: (CROSSOVER_PORT if item['archive'] == SETTINGS['POC_CROSSOVER_ARCHIVE'] else WORK) / item['archive']
                  for item in archives}
+gdi_lock = json.loads((project / 'native/gdi-upscalers/dependencies.json').read_text())
+for item in gdi_lock['archives']:
+    archives.append(item)
+    archive_paths[item['archive']] = CROSSOVER_PORT / 'gdi-upscalers/archives' / item['archive']
 for item in archives:
     assert sha256_file(archive_paths[item['archive']]) == item['sha256'], item['archive']
 for directory in source_dirs:

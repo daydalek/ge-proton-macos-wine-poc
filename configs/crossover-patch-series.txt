@@ -26,3 +26,7 @@ patches/crossover/winedmo-demuxed-frame-boundaries.patch
 patches/crossover/quartz-vmr9-backbuffer-scaling.patch
 patches/crossover/wmp-volume-decibels.patch
 patches/crossover/quartz-filesource-vfs-fallback.patch
+patches/wine-ge/macos-gdi-fullscreen-centering.patch
+patches/wine-ge/ddraw-external-mode-loss.patch
+patches/wine-ge/macos-metalfx-spatial.patch
+patches/wine-ge/macos-gdi-upscalers.patch

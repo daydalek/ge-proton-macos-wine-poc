@@ -1,0 +1,42 @@
+Project modification notice: Whisky legacy fullscreen compatibility
+Modification date: 2026-10-26
+Scope: Center software-rendered GDI surfaces inside the emulated-fullscreen content mask and crop allocation padding.
+Baseline: CrossOver 26.3.0 with the GE media macOS fullscreen patches.
+Original authors and LGPL-2.1-or-later license remain applicable.
+
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -418,6 +418,7 @@
+ @property (readonly, copy, nonatomic) NSArray* childWineWindows;
+ 
+ @property (retain, nonatomic) CAShapeLayer* contentViewMaskLayer;
++@property (nonatomic) CGRect fullscreenContentRect;
+ 
+     - (void) setShape:(CGPathRef)newShape;
+ 
+@@ -528,6 +529,16 @@
+             return;
+ 
+         imageRect = layer.bounds;
++        if (!CGRectIsEmpty(window.fullscreenContentRect) && !_everHadGLContext)
++        {
++            /* GDI surfaces start at the logical window origin. The fullscreen
++             * mask describes the centered physical content area. Crop away
++             * surface allocation padding and place the pixels inside it. */
++            imageRect = CGRectMake(0, 0, window.fullscreenContentRect.size.width,
++                                        window.fullscreenContentRect.size.height);
++            layer.contentsGravity = kCAGravityCenter;
++        }
++        else layer.contentsGravity = kCAGravityTopLeft;
+         imageRect.origin.x *= layer.contentsScale;
+         imageRect.origin.y *= layer.contentsScale;
+         imageRect.size.width *= layer.contentsScale;
+@@ -2852,6 +2863,8 @@
+ 
+     - (void) setMask:(CGRect)rect
+     {
++        self.fullscreenContentRect = rect;
++        [self.contentView setNeedsDisplay:YES];
+         /* Draw black bars to cover every part of the window except for 'rect'.
+          * Intended for use on a window covering the full screen.
+          */

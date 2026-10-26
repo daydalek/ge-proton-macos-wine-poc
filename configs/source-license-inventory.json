@@ -2344,10 +2344,145 @@
       "copyright_notices": [
         "Copyright 2003 Robert Shearman"
       ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-fullscreen-centering.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "34c48d650f80ff85154f26a4681262177e2851ce614da26c99baa4aefed09306",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/ddraw-external-mode-loss.patch",
+      "source_file": "dlls/ddraw/surface.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "48abcd4b0dbf7d21507a13b2e3806d565b836cc807512262992b08c5a0b9fa2e",
+      "copyright_notices": [
+        "Copyright (c) 1997-2000 Marcus Meissner",
+        "Copyright (c) 1998-2000 Lionel Ulmer",
+        "Copyright (c) 2000-2001 TransGaming Technologies Inc.",
+        "Copyright (c) 2006 Stefan Dösinger",
+        "Copyright (c) 2011 Ričardas Barkauskas for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-metalfx-spatial.patch",
+      "source_file": "dlls/winemac.drv/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build declarations",
+      "source_origin": "CrossOver 26.3 plus GDI fullscreen centering",
+      "source_sha256": "8ccca0e204038a5e208681069952617fcfb23cb976b92d43c05fd1cbe84a077d",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-metalfx-spatial.patch",
+      "source_file": "dlls/winemac.drv/cocoa_spatial.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "5e927953cb19e6ec3667b73a793bef5e6eb976aa1df4ec1ddbd05406d979784c",
+      "copyright_notices": [
+        "Copyright 2026 GE-Proton macOS Wine PoC contributors"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-metalfx-spatial.patch",
+      "source_file": "dlls/winemac.drv/cocoa_spatial.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "c7fbc4e5550d433be09b1b9201d61c6afa758fc9e5e127b9326b520213853307",
+      "copyright_notices": [
+        "Copyright 2026 GE-Proton macOS Wine PoC contributors"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-metalfx-spatial.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 plus GDI fullscreen centering",
+      "source_sha256": "34c48d650f80ff85154f26a4681262177e2851ce614da26c99baa4aefed09306",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build declarations",
+      "source_origin": "CrossOver 26.3 with MetalFX Spatial",
+      "source_sha256": "255f9ff6a6ba5414ba58ab71e76bb9a36fb6181a73b32842c09584704d7a8b8e",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_upscaler.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "6356bd76816b3a1ccedf270260964826b82a52bac060ca35379ebd2f07dacaf7",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_upscaler.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "c41b1afd5993b1dab8baeb07e03b350c729df4b6b4ba32103e081b63754dbc0c",
+      "copyright_notices": [
+        "Copyright 2026 GE-Proton macOS Wine PoC contributors"
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with MetalFX Spatial",
+      "source_sha256": "f2170eb7ecbca808b050aa8a0bfb6367dc4d1490c1c7e9646b9be83b6da4c6bd",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/wine_gdi_frame_diff.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "2bc579e31c4c87fe96b6a458f7719dac9e79cc79d7689dc3e769574fd5a95c05",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/wine_gdi_upscale_policy.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "c408b5c492e049a73c28ccd1aae4951634cb0a2c8e410b5e244dd230852e774a",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/wine_gdi_upscaler.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "e76ffce5db8b355f82d639292ed07ad3c9519c3d1e793ef2333c3bf97c615ebf",
+      "copyright_notices": []
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 204,
+    "LGPL-2.1-or-later": 217,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2382,6 +2517,10 @@
     "patches/crossover/winedmo-demuxed-frame-boundaries.patch": "6e14a484a0c1017977ab6bbd46186944550cd363ccc092cc4349ba1082c92965",
     "patches/crossover/quartz-vmr9-backbuffer-scaling.patch": "6190d3b958f628bdd4284f05d9e5f86ecce8f2e6389081a8f9c9ff1e559fe70b",
     "patches/crossover/wmp-volume-decibels.patch": "67c39dc1c1eedbe54dce8bb843076c6d64deb6837efb1d3dbba447e57f45562a",
-    "patches/crossover/quartz-filesource-vfs-fallback.patch": "702cdf5126848ec33b55c791785c9d1b7969be25b8debcdce1367ccd61f72a14"
+    "patches/crossover/quartz-filesource-vfs-fallback.patch": "702cdf5126848ec33b55c791785c9d1b7969be25b8debcdce1367ccd61f72a14",
+    "patches/wine-ge/macos-gdi-fullscreen-centering.patch": "e00b0a4609c2a1f0a96e9c41eb0d01635bcc18eda6b85883a0b87831bede6db6",
+    "patches/wine-ge/ddraw-external-mode-loss.patch": "3fa1bea92474b7d277dfb2d35d6899c1aad2b99a21da48438b0b45aee4dee8bc",
+    "patches/wine-ge/macos-metalfx-spatial.patch": "2601c79bd715d5e4833271838961410f7292376fe6527aacfb94a122b6fb56b3",
+    "patches/wine-ge/macos-gdi-upscalers.patch": "7364ac8fd0d324ee2948b109a14235b6607f68264780aa8fe1f0bbda2426a5b2"
   }
 }

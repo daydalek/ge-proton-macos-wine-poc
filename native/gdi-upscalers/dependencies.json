@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "algorithms": {
+    "anime4k": {
+      "upstream": "https://github.com/bloc97/Anime4K",
+      "version": "v4.0.1",
+      "shader": "Anime4K_Upscale_CNN_x2_S.glsl",
+      "sha256": "4c53ec2e287908f7ee7bcb266b0170421626d663576468b7d7dafc62962649a4",
+      "license": "MIT"
+    },
+    "realcugan": {
+      "upstream": "https://github.com/nihui/realcugan-ncnn-vulkan",
+      "version": "20220728",
+      "model": "models/models-se/up2x-no-denoise",
+      "inference": "ncnn CPU, full-frame SE, FP32",
+      "license": "MIT"
+    }
+  },
+  "archives": [
+    {
+      "id": "ncnn",
+      "archive": "ncnn-source.tar.gz",
+      "directory": "ncnn-20240410",
+      "url": "https://codeload.github.com/Tencent/ncnn/tar.gz/refs/tags/20240410",
+      "sha256": "328fe282b98457d85ab56184fa896467f6bf640d4e48e91fcefc8d31889f92b7"
+    },
+    {
+      "id": "realcugan",
+      "archive": "realcugan-source.tar.gz",
+      "directory": "realcugan-ncnn-vulkan-20220728",
+      "url": "https://codeload.github.com/nihui/realcugan-ncnn-vulkan/tar.gz/refs/tags/20220728",
+      "sha256": "9f261f43a8457d8f40d18149942358bcdb0fb3c3793c6dc84bd63139c743bb9e"
+    }
+  ],
+  "model_sha256": {
+    "models/models-se/up2x-no-denoise.param": "4b3b5c5710ad1d00503c8243417aa75f13fe497723e8b4952e8b1abfc08f9b84",
+    "models/models-se/up2x-no-denoise.bin": "7f135a712830b16678cb8247b9517308c5f3858fca9b10e1c3ad5ef6e261de0c"
+  }
+}

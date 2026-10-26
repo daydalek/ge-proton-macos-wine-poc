@@ -9,18 +9,13 @@ port="$POC_CROSSOVER_PORT"
 source_dir="$port/sources/wine"
 poc_require_path "$source_dir/configure" "run scripts/crossover/prepare-source.sh"
 poc_load_crossover_patches
-# The base media port is part of the prepared import and later patches overlap
-# it, so only the remaining series entries are applied or verified here.
-notice_args=(--patch "$POC_PROJECT/${POC_CROSSOVER_PATCHES[0]}")
-for patch_name in "${POC_CROSSOVER_PATCHES[@]:1}"; do
+# Validate the ordered stack as a whole, including generated source notices.
+notice_args=()
+for patch_name in "${POC_CROSSOVER_PATCHES[@]}"; do
   patch_file="$POC_PROJECT/$patch_name"
-  if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
-    git -C "$source_dir" apply "$patch_file"
-  else
-    git -C "$source_dir" apply --reverse --check "$patch_file"
-  fi
   notice_args+=(--patch "$patch_file")
 done
+python3 "$POC_PROJECT/scripts/apply-patch-series.py" --source "$source_dir" "${notice_args[@]}"
 python3 "$POC_PROJECT/scripts/source-notices.py" --source "$source_dir" "${notice_args[@]}"
 
 poc_setup_wine_build_env
@@ -42,6 +37,8 @@ case "$mode" in
   full)
     make -j"$POC_JOBS" > "$port/build-full.log" 2>&1
     make install > "$port/install.log" 2>&1
+    python3 "$POC_PROJECT/scripts/build-gdi-upscalers.py" --stage "$port/stage" \
+      --work "$port/gdi-upscalers" --jobs "$POC_JOBS" > "$port/build-gdi-upscalers.log" 2>&1
     PYTHONPATH="$POC_PROJECT/scripts/lib" python3 - "$port/stage" <<'PY_GRAPHICS'
 import sys
 from wined3d_builtins import preserve_wined3d_builtins
@@ -57,13 +54,17 @@ modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
            'lib/wine/x86_64-unix/winemac.so', 'lib/wine/x86_64-windows/wow64win.dll',
             'lib/wine/x86_64-unix/bcrypt.so', 'lib/wine/x86_64-unix/secur32.so',
             'lib/wine/x86_64-unix/ntdll.so', 'lib/wine/i386-windows/gdi32.dll',
-            'lib/wine/i386-windows/user32.dll']
+            'lib/wine/i386-windows/user32.dll', 'lib/wine/x86_64-unix/libwinegdiupscalers.dylib',
+            'lib/wine/x86_64-unix/gdi-upscalers/anime4k.metallib',
+            'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.param',
+            'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.bin']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
           'source_archive_sha256': lock['source_sha256'],
           'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
           'source_dirty': bool(subprocess.check_output(['git', '-C', str(source), 'status', '--porcelain'], text=True).strip()),
           'patches': {name: hashlib.sha256((project / name).read_bytes()).hexdigest() for name in patches},
-          'compiled_modules': {name: hashlib.sha256((stage / name).read_bytes()).hexdigest() for name in modules}}
+          'compiled_modules': {name: hashlib.sha256((stage / name).read_bytes()).hexdigest() for name in modules},
+          'gdi_upscalers': json.loads((stage / '.gdi-upscalers-build.json').read_text())}
 (stage / '.wine-build-provenance.json').write_text(json.dumps(record, indent=2) + '\n')
 PY_BUILD
     ;;
