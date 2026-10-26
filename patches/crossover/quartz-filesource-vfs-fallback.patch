@@ -1,0 +1,207 @@
+Subject: quartz: fall back to synchronous I/O and legacy file size for VFS hooks
+License: LGPL-2.1-or-later
+Modification date: 2026-10-26
+
+Some visual novel engines and translation patches hook Win32 file APIs to stream
+media directly out of archives. These legacy hooks often implement GetFileSize
+rather than GetFileSizeEx, and expect synchronous ReadFile/SetFilePointer instead
+of kernel overlapped I/O.
+
+When GetFileSizeEx fails on a virtual handle, fall back to GetFileSize and mark
+the reader as synchronous. Handle reader requests via synchronous seek and read,
+ensuring archive-backed media streams play without failing graph construction.
+
+diff --git a/dlls/quartz/filesource.c b/dlls/quartz/filesource.c
+--- a/dlls/quartz/filesource.c
++++ b/dlls/quartz/filesource.c
+@@ -64,6 +64,7 @@
+     LARGE_INTEGER file_size;
+     CRITICAL_SECTION sample_cs;
+     BOOL flushing;
++    BOOL is_sync_handle;
+     struct request *requests;
+     unsigned int max_requests;
+     CONDITION_VARIABLE sample_cv;
+@@ -495,9 +496,17 @@
+     if (!pszFileName)
+         return E_POINTER;
+ 
++    This->is_sync_handle = FALSE;
++
+     /* open file */
+     /* FIXME: check the sharing values that native uses */
+     hFile = CreateFileW(pszFileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
++    if (hFile == INVALID_HANDLE_VALUE)
++    {
++        hFile = CreateFileW(pszFileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
++        if (hFile != INVALID_HANDLE_VALUE)
++            This->is_sync_handle = TRUE;
++    }
+ 
+     if (hFile == INVALID_HANDLE_VALUE)
+     {
+@@ -506,9 +515,16 @@
+ 
+     if (!GetFileSizeEx(hFile, &This->file_size))
+     {
+-        WARN("Could not get file size.\n");
+-        CloseHandle(hFile);
+-        return HRESULT_FROM_WIN32(GetLastError());
++        DWORD high = 0, low = GetFileSize(hFile, &high);
++        if (low == INVALID_FILE_SIZE && GetLastError() != NO_ERROR)
++        {
++            WARN("Could not get file size.\n");
++            CloseHandle(hFile);
++            return HRESULT_FROM_WIN32(GetLastError());
++        }
++        This->file_size.LowPart = low;
++        This->file_size.HighPart = high;
++        This->is_sync_handle = TRUE;
+     }
+ 
+     if (This->pszFileName)
+@@ -743,6 +759,7 @@
+     unsigned int i;
+     HRESULT hr;
+     BYTE *data;
++    DWORD dummy = 0;
+ 
+     TRACE("filter %p, sample %p, cookie %#Ix.\n", filter, sample, cookie);
+ 
+@@ -777,15 +794,37 @@
+     req->ovl.OffsetHigh = BYTES_FROM_MEDIATIME(start) >> 32;
+     /* No reference is taken. */
+ 
+-    if (ReadFile(filter->file, data, BYTES_FROM_MEDIATIME(end - start), NULL, &req->ovl)
+-            || GetLastError() == ERROR_IO_PENDING)
++    if (!filter->is_sync_handle)
+     {
+-        hr = S_OK;
++        if (ReadFile(filter->file, data, BYTES_FROM_MEDIATIME(end - start), &dummy, &req->ovl)
++                || GetLastError() == ERROR_IO_PENDING)
++        {
++            hr = S_OK;
++            req->sample = sample;
++            req->cookie = cookie;
++        }
++        else
++        {
++            WARN("Overlapped ReadFile failed (%lu), switching to synchronous fallback.\n", GetLastError());
++            filter->is_sync_handle = TRUE;
++        }
++    }
++
++    if (filter->is_sync_handle)
++    {
++        LONG high = req->ovl.OffsetHigh;
++        DWORD bytes_read = 0;
++        SetLastError(NO_ERROR);
++        if (SetFilePointer(filter->file, req->ovl.Offset, high ? &high : NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER || GetLastError() == NO_ERROR)
++        {
++            ReadFile(filter->file, data, BYTES_FROM_MEDIATIME(end - start), &bytes_read, NULL);
++        }
++        req->ovl.Internal = 0;
++        req->ovl.InternalHigh = bytes_read;
+         req->sample = sample;
+         req->cookie = cookie;
++        hr = S_OK;
+     }
+-    else
+-        hr = HRESULT_FROM_WIN32(GetLastError());
+ 
+     LeaveCriticalSection(&filter->sample_cs);
+     return hr;
+@@ -815,12 +854,19 @@
+         for (i = 0; i < filter->max_requests; ++i)
+         {
+             struct request *req = &filter->requests[i];
+-            DWORD size;
++            DWORD size = 0;
+ 
+-            if (req->sample && GetOverlappedResult(filter->file, &req->ovl, &size, FALSE))
++            if (!req->sample)
++                continue;
++
++            if (GetOverlappedResult(filter->file, &req->ovl, &size, FALSE)
++                    || (filter->is_sync_handle && GetLastError() != ERROR_IO_INCOMPLETE))
+             {
+                 REFERENCE_TIME start, end;
+ 
++                if (!size && req->ovl.InternalHigh)
++                    size = req->ovl.InternalHigh;
++
+                 IMediaSample_SetActualDataLength(req->sample, size);
+                 start = MEDIATIME_FROM_BYTES(((ULONGLONG)req->ovl.OffsetHigh << 32) + req->ovl.Offset);
+                 end = start + MEDIATIME_FROM_BYTES(size);
+@@ -841,21 +887,47 @@
+     return VFW_E_TIMEOUT;
+ }
+ 
+-static BOOL sync_read(HANDLE file, LONGLONG offset, LONG length, BYTE *buffer, DWORD *read_len)
++static BOOL sync_read(struct async_reader *filter, LONGLONG offset, LONG length, BYTE *buffer, DWORD *read_len)
+ {
+     OVERLAPPED ovl = {0};
++    DWORD dummy = 0;
+     BOOL ret;
+ 
++    *read_len = 0;
++
++    if (filter->is_sync_handle)
++    {
++        LONG high = (LONG)(offset >> 32);
++        SetLastError(NO_ERROR);
++        if (SetFilePointer(filter->file, (LONG)offset, high ? &high : NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
++            return FALSE;
++        return ReadFile(filter->file, buffer, length, read_len, NULL);
++    }
++
+     ovl.hEvent = (HANDLE)((ULONG_PTR)CreateEventW(NULL, TRUE, FALSE, NULL) | 1);
+     ovl.Offset = (DWORD)offset;
+     ovl.OffsetHigh = offset >> 32;
+ 
+-    *read_len = 0;
++    ret = ReadFile(filter->file, buffer, length, &dummy, &ovl);
++    if (ret)
++    {
++        *read_len = dummy ? dummy : length;
++        CloseHandle(ovl.hEvent);
++        return TRUE;
++    }
++    if (GetLastError() == ERROR_IO_PENDING)
++        ret = GetOverlappedResult(filter->file, &ovl, read_len, TRUE);
++    else
++    {
++        /* Fall back to synchronous seek and read for virtual/hooked handles */
++        LONG high = (LONG)(offset >> 32);
++        SetLastError(NO_ERROR);
++        if (SetFilePointer(filter->file, (LONG)offset, high ? &high : NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER || GetLastError() == NO_ERROR)
++            ret = ReadFile(filter->file, buffer, length, read_len, NULL);
++        if (ret)
++            filter->is_sync_handle = TRUE;
++    }
+ 
+-    ret = ReadFile(file, buffer, length, NULL, &ovl);
+-    if (ret || GetLastError() == ERROR_IO_PENDING)
+-        ret = GetOverlappedResult(file, &ovl, read_len, TRUE);
+-
+     TRACE("Returning %lu bytes.\n", *read_len);
+ 
+     CloseHandle(ovl.hEvent);
+@@ -882,7 +954,7 @@
+     if (SUCCEEDED(hr))
+     {
+         length = BYTES_FROM_MEDIATIME(end_time - start_time);
+-        ret = sync_read(filter->file, BYTES_FROM_MEDIATIME(start_time), length, buffer, &read_len);
++        ret = sync_read(filter, BYTES_FROM_MEDIATIME(start_time), length, buffer, &read_len);
+         if (ret)
+             hr = (read_len == length) ? S_OK : S_FALSE;
+         else if (GetLastError() == ERROR_HANDLE_EOF)
+@@ -908,7 +980,7 @@
+     TRACE("filter %p, offset %s, length %ld, buffer %p.\n",
+             filter, wine_dbgstr_longlong(offset), length, buffer);
+ 
+-    ret = sync_read(filter->file, offset, length, buffer, &read_len);
++    ret = sync_read(filter, offset, length, buffer, &read_len);
+     if (ret)
+         hr = (read_len == length) ? S_OK : S_FALSE;
+     else if (GetLastError() == ERROR_HANDLE_EOF)

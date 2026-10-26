@@ -1,0 +1,118 @@
+Subject: wmp: convert volume percentages to logarithmic attenuation
+License: LGPL-2.1-or-later
+Modification date: 2026-10-25
+
+Map the WMP volume percentage to IBasicAudio hundredths of a decibel using
+the amplitude ratio. Preserve silence at zero and full volume at one hundred.
+Validate the documented input range before storing the setting.
+
+diff --git a/dlls/wmp/player.c b/dlls/wmp/player.c
+--- a/dlls/wmp/player.c
++++ b/dlls/wmp/player.c
+@@ -1,42 +1,44 @@
+ /*
+  * Copyright 2014 Jacek Caban for CodeWeavers
+  *
+  * This library is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU Lesser General Public
+  * License as published by the Free Software Foundation; either
+  * version 2.1 of the License, or (at your option) any later version.
+  *
+  * This library is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  * Lesser General Public License for more details.
+  *
+  * You should have received a copy of the GNU Lesser General Public
+  * License along with this library; if not, write to the Free Software
+  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+  */
++
++#include <math.h>
+ 
+ #include "wmp_private.h"
+ 
+ #include "wine/debug.h"
+ #include <nserror.h>
+ #include "wmpids.h"
+ #include "shlwapi.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wmp);
+ 
+ static ATOM player_msg_class;
+ static INIT_ONCE class_init_once;
+ static UINT WM_WMPEVENT;
+ 
+ static void update_state(WindowsMediaPlayer *wmp, LONG type, LONG state)
+ {
+     DISPPARAMS dispparams;
+     VARIANTARG params[1];
+ 
+     if (type == DISPID_WMPCOREEVENT_PLAYSTATECHANGE)
+         wmp->play_state = (WMPPlayState)state;
+     else if (type == DISPID_WMPCOREEVENT_OPENSTATECHANGE)
+         wmp->open_state = (WMPOpenState)state;
+ 
+     dispparams.cArgs = 1;
+@@ -1284,56 +1286,59 @@
+     FIXME("(%p)->(%p)\n", This, p);
+     return E_NOTIMPL;
+ }
+ 
+ static HRESULT WINAPI WMPSettings_put_balance(IWMPSettings *iface, LONG v)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+     FIXME("(%p)->(%ld)\n", This, v);
+     return E_NOTIMPL;
+ }
+ 
+ static HRESULT WINAPI WMPSettings_get_volume(IWMPSettings *iface, LONG *p)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+     TRACE("(%p)->(%p)\n", This, p);
+     if (!p)
+         return E_POINTER;
+     *p = This->volume;
+     return S_OK;
+ }
+ 
+ static HRESULT WINAPI WMPSettings_put_volume(IWMPSettings *iface, LONG v)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+     TRACE("(%p)->(%ld)\n", This, v);
++    if (v < 0 || v > 100)
++        return E_INVALIDARG;
+     This->volume = v;
+     if (!This->filter_graph)
+         return S_OK;
+ 
+-    /* IBasicAudio -   [-10000, 0], wmp - [0, 100] */
+-    v = 10000 * v / 100 - 10000;
++    /* IBasicAudio uses hundredths of a decibel; WMP exposes a percentage.
++     * Convert the amplitude ratio logarithmically so low settings remain audible. */
++    v = v ? 2000.0 * log10(v / 100.0) : -10000;
+     if (!This->basic_audio)
+         return S_FALSE;
+ 
+     return IBasicAudio_put_Volume(This->basic_audio, v);
+ }
+ 
+ static HRESULT WINAPI WMPSettings_getMode(IWMPSettings *iface, BSTR mode, VARIANT_BOOL *p)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+     FIXME("(%p)->(%s %p)\n", This, debugstr_w(mode), p);
+     return E_NOTIMPL;
+ }
+ 
+ static HRESULT WINAPI WMPSettings_setMode(IWMPSettings *iface, BSTR mode, VARIANT_BOOL v)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+     FIXME("(%p)->(%s %x)\n", This, debugstr_w(mode), v);
+     return E_NOTIMPL;
+ }
+ 
+ static HRESULT WINAPI WMPSettings_get_enableErrorDialogs(IWMPSettings *iface, VARIANT_BOOL *p)
+ {
+     WindowsMediaPlayer *This = impl_from_IWMPSettings(iface);
+ 
+     TRACE("(%p)->(%p)\n", This, p);

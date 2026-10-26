@@ -176,6 +176,33 @@ Visual presentation, synchronization and frame pacing require host-application
 validation. The implementation covers windowed video playback; full WMP skins,
 fullscreen and true windowless video remain separate implementation work.
 
+
+#### WMReader complete frames and embedded playback
+
+`winedmo-demuxed-frame-boundaries.patch` carries complete demuxed frame boundaries
+into the FFmpeg parser, supporting ASF VC-1 payloads that omit start codes while
+retaining fragmented-input parsing for other callers.
+`quartz-vmr9-backbuffer-scaling.patch` scales into the visible backbuffer region
+before presentation when the video buffer exceeds the embedded window size.
+`wmp-volume-decibels.patch` converts volume percentages logarithmically into
+DirectShow attenuation, retaining silence at zero and full volume at one hundred.
+
+The silent probe checks video samples, increasing timestamps and repeated restart:
+
+```sh
+wine tools/probes/wm-reader-video-probe-x86.exe 'Z:\path\to\video.wmv' 120 2
+```
+
+Set the sample count to `0` to read through video EOF.
+Use `wm-reader-video-probe-x64.exe` for x64. Host playback verifies the visible
+image, audible volume, synchronization and natural completion.
+
+#### DirectShow VFS archive fallback and legacy handle compatibility
+
+`quartz-filesource-vfs-fallback.patch` adds general compatibility to the Wine DirectShow file source for virtual file systems (VFS, such as visual novel engines or translation patches using Microsoft Detours to stream media directly from game archives):
+- Falls back to legacy `GetFileSize` when a virtual handle rejects `GetFileSizeEx`, preventing `ERROR_INVALID_HANDLE` (0x80070006) during filter graph construction;
+- Provides synchronous seek and read fallbacks along with `IAsyncReader` request scheduling for VFS handles that only hook synchronous Win32 file APIs, allowing archive-backed media to play smoothly without manual extraction.
+
 ---
 
 ## Packaging and release checks

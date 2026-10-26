@@ -1,0 +1,41 @@
+diff --git a/include/wine/winedmo.h b/include/wine/winedmo.h
+--- a/include/wine/winedmo.h
++++ b/include/wine/winedmo.h
+@@ -48,6 +48,7 @@
+ /* Flags for winedmo_transform_push_input */
+ #define WINEDMO_SAMPLE_FLAG_SYNC_POINT      0x01
+ #define WINEDMO_SAMPLE_FLAG_DISCONTINUITY   0x02
++#define WINEDMO_SAMPLE_FLAG_COMPLETE_FRAME  0x40  /* input contains a complete demuxed frame */
+ /* Flags returned by winedmo_transform_get_output */
+ #define WINEDMO_SAMPLE_FLAG_INCOMPLETE      0x04  /* more output pending without new input */
+ #define WINEDMO_SAMPLE_FLAG_FORMAT_CHANGED  0x08  /* output format changed; call get_output_format */
+diff --git a/dlls/winedmo/wm_reader.c b/dlls/winedmo/wm_reader.c
+--- a/dlls/winedmo/wm_reader.c
++++ b/dlls/winedmo/wm_reader.c
+@@ -1269,6 +1269,9 @@
+             if ((in_flags & WINEDMO_SAMPLE_FLAG_SYNC_POINT) && IsEqualGUID(&s->major_type, &MFMediaType_Video))
+                 s->next_decoded_cleanpoint = true;
+ 
++            /* The demuxer has already assembled complete compressed frames.
++             * ASF VC-1 frames may omit elementary-stream start codes. */
++            in_flags |= WINEDMO_SAMPLE_FLAG_COMPLETE_FRAME;
+             if ((dec_status = winedmo_transform_push_input(s->decoder, src, data_len,
+                     in_pts, INT64_MIN, in_dur, in_flags))
+                     && dec_status != STATUS_DEVICE_BUSY)
+diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -1135,6 +1135,13 @@
+         const uint8_t *data = t->packet->data;
+         int size = t->packet->size;
+ 
++        /* Preserve the frame boundaries supplied by container demuxers.
++         * In particular, ASF VC-1 payloads can have no start codes at all. */
++        if (params->flags & WINEDMO_SAMPLE_FLAG_COMPLETE_FRAME)
++            t->parser->flags |= PARSER_FLAG_COMPLETE_FRAMES;
++        else
++            t->parser->flags &= ~PARSER_FLAG_COMPLETE_FRAMES;
++
+         while (size > 0)
+         {
+             uint8_t *parsed_data = NULL;

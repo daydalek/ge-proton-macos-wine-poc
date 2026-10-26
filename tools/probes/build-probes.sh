@@ -17,6 +17,9 @@ for target in i686 x86_64; do
       "$kit/media-probe.c" -o "$kit/media-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -Werror -O2 -municode \
+      "$kit/wm-reader-video-probe.c" -o "$kit/wm-reader-video-probe-$bits.exe" \
+      -lole32 -luuid
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -Werror -O2 -municode \
       "$kit/wmp-probe.c" -o "$kit/wmp-probe-$bits.exe" \
       -lole32 -loleaut32 -luuid
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \

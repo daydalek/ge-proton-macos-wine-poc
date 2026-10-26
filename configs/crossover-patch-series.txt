@@ -22,3 +22,7 @@ patches/crossover/i386-hotpatch-prologue.patch
 patches/crossover/winedmo-repeated-seek.patch
 patches/crossover/winedmo-seek-generation.patch
 patches/crossover/wmp-activex-player2-embedding.patch
+patches/crossover/winedmo-demuxed-frame-boundaries.patch
+patches/crossover/quartz-vmr9-backbuffer-scaling.patch
+patches/crossover/wmp-volume-decibels.patch
+patches/crossover/quartz-filesource-vfs-fallback.patch

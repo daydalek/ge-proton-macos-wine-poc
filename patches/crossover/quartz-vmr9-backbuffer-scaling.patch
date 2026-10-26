@@ -1,0 +1,98 @@
+Subject: quartz: scale video into the visible backbuffer before presenting
+License: LGPL-2.1-or-later
+Modification date: 2026-10-25
+
+Convert the video source rectangle into a backbuffer region bounded by the
+window destination. Present that region to the host destination, preserving
+letterboxing and explicit source crops when the video-sized backbuffer is
+larger than the embedded window.
+
+diff --git a/dlls/quartz/vmr9.c b/dlls/quartz/vmr9.c
+--- a/dlls/quartz/vmr9.c
++++ b/dlls/quartz/vmr9.c
+@@ -2313,7 +2313,8 @@
+     IDirect3DDevice9 *device = presenter->d3d9_dev;
+     const RECT src = filter->window.src;
+     IDirect3DSurface9 *backbuffer;
+-    RECT dst = filter->window.dst;
++    RECT dst = filter->window.dst, blit_dst;
++    D3DSURFACE_DESC desc;
+     HRESULT hr;
+ 
+     TRACE("presenter %p, cookie %#Ix, info %p.\n", presenter, cookie, info);
+@@ -2321,26 +2322,6 @@
+     /* This might happen if we don't have active focus (eg on a different virtual desktop) */
+     if (!device)
+         return S_OK;
+-
+-    if (FAILED(hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET,
+-            D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0)))
+-        ERR("Failed to clear, hr %#lx.\n", hr);
+-
+-    if (FAILED(hr = IDirect3DDevice9_BeginScene(device)))
+-        ERR("Failed to begin scene, hr %#lx.\n", hr);
+-
+-    if (FAILED(hr = IDirect3DDevice9_GetBackBuffer(device, 0, 0, D3DBACKBUFFER_TYPE_MONO, &backbuffer)))
+-    {
+-        ERR("Failed to get backbuffer, hr %#lx.\n", hr);
+-        return hr;
+-    }
+-
+-    if (FAILED(hr = IDirect3DDevice9_StretchRect(device, info->lpSurf, NULL, backbuffer, NULL, D3DTEXF_POINT)))
+-        ERR("Failed to blit image, hr %#lx.\n", hr);
+-    IDirect3DSurface9_Release(backbuffer);
+-
+-    if (FAILED(hr = IDirect3DDevice9_EndScene(device)))
+-        ERR("Failed to end scene, hr %#lx.\n", hr);
+ 
+     if (filter->aspect_mode == VMR9ARMode_LetterBox)
+     {
+@@ -2367,7 +2348,47 @@
+         }
+     }
+ 
+-    if (FAILED(hr = IDirect3DDevice9_Present(device, &src, &dst, NULL, NULL)))
++    if (IsRectEmpty(&dst))
++        return S_OK;
++
++    if (FAILED(hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET,
++            D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0)))
++        ERR("Failed to clear, hr %#lx.\n", hr);
++
++    if (FAILED(hr = IDirect3DDevice9_BeginScene(device)))
++        ERR("Failed to begin scene, hr %#lx.\n", hr);
++
++    if (FAILED(hr = IDirect3DDevice9_GetBackBuffer(device, 0, 0, D3DBACKBUFFER_TYPE_MONO, &backbuffer)))
++    {
++        ERR("Failed to get backbuffer, hr %#lx.\n", hr);
++        return hr;
++    }
++
++    if (FAILED(hr = IDirect3DSurface9_GetDesc(backbuffer, &desc)))
++    {
++        IDirect3DSurface9_Release(backbuffer);
++        return hr;
++    }
++
++    /* Scale into the visible backbuffer region before presenting. A windowed
++     * drawable can be smaller than the video-sized backbuffer after hosting
++     * or resizing; keeping the intermediate image within both extents also
++     * gives Present matching coordinates for that case. */
++    SetRect(&blit_dst, 0, 0, min(desc.Width, dst.right - dst.left),
++            min(desc.Height, dst.bottom - dst.top));
++    TRACE("video src %s, blit %s, dst %s, backbuffer %ux%u.\n",
++            wine_dbgstr_rect(&src), wine_dbgstr_rect(&blit_dst), wine_dbgstr_rect(&dst),
++            desc.Width, desc.Height);
++    if (FAILED(hr = IDirect3DDevice9_StretchRect(device, info->lpSurf, &src,
++            backbuffer, &blit_dst, D3DTEXF_POINT)))
++        ERR("Failed to blit image, hr %#lx.\n", hr);
++    IDirect3DSurface9_Release(backbuffer);
++
++    if (FAILED(hr = IDirect3DDevice9_EndScene(device)))
++        ERR("Failed to end scene, hr %#lx.\n", hr);
++
++
++    if (FAILED(hr = IDirect3DDevice9_Present(device, &blit_dst, &dst, NULL, NULL)))
+         ERR("Failed to present, hr %#lx.\n", hr);
+ 
+     return S_OK;

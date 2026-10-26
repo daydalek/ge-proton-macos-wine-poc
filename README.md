@@ -143,6 +143,31 @@ x64 验证使用 `wmp-probe-x64.exe`。返回码 0 表示探针通过；实际�
 同步和帧间隔需要在宿主内验证。当前实现范围为窗口化视频播放，完整 WMP 皮肤、
 全屏和真正的无窗口视频另需实现。
 
+
+#### WMReader 完整帧与嵌入播放修复
+
+`winedmo-demuxed-frame-boundaries.patch` 将容器解复用后的完整帧标记传递到
+FFmpeg 解析器，支持 ASF 中省略起始码的 VC-1 帧，并保留分片输入路径的解析行为。
+`quartz-vmr9-backbuffer-scaling.patch` 在视频表面复制阶段缩放到可见区域，
+修复视频缓冲大于嵌入窗口时的局部显示。
+`wmp-volume-decibels.patch` 将播放器音量百分比按幅度对数换算为 DirectShow
+分贝衰减，支持低音量设置；0 保持静音，100 保持满音量。
+
+静音探针检查视频样本、连续时间戳及重复定位到开头后的输出：
+
+```sh
+wine tools/probes/wm-reader-video-probe-x86.exe 'Z:\path\to\video.wmv' 120 2
+```
+
+样本数使用 `0` 可完整读取至视频流末尾。x64 使用 `wm-reader-video-probe-x64.exe`。
+实际画面、音量、同步和自然结束由宿主内播放验收。
+
+#### DirectShow VFS 归档回退与旧版句柄兼容
+
+`quartz-filesource-vfs-fallback.patch` 为 Wine DirectShow 文件源添加了对虚拟文件系统（VFS，如使用微软 Detours 钩取 Win32 文件 API 从封包内直接流式读取视频的汉化补丁或游戏引擎）的通用兼容：
+- 当虚拟句柄不支持 `GetFileSizeEx` 时，自动回退到传统的 `GetFileSize`，修复了伪句柄导致 DirectShow 图构建抛出 `ERROR_INVALID_HANDLE` (0x80070006) 的缺陷；
+- 针对仅拦截同步 `ReadFile` / `SetFilePointer` 而不支持重叠 I/O (Overlapped I/O) 的 VFS 句柄，提供同步定位读取回退与 `IAsyncReader` 请求调度，确保封包内嵌视频流无需手动解压即可在 Wine 下直接完整流畅播放。
+
 ---
 
 ## 打包与发布检查
