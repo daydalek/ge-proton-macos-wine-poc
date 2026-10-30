@@ -1,0 +1,130 @@
+From: GE macOS Wine PoC
+Subject: win32u: remap 64-bit Vulkan host memory mappings to 32-bit address space on macOS WoW64
+
+When running 32-bit WoW64 applications on macOS with MoltenVK, host memory
+mappings from vkMapMemory typically reside above the 4GB boundary. Instead of
+truncating and failing with VK_ERROR_OUT_OF_HOST_MEMORY, allocate virtual
+memory in the 32-bit address space and use Darwin's mach_vm_remap to create
+a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
+
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -28,6 +28,11 @@
+ #include <dlfcn.h>
+ #include <pthread.h>
+ #include <unistd.h>
++
++#ifdef __APPLE__
++#include <mach/mach.h>
++#include <mach/mach_vm.h>
++#endif
+ 
+ #include "ntstatus.h"
+ #define WIN32_NO_STATUS
+@@ -1040,7 +1045,7 @@
+     if (!client_memory) return;
+     memory = device_memory_from_handle( client_memory );
+ 
+-    if (memory->vm_map && !physical_device->external_memory_align)
++    if (memory->vm_map && physical_device->map_placed_align && device->p_vkUnmapMemory2KHR)
+     {
+         const VkMemoryUnmapInfoKHR info =
+         {
+@@ -1050,6 +1055,10 @@
+         };
+         device->p_vkUnmapMemory2KHR( device->host.device, &info );
+     }
++    else if (memory->vm_map && !physical_device->external_memory_align)
++    {
++        device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
++    }
+ 
+     device->p_vkFreeMemory( device->host.device, memory->obj.host.device_memory, NULL );
+     instance->p_remove_object( instance, &memory->obj.obj );
+@@ -1179,10 +1188,54 @@
+ #ifdef _WIN64
+     if (NtCurrentTeb()->WowTebOffset && res == VK_SUCCESS && (UINT_PTR)*data >> 32)
+     {
++#ifdef __APPLE__
++        void *host_ptr = *data;
++        vm_map_address_t base = (vm_map_address_t)(UINT_PTR)host_ptr & ~PAGE_MASK;
++        SIZE_T length = map_info->size == VK_WHOLE_SIZE ? memory->size - map_info->offset : map_info->size;
++        SIZE_T mapping_size = (length + ((vm_map_offset_t)(UINT_PTR)host_ptr - base) + PAGE_MASK) & ~PAGE_MASK;
++        SIZE_T alloc_size = mapping_size;
++        mach_vm_address_t lowaddr;
++        vm_prot_t cur_prot, max_prot;
++        kern_return_t kr;
++        void *vm_ptr = NULL;
++
++        if (!NtAllocateVirtualMemory( GetCurrentProcess(), &vm_ptr, zero_bits,
++                                      &alloc_size, MEM_COMMIT, PAGE_READWRITE ))
++        {
++            lowaddr = (UINT_PTR)vm_ptr;
++            if ((kr = mach_vm_remap( mach_task_self(), &lowaddr, mapping_size, 0,
++                                     VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE,
++                                     mach_task_self(), base, FALSE,
++                                     &cur_prot, &max_prot, VM_INHERIT_DEFAULT )) == KERN_SUCCESS)
++            {
++                memory->vm_map = vm_ptr;
++                *data = (char *)memory->vm_map + ((vm_map_offset_t)(UINT_PTR)host_ptr - base);
++                TRACE( "Remapped 64-bit Vulkan mapping %p to 32-bit address %p (mapping_size %zu)\n",
++                       host_ptr, *data, mapping_size );
++            }
++            else
++            {
++                ERR( "mach_vm_remap failed: %d, releasing virtual memory\n", kr );
++                alloc_size = 0;
++                NtFreeVirtualMemory( GetCurrentProcess(), &vm_ptr, &alloc_size, MEM_RELEASE );
++                device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
++                *data = NULL;
++                res = VK_ERROR_OUT_OF_HOST_MEMORY;
++            }
++        }
++        else
++        {
++            ERR( "NtAllocateVirtualMemory failed for 32-bit placement\n" );
++            device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
++            *data = NULL;
++            res = VK_ERROR_OUT_OF_HOST_MEMORY;
++        }
++#else
+         FIXME( "returned mapping %p does not fit 32-bit pointer\n", *data );
+         device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
+         *data = NULL;
+         res = VK_ERROR_OUT_OF_HOST_MEMORY;
++#endif
+     }
+ #endif
+ 
+@@ -1216,14 +1269,20 @@
+ 
+     if (!device->p_vkUnmapMemory2KHR)
+     {
+-        if (unmap_info->pNext || memory->vm_map) FIXME( "Not implemented\n" );
++        if (unmap_info->pNext) FIXME( "Not implemented\n" );
+         device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
++        if (memory->vm_map)
++        {
++            SIZE_T size = 0;
++            NtFreeVirtualMemory( GetCurrentProcess(), &memory->vm_map, &size, MEM_RELEASE );
++            memory->vm_map = NULL;
++        }
+         return VK_SUCCESS;
+     }
+ 
+     info = *unmap_info;
+     info.memory = memory->obj.host.device_memory;
+-    if (memory->vm_map) info.flags |= VK_MEMORY_UNMAP_RESERVE_BIT_EXT;
++    if (memory->vm_map && physical_device->map_placed_align) info.flags |= VK_MEMORY_UNMAP_RESERVE_BIT_EXT;
+ 
+     res = device->p_vkUnmapMemory2KHR( device->host.device, &info );
+ 
+@@ -3010,6 +3069,8 @@
+     {
+ #ifdef SONAME_LIBVULKAN
+         libvulkan = SONAME_LIBVULKAN;
++#elif defined(__APPLE__)
++        libvulkan = "libMoltenVK.dylib";
+ #else
+         return;
+ #endif
