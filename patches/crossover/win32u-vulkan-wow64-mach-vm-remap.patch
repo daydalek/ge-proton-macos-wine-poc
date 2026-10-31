@@ -21,7 +21,25 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
  
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
-@@ -1040,7 +1045,7 @@
+@@ -535,8 +540,16 @@
+         VkPhysicalDeviceProperties2 props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &host_mem_props};
+ 
+         instance->p_vkGetPhysicalDeviceProperties2KHR( host_physical_device, &props );
++#ifdef __APPLE__
++        /* On Apple Silicon macOS, importing Wine host memory as no-copy MTLBuffers triggers
++         * kIOGPUCommandBufferCallbackErrorOutOfMemory. Disable host memory import for 32-bit
++         * WoW64 processes and route mappings through Darwin mach_vm_remap low-address aliasing. */
++        physical_device->external_memory_align = 0;
++        TRACE( "Disabled VK_EXT_external_memory_host for macOS WoW64; using mach_vm_remap\n" );
++#else
+         physical_device->external_memory_align = host_mem_props.minImportedHostPointerAlignment;
+         if (physical_device->external_memory_align) WARN( "Not using VK_EXT_external_memory_host for memory mapping\n" );
+         else TRACE( "Using VK_EXT_external_memory_host for memory mapping with alignment: %u\n", physical_device->external_memory_align );
++#endif
+     }
+ 
+     driver_funcs->p_map_device_extensions( &extensions );
+@@ -1040,7 +1053,7 @@
      if (!client_memory) return;
      memory = device_memory_from_handle( client_memory );
  
@@ -30,7 +48,7 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
      {
          const VkMemoryUnmapInfoKHR info =
          {
-@@ -1050,6 +1055,10 @@
+@@ -1050,6 +1063,10 @@
          };
          device->p_vkUnmapMemory2KHR( device->host.device, &info );
      }
@@ -41,7 +59,7 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
  
      device->p_vkFreeMemory( device->host.device, memory->obj.host.device_memory, NULL );
      instance->p_remove_object( instance, &memory->obj.obj );
-@@ -1179,10 +1188,54 @@
+@@ -1179,10 +1196,54 @@
  #ifdef _WIN64
      if (NtCurrentTeb()->WowTebOffset && res == VK_SUCCESS && (UINT_PTR)*data >> 32)
      {
@@ -96,7 +114,7 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
      }
  #endif
  
-@@ -1216,14 +1269,20 @@
+@@ -1216,14 +1277,20 @@
  
      if (!device->p_vkUnmapMemory2KHR)
      {
@@ -119,7 +137,7 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
  
      res = device->p_vkUnmapMemory2KHR( device->host.device, &info );
  
-@@ -3010,6 +3069,8 @@
+@@ -3010,6 +3077,8 @@
      {
  #ifdef SONAME_LIBVULKAN
          libvulkan = SONAME_LIBVULKAN;
