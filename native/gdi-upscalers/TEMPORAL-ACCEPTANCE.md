@@ -47,3 +47,12 @@ results alone.
 - Wine integration compiled against the optional extension and retained the
   original ABI and presentation fallback.
 - User game acceptance: pending.
+
+## User feedback: vertical orientation
+
+The user reported vertically inverted game pixels and text with correctly
+oriented window chrome and Metal HUD. The upload path applied an additional
+vertical CGContext transform. That transform has been removed so upload uses
+the same rasterization as conventional Wine presentation; source, reference,
+mask and neural snapshots retain one shared coordinate convention. The revised
+orientation is awaiting user confirmation after restarting the game.

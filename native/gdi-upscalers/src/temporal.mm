@@ -250,7 +250,8 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     CGColorSpaceRelease(space);
     if (!bitmap) { [upload release]; failed=YES; return NO; }
     CGContextSetBlendMode(bitmap,kCGBlendModeCopy);
-    CGContextTranslateCTM(bitmap,0,ih); CGContextScaleCTM(bitmap,1,-1);
+    /* Match Wine's conventional CGImage rasterization. Current input, neural
+     * snapshots and residual references share this bitmap coordinate system. */
     CGContextDrawImage(bitmap,CGRectMake(0,0,iw,ih),image); CGContextRelease(bitmap);
     id<MTLTexture> texture=[self uploadTexture:upload width:iw height:ih stride:inputStride];
     if (!texture) { [upload release]; failed=YES; return NO; }
