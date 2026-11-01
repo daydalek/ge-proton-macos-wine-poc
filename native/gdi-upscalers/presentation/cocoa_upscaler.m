@@ -98,6 +98,18 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
 @implementation WineGDIUpscaler
 
 + (BOOL) enabled { return selected_algorithm() != UPSCALE_OFF; }
++ (BOOL)temporalEnabled
+{
+    unsigned selected=selected_algorithm();
+    const char *mode=getenv("WINE_GDI_TEMPORAL");
+    return (selected==WGDI_REALCUGAN || selected==UPSCALE_ADAPTIVE) && (!mode || strcmp(mode,"0"));
+}
+- (BOOL)supportsTemporalSurfaces
+{
+    return temporal && [temporal respondsToSelector:@selector(presentSurface:inLayer:frame:width:height:request:needsDisplay:sourceConsumed:)] &&
+        [temporal respondsToSelector:@selector(presentLatestInLayer:frame:width:height:request:needsDisplay:)];
+}
+- (void)cancelTemporalPresentation { [temporal cancel]; }
 
 - (id) init
 {
@@ -147,11 +159,9 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
 
 - (void)hideTemporalPresentation { [[temporal layer] setHidden:YES]; }
 
-- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
-    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
+- (BOOL)requestTemporalInput:(NSData *)snapshot width:(NSUInteger)iw height:(NSUInteger)ih
+    token:(uint64_t)token needsDisplay:(void (^)(void))redraw
 {
-    if (!temporal) return NO;
-    WGDITemporalRequest request = ^BOOL(NSData *snapshot, NSUInteger iw, NSUInteger ih, uint64_t token) {
         if (neuralFailed) {
             [temporal completeOutput:nil token:token needsDisplay:redraw];
             return YES;
@@ -187,9 +197,35 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
             }
         });
         return YES;
-    };
+
+}
+- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
+{
+    if (!temporal) return NO;
     return [temporal presentImage:image inLayer:parent frame:frame width:width height:height
-        request:request needsDisplay:redraw];
+        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
+            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
+        } needsDisplay:redraw];
+}
+- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
+    sourceConsumed:(void (^)(void))consumed
+{
+    if (![self supportsTemporalSurfaces]) { if (consumed) consumed(); return NO; }
+    return [temporal presentSurface:surface inLayer:parent frame:frame width:width height:height
+        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
+            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
+        } needsDisplay:redraw sourceConsumed:consumed];
+}
+- (BOOL)redrawTemporalInLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
+{
+    if (![self supportsTemporalSurfaces]) return NO;
+    return [temporal presentLatestInLayer:parent frame:frame width:width height:height
+        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
+            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
+        } needsDisplay:redraw];
 }
 
 - (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height

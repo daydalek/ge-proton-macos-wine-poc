@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Install locked Vulkan headers and the official MoltenVK x86_64 runtime.
+# Install locked Vulkan headers and a patched, default-off MoltenVK runtime.
 set -euo pipefail
 source "$(dirname "$0")/lib/common.sh"
 poc_setup_build_env
@@ -28,8 +28,25 @@ if test "$arches" = x86_64; then
 else
   /usr/bin/lipo "$moltenvk" -thin x86_64 -output "$POC_DEPS/lib/libMoltenVK.dylib"
 fi
+# Build the tested variant from pinned sources rather than shipping an
+# unpatched binary. The official archive above remains a locked input for
+# dependency/provenance checks; the workaround activates only when requested.
+bash "$POC_PROJECT/scripts/build-shadow-moltenvk.sh"
 /usr/bin/install_name_tool -id '@rpath/libMoltenVK.dylib' "$POC_DEPS/lib/libMoltenVK.dylib"
 /usr/bin/codesign --force --sign - "$POC_DEPS/lib/libMoltenVK.dylib"
+mkdir -p "$POC_DEPS/share/whisky"
+cp "$POC_WORK/moltenvk-shadow/shadow-import.patch" "$POC_DEPS/share/whisky/moltenvk-shadow-import.patch"
+"$POC_PYTHON" - "$POC_DEPS" <<'PY_SHADOW'
+import hashlib, json, sys
+from pathlib import Path
+deps = Path(sys.argv[1])
+sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+record = {'source_revision': 'db66022459ffb663aa2b50f6b018bc2e124f5edf',
+          'patch_sha256': sha(deps / 'share/whisky/moltenvk-shadow-import.patch'),
+          'dylib_sha256': sha(deps / 'lib/libMoltenVK.dylib'),
+          'configuration': 'MVK_CONFIG_SHADOW_IMPORTED_HOST_MEMORY', 'default_enabled': False}
+(deps / 'share/whisky/moltenvk-shadow-build.json').write_text(json.dumps(record, indent=2) + '\n')
+PY_SHADOW
 "$POC_PYTHON" - "$POC_DEPS" "$POC_VULKAN_HEADERS_DIR" <<'PY'
 import sys
 from pathlib import Path

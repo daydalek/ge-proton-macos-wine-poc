@@ -77,7 +77,7 @@ configure_file("${WGDI_MODEL_DIR}/up2x-no-denoise.bin" "${RESOURCES}/models-se/u
 add_library(winegdiupscalers SHARED src/api.cpp src/anime4k.mm src/realcugan.cpp src/coreml-client.cpp src/resize.mm src/temporal.mm)
 target_include_directories(winegdiupscalers PUBLIC include PRIVATE src)
 target_compile_options(winegdiupscalers PRIVATE -Wall -Wextra -Werror=return-type)
-target_link_libraries(winegdiupscalers PRIVATE ncnn "-framework Foundation" "-framework Metal" "-framework Accelerate" "-framework QuartzCore" "-framework CoreGraphics")
+target_link_libraries(winegdiupscalers PRIVATE ncnn "-framework Foundation" "-framework Metal" "-framework Accelerate" "-framework QuartzCore" "-framework CoreGraphics" "-framework IOSurface")
 set_target_properties(winegdiupscalers PROPERTIES INSTALL_NAME_DIR "@rpath")
 add_dependencies(winegdiupscalers anime4k_shaders temporal_shaders)
 set(WINE_UNIX_DIR "lib/wine/x86_64-unix" CACHE STRING "Wine Unix architecture directory")

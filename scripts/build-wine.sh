@@ -25,7 +25,7 @@ poc_note "Building $variant from $src (macOS >= $MACOSX_DEPLOYMENT_TARGET, $POC_
 mkdir -p "$root/build/$variant" "$root/stage/$variant" "$root/logs/$variant"
 if test "$variant" = media; then
   apply_args=()
-  for patch_name in macos-platform.patch macos-vmr7-window.patch wow64-demuxer-cleanup.patch quartz-child-window-position.patch quartz-preserve-window-size.patch mpeg-audio-wave-format.patch rosetta-wow64-thunks.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch wine-upstream-syscall-wrappers.patch macos-gdi-fullscreen-centering.patch macos-metalfx-spatial.patch macos-gdi-upscalers.patch; do
+  for patch_name in macos-platform.patch macos-vmr7-window.patch wow64-demuxer-cleanup.patch quartz-child-window-position.patch quartz-preserve-window-size.patch mpeg-audio-wave-format.patch rosetta-wow64-thunks.patch command-line-append.patch vkd3d-partial-varyings.patch dbghelp-dwarf-divisor.patch sechost-device-notify-handle.patch stale-present-rect.patch opengl-flush-flags.patch macos-fullscreen-surface.patch wow64-present-rect.patch wine-upstream-syscall-wrappers.patch macos-gdi-fullscreen-centering.patch macos-metalfx-spatial.patch macos-gdi-upscalers.patch macos-wined3d-temporal.patch macos-gdi-metal-presentation-exclusion.patch; do
   patch_file="$POC_PROJECT/patches/wine-ge/$patch_name"
   apply_args+=(--patch "$patch_file")
   done

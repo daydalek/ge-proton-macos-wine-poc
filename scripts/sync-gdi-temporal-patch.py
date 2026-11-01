@@ -18,10 +18,16 @@ def main():
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--source-tree', type=Path, help='Also refresh these generated files in an existing Wine source tree')
     args = parser.parse_args()
-    patch = ROOT / 'patches/wine-ge/macos-gdi-upscalers.patch'
+    groups = [('macos-gdi-upscalers.patch', FILES),
+              ('macos-wined3d-temporal.patch', {'cocoa_gl_temporal.h': NATIVE / 'presentation/cocoa_gl_temporal.h'})]
+    for patch_name, files in groups:
+        sync_patch(ROOT / 'patches/wine-ge' / patch_name, files, args, parser)
+
+
+def sync_patch(patch, files, args, parser):
     original = patch.read_text()
     updated = original
-    for name, source in FILES.items():
+    for name, source in files.items():
         content = source.read_text()
         marker = f'diff --git a/dlls/winemac.drv/{name} b/dlls/winemac.drv/{name}\n'
         section = (marker + 'new file mode 100644\n--- /dev/null\n' +

@@ -14,7 +14,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     id<MTLComputePipelineState> resetPS, seedPS, detectPS, maskPS, acceptPS, inputPS, residualPS, timesPS;
     id<MTLRenderPipelineState> renderPS;
     CAMetalLayer *displayLayer;
-    id<MTLTexture> referenceTexture, residualTexture, previousTexture, currentTexture, changesTexture, weightsTexture;
+    id<MTLTexture> referenceTexture, residualTexture, previousTexture, currentTexture, changesTexture, weightsTexture, analysedTexture;
     id<MTLBuffer> referenceTimes, previousUpload, analysedUpload;
     NSMutableData *referenceCPU, *pendingSelection, *pendingVersions;
     NSData *pendingInput;
@@ -22,7 +22,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     NSUInteger inputWidth, inputHeight, inputStride, framesInFlight;
     uint64_t frameSequence, nextToken, pendingToken, pendingEpoch;
     double origin, fadeUntil;
-    BOOL cancelled, failed, neuralDisabled, timerPending, seeded, trace;
+    BOOL cancelled, failed, neuralDisabled, timerPending, seeded, trace, referenceCPUSeeded, snapshotPending;
 }
 - (id)initWithResources:(NSString *)resources;
 @end
@@ -95,12 +95,13 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     [referenceTimes release]; referenceTimes = nil;
     [previousUpload release]; previousUpload = nil;
     [analysedUpload release]; analysedUpload = nil;
+    [analysedTexture release]; analysedTexture = nil;
     [referenceCPU release]; referenceCPU = nil;
     [pendingInput release]; pendingInput = nil;
     [pendingSelection release]; pendingSelection = nil;
     [pendingVersions release]; pendingVersions = nil;
     pendingToken = 0; inputWidth = inputHeight = inputStride = 0;
-    timerPending = seeded = NO; fadeUntil = 0;
+    timerPending = seeded = referenceCPUSeeded = snapshotPending = NO; fadeUntil = 0;
 }
 - (void)cancel
 {
@@ -196,7 +197,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
 }
 - (void)refine:(WGDITemporalRequest)request redraw:(void (^)(void))redraw
 {
-    if (cancelled || failed || neuralDisabled || pendingToken || !analysedUpload || !request) return;
+    if (cancelled || failed || neuralDisabled || pendingToken || !analysedTexture || snapshotPending || !request) return;
     NSUInteger count = (NSUInteger)schedule.columns*schedule.rows;
     NSMutableData *selection = [NSMutableData dataWithLength:count*sizeof(uint32_t)];
     NSMutableData *versions = [NSMutableData dataWithLength:count*sizeof(uint64_t)];
@@ -209,8 +210,22 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
         if (dirty) [self requestLater:next request:request redraw:redraw];
         return;
     }
+    if (analysedUpload) {
+        [self submitSnapshot:analysedUpload selection:selection versions:versions request:request redraw:redraw];
+    } else {
+        [self readSnapshot:selection versions:versions request:request redraw:redraw];
+    }
+}
+- (void)submitSnapshot:(id<MTLBuffer>)sourceBuffer selection:(NSMutableData *)selection
+    versions:(NSMutableData *)versions request:(WGDITemporalRequest)request redraw:(void (^)(void))redraw
+{
+    if (!sourceBuffer || pendingToken || cancelled || failed || neuralDisabled) return;
+    NSUInteger count=(NSUInteger)schedule.columns*schedule.rows;
+    unsigned ready=wgdi_temporal_revalidate(&schedule,schedule.epoch,(uint32_t *)selection.mutableBytes,
+        (const uint64_t *)versions.bytes);
+    if (!ready) { if (redraw) redraw(); return; }
     NSMutableData *candidate = [[referenceCPU mutableCopy] autorelease];
-    const uint8_t *source = (const uint8_t *)analysedUpload.contents;
+    const uint8_t *source = (const uint8_t *)sourceBuffer.contents;
     uint8_t *destination = (uint8_t *)candidate.mutableBytes;
     const uint32_t *selected = (const uint32_t *)selection.bytes;
     for (NSUInteger ty=0;ty<schedule.rows;++ty) for (NSUInteger tx=0;tx<schedule.columns;++tx) {
@@ -229,48 +244,136 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
         [self requestLater:WGDI_TEMPORAL_QUIET_SECONDS request:request redraw:redraw];
     }
 }
+- (void)readSnapshot:(NSMutableData *)selection versions:(NSMutableData *)versions
+    request:(WGDITemporalRequest)request redraw:(void (^)(void))redraw
+{
+    if (snapshotPending || !analysedTexture) return;
+    id<MTLBuffer> readback=[device newBufferWithLength:inputStride*inputHeight options:MTLResourceStorageModeShared];
+    id<MTLCommandBuffer> command=[queue commandBuffer];
+    if (!readback || !command) {
+        [readback release]; neuralDisabled=YES; if (redraw) redraw(); return;
+    }
+    BOOL seedCPU=!referenceCPUSeeded;
+    id<MTLBlitCommandEncoder> blit=[command blitCommandEncoder];
+    const uint32_t *selected=(const uint32_t *)selection.bytes;
+    for (NSUInteger ty=0;ty<(seedCPU ? 1 : schedule.rows);++ty)
+        for (NSUInteger tx=0;tx<(seedCPU ? 1 : schedule.columns);++tx) {
+            if (!seedCPU && !selected[ty*schedule.columns+tx]) continue;
+            NSUInteger x=seedCPU ? 0 : tx*256, y=seedCPU ? 0 : ty*256;
+            NSUInteger w=seedCPU ? inputWidth : MIN((NSUInteger)256,inputWidth-x);
+            NSUInteger h=seedCPU ? inputHeight : MIN((NSUInteger)256,inputHeight-y);
+            [blit copyFromTexture:analysedTexture sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(x,y,0)
+                sourceSize:MTLSizeMake(w,h,1) toBuffer:readback destinationOffset:y*inputStride+x*4
+                destinationBytesPerRow:inputStride destinationBytesPerImage:inputStride*inputHeight];
+        }
+    [blit endEncoding];
+    snapshotPending=YES; uint64_t epoch=schedule.epoch;
+    NSUInteger iw=inputWidth,ih=inputHeight,stride=inputStride;
+    [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (cancelled || epoch!=schedule.epoch) return;
+            snapshotPending=NO;
+            if (completed.status==MTLCommandBufferStatusError) {
+                neuralDisabled=YES; NSLog(@"Wine temporal: inference snapshot failed (%@)",completed.error);
+                if (redraw) redraw(); return;
+            }
+            if (seedCPU) {
+                for (NSUInteger y=0;y<ih;++y) memcpy((uint8_t *)referenceCPU.mutableBytes+y*iw*4,
+                    (const uint8_t *)readback.contents+y*stride,iw*4);
+                referenceCPUSeeded=YES;
+            }
+            [self submitSnapshot:readback selection:selection versions:versions request:request redraw:redraw];
+        });
+    }];
+    [command commit]; [readback release];
+}
 - (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
     width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
     needsDisplay:(void (^)(void))redraw
 {
-    NSAssert(NSThread.isMainThread, @"Temporal presentation requires main-thread ownership");
-    if (cancelled || failed || !image || !parent || !width || !height || width>8192 || height>8192 ||
-        (uint64_t)width*height>32u*1024u*1024u || CGRectIsEmpty(frame)) return NO;
-    if (framesInFlight >= 2) {
-        displayLayer.hidden=NO; displayLayer.frame=frame;
-        if (redraw) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC/60),dispatch_get_main_queue(),redraw);
-        return YES;
-    }
+    if (!image || cancelled || failed) return NO;
     NSUInteger iw=CGImageGetWidth(image), ih=CGImageGetHeight(image);
     if (![self configureWidth:iw height:ih]) { failed=YES; return NO; }
-    id<MTLBuffer> upload = [device newBufferWithLength:inputStride*ih options:MTLResourceStorageModeShared];
+    id<MTLBuffer> upload=[device newBufferWithLength:inputStride*ih options:MTLResourceStorageModeShared];
     CGColorSpaceRef space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     CGContextRef bitmap=upload ? CGBitmapContextCreate(upload.contents,iw,ih,8,inputStride,space,
         kCGBitmapByteOrder32Little|kCGImageAlphaNoneSkipFirst) : NULL;
     CGColorSpaceRelease(space);
     if (!bitmap) { [upload release]; failed=YES; return NO; }
     CGContextSetBlendMode(bitmap,kCGBlendModeCopy);
-    /* Match Wine's conventional CGImage rasterization. Current input, neural
-     * snapshots and residual references share this bitmap coordinate system. */
+    /* Same rasterization as conventional Wine GDI; OpenGL normalizes in its blit. */
     CGContextDrawImage(bitmap,CGRectMake(0,0,iw,ih),image); CGContextRelease(bitmap);
     id<MTLTexture> texture=[self uploadTexture:upload width:iw height:ih stride:inputStride];
-    if (!texture) { [upload release]; failed=YES; return NO; }
-    BOOL seedReference = !seeded;
-    if (!seeded) {
+    if (!referenceCPUSeeded) {
         for (NSUInteger y=0;y<ih;++y) memcpy((uint8_t *)referenceCPU.mutableBytes+y*iw*4,
             (const uint8_t *)upload.contents+y*inputStride,iw*4);
-        seeded=YES;
+        referenceCPUSeeded=YES;
     }
+    BOOL result=[self presentTexture:texture upload:upload external:nil inLayer:parent frame:frame
+        width:width height:height request:request needsDisplay:redraw sourceConsumed:nil];
+    [texture release]; [upload release]; return result;
+}
+- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
+    needsDisplay:(void (^)(void))redraw sourceConsumed:(void (^)(void))consumed
+{
+    if (!surface || cancelled || failed) { if (consumed) consumed(); return NO; }
+    NSUInteger iw=IOSurfaceGetWidth(surface),ih=IOSurfaceGetHeight(surface);
+    if (![self configureWidth:iw height:ih]) { if (consumed) consumed(); return NO; }
+    MTLTextureDescriptor *descriptor=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+        width:iw height:ih mipmapped:NO];
+    descriptor.storageMode=MTLStorageModeShared; descriptor.usage=MTLTextureUsageShaderRead;
+    id<MTLTexture> external=[device newTextureWithDescriptor:descriptor iosurface:surface plane:0];
+    descriptor.storageMode=MTLStorageModePrivate;
+    id<MTLTexture> immutable=[device newTextureWithDescriptor:descriptor];
+    CFRetain(surface);
+    BOOL result=[self presentTexture:immutable upload:nil external:external inLayer:parent frame:frame
+        width:width height:height request:request needsDisplay:redraw sourceConsumed:^{
+            if (consumed) consumed(); CFRelease(surface);
+        }];
+    [external release]; [immutable release]; return result;
+}
+- (BOOL)presentLatestInLayer:(CALayer *)parent frame:(CGRect)frame width:(NSUInteger)width
+    height:(NSUInteger)height request:(WGDITemporalRequest)request needsDisplay:(void (^)(void))redraw
+{
+    id<MTLTexture> latest=[[currentTexture retain] autorelease];
+    if (!latest) return NO;
+    return [self presentTexture:latest upload:previousUpload external:nil inLayer:parent frame:frame
+        width:width height:height request:request needsDisplay:redraw sourceConsumed:nil];
+}
+- (BOOL)presentTexture:(id<MTLTexture>)texture upload:(id<MTLBuffer>)upload external:(id<MTLTexture>)external
+    inLayer:(CALayer *)parent frame:(CGRect)frame width:(NSUInteger)width height:(NSUInteger)height
+    request:(WGDITemporalRequest)request needsDisplay:(void (^)(void))redraw sourceConsumed:(void (^)(void))consumed
+{
+    NSAssert(NSThread.isMainThread, @"Temporal presentation requires main-thread ownership");
+    if (cancelled || failed || !texture || !parent || !width || !height || width>8192 || height>8192 ||
+        (uint64_t)width*height>32u*1024u*1024u || CGRectIsEmpty(frame) || (consumed && !external)) {
+        if (consumed) consumed(); return NO;
+    }
+    if (framesInFlight>=2) {
+        displayLayer.hidden=NO; displayLayer.frame=frame;
+        if (redraw) dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC/60),dispatch_get_main_queue(),redraw);
+        if (consumed) consumed(); return YES;
+    }
+    NSUInteger iw=inputWidth,ih=inputHeight;
+    BOOL seedReference=!seeded;
     if (displayLayer.superlayer != parent) { [displayLayer removeFromSuperlayer]; [parent addSublayer:displayLayer]; }
     displayLayer.frame=frame; displayLayer.contentsScale=width/frame.size.width;
     displayLayer.drawableSize=CGSizeMake(width,height); displayLayer.hidden=NO;
     id<CAMetalDrawable> drawable=[displayLayer nextDrawable];
-    if (!drawable) { [texture release]; [upload release]; return NO; }
+    if (!drawable) { if (consumed) consumed(); return NO; }
     struct wgdi_temporal_parameters p=[self parameters];
     id<MTLBuffer> metadata=[device newBufferWithLength:(NSUInteger)p.block_columns*p.block_rows*sizeof(uint32_t)
         options:MTLResourceStorageModeShared];
     id<MTLCommandBuffer> command=[queue commandBuffer];
-    if (!metadata || !command) { [metadata release]; [texture release]; [upload release]; failed=YES; return NO; }
+    if (!metadata || !command) { [metadata release]; if (consumed) consumed(); failed=YES; return NO; }
+    if (external) {
+        id<MTLBlitCommandEncoder> blit=[command blitCommandEncoder];
+        [blit copyFromTexture:external sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)
+            sourceSize:MTLSizeMake(iw,ih,1) toTexture:texture destinationSlice:0 destinationLevel:0
+            destinationOrigin:MTLOriginMake(0,0,0)];
+        [blit endEncoding];
+    }
     if (seedReference) {
         id<MTLComputeCommandEncoder> seed = [command computeCommandEncoder];
         [seed setComputePipelineState:seedPS]; [seed setTexture:texture atIndex:0];
@@ -295,6 +398,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     ++framesInFlight;
     [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
         (void)oldUpload;
+        if (consumed) consumed();
         dispatch_async(dispatch_get_main_queue(), ^{
             if (framesInFlight) --framesInFlight;
             if (cancelled || epoch!=schedule.epoch) return;
@@ -310,6 +414,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
             if (sequence>schedule.observed_sequence) {
                 wgdi_temporal_observe(&schedule,(const uint32_t *)metadata.contents,epoch,sequence,captured);
                 [analysedUpload release]; analysedUpload=[upload retain];
+                [analysedTexture release]; analysedTexture=[texture retain];
                 [self refine:request redraw:redraw];
             }
             if ([self now]<fadeUntil && redraw)
@@ -318,9 +423,9 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     }];
     [previousTexture release]; previousTexture=[texture retain];
     [currentTexture release]; currentTexture=[texture retain];
-    [previousUpload release]; previousUpload=[upload retain];
-    [command presentDrawable:drawable]; [command commit];
-    [metadata release]; [texture release]; [upload release];
+    [upload retain]; [previousUpload release]; previousUpload=upload;
+    [command presentDrawable:drawable]; [command commit]; seeded=YES;
+    [metadata release];
     return YES;
 }
 - (void)clearPending

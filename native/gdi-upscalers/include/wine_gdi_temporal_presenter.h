@@ -5,6 +5,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #include <stdint.h>
 #import <QuartzCore/CALayer.h>
+#import <IOSurface/IOSurface.h>
 
 /* Snapshot BGRA is tightly packed, top row first. Neural output is always 2x.
  * Request returns YES only when the owner accepted the asynchronous job. */
@@ -14,6 +15,16 @@ typedef BOOL (^WGDITemporalRequest)(NSData *input, NSUInteger width, NSUInteger 
 - (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
     width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
     needsDisplay:(void (^)(void))redraw;
+@optional
+/* The producer completes OpenGL writes before calling this method. The callback
+ * releases its bounded source slot after Metal copies it to immutable storage. */
+- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
+    needsDisplay:(void (^)(void))redraw sourceConsumed:(void (^)(void))consumed;
+- (BOOL)presentLatestInLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
+    needsDisplay:(void (^)(void))redraw;
+@required
 - (void)completeOutput:(NSData *)output token:(uint64_t)token needsDisplay:(void (^)(void))redraw;
 - (void)cancel;
 @end

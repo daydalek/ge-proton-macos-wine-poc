@@ -29,6 +29,14 @@
     NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
 }
 + (BOOL) enabled;
++ (BOOL)temporalEnabled;
+- (BOOL)supportsTemporalSurfaces;
+- (void)cancelTemporalPresentation;
+- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
+    sourceConsumed:(void (^)(void))consumed;
+- (BOOL)redrawTemporalInLayer:(CALayer *)parent frame:(CGRect)frame
+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw;
 - (void)hideTemporalPresentation;
 - (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
     width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw;

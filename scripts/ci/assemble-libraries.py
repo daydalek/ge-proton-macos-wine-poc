@@ -14,6 +14,7 @@ import sys
 import tarfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
+from poc_common import DXVK_VERSION, WORK, resolve_pinned_dxvk
 from wined3d_builtins import preserve_wined3d_builtins
 
 
@@ -35,7 +36,7 @@ def main():
     parser.add_argument('--stage', type=Path, required=True, help='Current build stage containing media and deps-x64')
     parser.add_argument('--wine-stage', type=Path, help='Wine install tree; default is stage/media')
     parser.add_argument('--core', default='media', choices=('media', 'crossover-ge-media'))
-    parser.add_argument('--base-libraries', type=Path, required=True, help='Existing Libraries tree providing DXVK')
+    parser.add_argument('--base-libraries', type=Path, required=True, help='Existing Libraries tree providing runtime metadata')
     parser.add_argument('--version', required=True, help='Runtime release version X.Y.Z; independent of Wine version')
     parser.add_argument('--output', type=Path, required=True, help='Fresh output directory')
     args = parser.parse_args()
@@ -47,16 +48,15 @@ def main():
     required = [wine_stage / 'bin/wine', wine_stage / 'bin/wineserver',
                 stage / 'deps-x64/lib/libMoltenVK.dylib', base / 'WhiskyWineVersion.plist',
                 poc / 'licenses', poc / 'COPYING.LIB', poc / 'UPSTREAMS.md']
-    required += [base / 'DXVK' / arch / dll for arch in ('x64', 'x32')
-                 for dll in ('d3d11.dll', 'd3d10core.dll')]
     for path in required:
         if not path.exists():
             parser.error(f'missing input: {path}')
     if out.exists():
         parser.error(f'output already exists: {out}')
     base_info = plistlib.loads((base / 'WhiskyWineVersion.plist').read_bytes())
-    if not base_info.get('dxvkVersion'):
-        parser.error('base runtime must record its DXVK version')
+    if base_info.get('dxvkVersion') != DXVK_VERSION:
+        parser.error(f'base runtime records DXVK {base_info.get("dxvkVersion")!r}, expected {DXVK_VERSION!r}')
+    dxvk = resolve_pinned_dxvk(WORK)
     out.mkdir(parents=True)
     lib = out / 'Libraries'
     lib.mkdir()
@@ -70,9 +70,14 @@ def main():
     if wine64.exists() or wine64.is_symlink():
         wine64.unlink()
     wine64.symlink_to('wine')
-    shutil.copytree(base / 'DXVK', lib / 'DXVK', symlinks=True)
+    print('Copying pinned DXVK payload', flush=True)
+    shutil.copytree(dxvk, lib / 'DXVK', symlinks=True)
     notices = lib / 'GE-Media'
     notices.mkdir()
+    shadow_notices = stage / 'deps-x64/share/whisky'
+    for name in ('moltenvk-shadow-import.patch', 'moltenvk-shadow-build.json'):
+        if (shadow_notices / name).is_file():
+            shutil.copy2(shadow_notices / name, notices / name)
     for name in ('COPYING.LIB', 'LICENSE', 'UPSTREAMS.md'):
         shutil.copy2(poc / name, notices / name)
     for name in ('licenses', 'patches'):
@@ -139,7 +144,7 @@ def main():
     # Local D3DMetal 3.0 device/present probes passed on the CrossOver core.
     # Do not advertise this capability for the legacy Valve packaging check.
     info = {'version': dict(zip(('major', 'minor', 'patch'), map(int, args.version.split('.')))),
-            'dxvkVersion': base_info['dxvkVersion'], 'gptkCapable': args.core == 'crossover-ge-media'}
+            'dxvkVersion': DXVK_VERSION, 'gptkCapable': args.core == 'crossover-ge-media'}
     (lib / 'WhiskyWineVersion.plist').write_bytes(plistlib.dumps(info))
     manifest = {'runtime_version': args.version, 'wine_version': run(str(wine64), '--version').strip(),
                 'core': args.core, 'poc_commit': run('git', '-C', str(poc), 'rev-parse', 'HEAD').strip(),

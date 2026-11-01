@@ -19,7 +19,7 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.h b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.h
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,49 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#import "cocoa_spatial.h"
 +#include "wine_gdi_upscaler.h"
@@ -51,6 +51,14 @@ new file mode 100644
 +    NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
 +}
 ++ (BOOL) enabled;
+++ (BOOL)temporalEnabled;
++- (BOOL)supportsTemporalSurfaces;
++- (void)cancelTemporalPresentation;
++- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++    sourceConsumed:(void (^)(void))consumed;
++- (BOOL)redrawTemporalInLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw;
 +- (void)hideTemporalPresentation;
 +- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
 +    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw;
@@ -65,7 +73,7 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.m b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.m
-@@ -0,0 +1,409 @@
+@@ -0,0 +1,445 @@
 +/*
 + * Optional GDI upscaler selection and asynchronous neural presentation.
 + * Copyright 2026 GE-Proton macOS Wine PoC contributors
@@ -166,6 +174,18 @@ new file mode 100644
 +@implementation WineGDIUpscaler
 +
 ++ (BOOL) enabled { return selected_algorithm() != UPSCALE_OFF; }
+++ (BOOL)temporalEnabled
++{
++    unsigned selected=selected_algorithm();
++    const char *mode=getenv("WINE_GDI_TEMPORAL");
++    return (selected==WGDI_REALCUGAN || selected==UPSCALE_ADAPTIVE) && (!mode || strcmp(mode,"0"));
++}
++- (BOOL)supportsTemporalSurfaces
++{
++    return temporal && [temporal respondsToSelector:@selector(presentSurface:inLayer:frame:width:height:request:needsDisplay:sourceConsumed:)] &&
++        [temporal respondsToSelector:@selector(presentLatestInLayer:frame:width:height:request:needsDisplay:)];
++}
++- (void)cancelTemporalPresentation { [temporal cancel]; }
 +
 +- (id) init
 +{
@@ -215,11 +235,9 @@ new file mode 100644
 +
 +- (void)hideTemporalPresentation { [[temporal layer] setHidden:YES]; }
 +
-+- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
-+    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++- (BOOL)requestTemporalInput:(NSData *)snapshot width:(NSUInteger)iw height:(NSUInteger)ih
++    token:(uint64_t)token needsDisplay:(void (^)(void))redraw
 +{
-+    if (!temporal) return NO;
-+    WGDITemporalRequest request = ^BOOL(NSData *snapshot, NSUInteger iw, NSUInteger ih, uint64_t token) {
 +        if (neuralFailed) {
 +            [temporal completeOutput:nil token:token needsDisplay:redraw];
 +            return YES;
@@ -255,9 +273,35 @@ new file mode 100644
 +            }
 +        });
 +        return YES;
-+    };
++
++}
++- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++{
++    if (!temporal) return NO;
 +    return [temporal presentImage:image inLayer:parent frame:frame width:width height:height
-+        request:request needsDisplay:redraw];
++        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
++            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
++        } needsDisplay:redraw];
++}
++- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++    sourceConsumed:(void (^)(void))consumed
++{
++    if (![self supportsTemporalSurfaces]) { if (consumed) consumed(); return NO; }
++    return [temporal presentSurface:surface inLayer:parent frame:frame width:width height:height
++        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
++            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
++        } needsDisplay:redraw sourceConsumed:consumed];
++}
++- (BOOL)redrawTemporalInLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++{
++    if (![self supportsTemporalSurfaces]) return NO;
++    return [temporal presentLatestInLayer:parent frame:frame width:width height:height
++        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
++            return [self requestTemporalInput:input width:iw height:ih token:token needsDisplay:redraw];
++        } needsDisplay:redraw];
 +}
 +
 +- (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
@@ -742,7 +786,7 @@ diff --git a/dlls/winemac.drv/wine_gdi_temporal_presenter.h b/dlls/winemac.drv/w
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/wine_gdi_temporal_presenter.h
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,42 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#ifndef WINE_GDI_TEMPORAL_PRESENTER_H
 +#define WINE_GDI_TEMPORAL_PRESENTER_H
@@ -750,6 +794,7 @@ new file mode 100644
 +#import <CoreGraphics/CoreGraphics.h>
 +#include <stdint.h>
 +#import <QuartzCore/CALayer.h>
++#import <IOSurface/IOSurface.h>
 +
 +/* Snapshot BGRA is tightly packed, top row first. Neural output is always 2x.
 + * Request returns YES only when the owner accepted the asynchronous job. */
@@ -759,6 +804,16 @@ new file mode 100644
 +- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
 +    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
 +    needsDisplay:(void (^)(void))redraw;
++@optional
++/* The producer completes OpenGL writes before calling this method. The callback
++ * releases its bounded source slot after Metal copies it to immutable storage. */
++- (BOOL)presentSurface:(IOSurfaceRef)surface inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
++    needsDisplay:(void (^)(void))redraw sourceConsumed:(void (^)(void))consumed;
++- (BOOL)presentLatestInLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
++    needsDisplay:(void (^)(void))redraw;
++@required
 +- (void)completeOutput:(NSData *)output token:(uint64_t)token needsDisplay:(void (^)(void))redraw;
 +- (void)cancel;
 +@end

@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--package', type=Path, default=(script_dir if (script_dir / 'baseline').is_dir() else script_dir.parent / 'outputs/wine-poc'))
 parser.add_argument('--libraries', action='store_true', help='Check the final Whisky Libraries tree')
 parser.add_argument('--require-crypto', action='store_true', help='Require bundled GnuTLS and Wine crypto backends')
+parser.add_argument('--require-shadow-moltenvk', action='store_true', help='Require the opt-in shadow-import MoltenVK')
 parser.add_argument('--max-minimum-macos', help='Reject binaries requiring a newer macOS than this version')
 args = parser.parse_args()
 root = args.package.resolve()
@@ -34,6 +35,14 @@ for file in root.rglob('*'):
         assert file.exists(), ('Broken symlink', file)
 moltenvk = root / ('Wine/lib/libMoltenVK.dylib' if args.libraries else 'deps/lib/libMoltenVK.dylib')
 assert moltenvk.is_file(), 'Missing MoltenVK runtime'
+if args.require_shadow_moltenvk:
+    assert b'MVK_CONFIG_SHADOW_IMPORTED_HOST_MEMORY' in moltenvk.read_bytes(), 'Missing MoltenVK shadow-import workaround'
+    assert args.libraries, '--require-shadow-moltenvk expects --libraries'
+    notices = root / 'GE-Media'
+    patch = notices / 'moltenvk-shadow-import.patch'
+    record = json.loads((notices / 'moltenvk-shadow-build.json').read_text())
+    assert hashlib.sha256(patch.read_bytes()).hexdigest() == record['patch_sha256'], 'Shadow-import patch digest mismatch'
+    assert record['default_enabled'] is False, 'Shadow-import must remain opt-in'
 description = subprocess.check_output(['/usr/bin/file', '-b', str(moltenvk)], text=True)
 assert 'Mach-O 64-bit' in description and 'x86_64' in description, description
 records.append({'file': str(moltenvk.relative_to(root)), 'type': description.strip()})

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-2.1-or-later
 """Exercise the real helper protocol with a compiled fixed-size model bundle.
 Usage: python3 coreml-tiling-test.py HELPER RESOURCES [WxH ...]
 Select a small model bundle for fast regression runs.

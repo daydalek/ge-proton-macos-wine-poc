@@ -18,6 +18,8 @@ credentials = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b
 media_names = {'test-wmv2.wmv', 'test-mpeg1.mpg', 'test-pcm.wav'}
 forbidden = {'.exe', '.dll', '.paz', '.vff', '.iso', '.zip', '.tar', '.gz', '.xz', '.dmg'}
 
+# Standalone helpers keep the license they were published with.
+NON_LGPL_SOURCES = {'scripts/patch-eustia-vfs.py': b'SPDX-License-Identifier: MIT'}
 PUBLIC_CONFIGS = {'build.env', 'crossover-patch-series.txt', 'crossover-source-lock.json', 'dependency-lock.json',
                   'source-license-inventory.json', 'source-lock.json', 'vulkan-generation-lock.json',
                   'linux-build.json'}
@@ -52,7 +54,8 @@ for name in filter(None, tracked):
     check_public_file(name)
     check_file(name, data)
     if file.suffix in {'.py', '.sh', '.c'}:
-        assert b'SPDX-License-Identifier: LGPL-2.1-or-later' in data[:1000], name
+        expected = NON_LGPL_SOURCES.get(name, b'SPDX-License-Identifier: LGPL-2.1-or-later')
+        assert expected in data[:1000], name
     count += 1
 md_files = [project / name for name in tracked if name and name.endswith('.md') and (project / name).is_file()]
 for file in md_files:

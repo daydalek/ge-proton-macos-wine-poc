@@ -21,7 +21,7 @@ a zero-copy mapping. Keep the original behavior on Linux via #ifdef __APPLE__.
  
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
-@@ -535,8 +540,16 @@
+@@ -535,9 +540,17 @@
          VkPhysicalDeviceProperties2 props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &host_mem_props};
  
          instance->p_vkGetPhysicalDeviceProperties2KHR( host_physical_device, &props );

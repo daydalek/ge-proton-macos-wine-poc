@@ -56,3 +56,28 @@ vertical CGContext transform. That transform has been removed so upload uses
 the same rasterization as conventional Wine presentation; source, reference,
 mask and neural snapshots retain one shared coordinate convention. The revised
 orientation is awaiting user confirmation after restarting the game.
+
+## WineD3D / OpenGL extension
+
+Use 超次元恋人 (DimensionToTsuLovers_cn.exe) with Real-CUGAN or adaptive
+selected in the GPUI game upscaler setting. Restart the game to load the driver.
+The additional log marker is `Wine temporal: OpenGL/WineD3D IOSurface bridge
+submitted`. Confirm main game pixels refine along with stable GDI windows.
+Check orientation, colour, mouse clicks, resize/fullscreen, scene changes and
+frame time. The initial bridge uses glFinish for GL-to-Metal synchronization;
+compare frame rate with WINE_GDI_TEMPORAL=0. Driver/native compilation and
+signature checks provide build/deployment evidence; game acceptance is pending.
+
+## Metal/Vulkan ownership regression (Sakura no Uta 10th)
+
+GDI upscaling now queries live Metal view descendants and ancestor trees. Metal
+attachment and reparenting retire ancestor GDI layers and cancel temporal jobs;
+subsequent display callbacks enforce the same ownership gate. Removing GPU views
+requests repaint so software presentation can create fresh GDI assets.
+
+User check: restart Sakura no Uta 10th with MetalFX Spatial selected, verify the
+DXVK game image, resize/fullscreen, then compare with GDI upscaling off. Repeat
+with Real-CUGAN to check pending asynchronous completions. A retirement may log
+`Wine GDI upscaler: retiring GDI presentation for Metal view tree`. Static GDI
+games and the WineD3D OpenGL temporal bridge retain their independent paths.
+The driver compiles; game/visual acceptance is pending with the user.

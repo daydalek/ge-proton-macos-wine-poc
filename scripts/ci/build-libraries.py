@@ -16,11 +16,10 @@ import urllib.request
 
 PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT / 'scripts/lib'))
-from poc_common import STAGE, CROSSOVER_PORT, WORK, SETTINGS, sha256_file, crossover_patch_series
+from poc_common import (STAGE, CROSSOVER_PORT, WORK, SETTINGS, sha256_file, crossover_patch_series,
+                        DXVK_BASE_URL, DXVK_BASE_SHA256)
 
 # Bootstrap only the pinned DXVK payload. Wine always comes from the current build.
-DXVK_BASE_URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz'
-DXVK_BASE_SHA256 = 'bb5f2f3d49e528e9200c02beb5b1e004c06ad00969a790285faa9ed46f900c60'
 
 
 def extract_dxvk(archive, destination):
@@ -111,6 +110,13 @@ def main():
     compiled = None
     if 'validation_scope' not in release_context:
         compiled = validate_compiled_provenance(args.wine_stage)
+        shadow_meta = STAGE / 'deps-x64/share/whisky/moltenvk-shadow-build.json'
+        shadow_patch = shadow_meta.parent / 'moltenvk-shadow-import.patch'
+        shadow = json.loads(shadow_meta.read_text())
+        if (sha256_file(shadow_patch) != shadow['patch_sha256']
+                or sha256_file(STAGE / 'deps-x64/lib/libMoltenVK.dylib') != shadow['dylib_sha256']
+                or shadow['default_enabled'] is not False):
+            raise ValueError('MoltenVK shadow-import build provenance mismatch')
 
     assembled = staging / 'assembled'
     public = staging / 'public'
@@ -137,7 +143,7 @@ def main():
     subprocess.run([sys.executable, str(PROJECT / 'scripts/ci/prepare-libraries.py'),
                     '--input', str(assembled / 'Libraries'), '--output', str(public),
                     '--objcopy', str(objcopy), '--private-name', os.environ.get('USER', 'runner')], check=True)
-    crypto_checks = [] if 'validation_scope' in release_context else ['--require-crypto']
+    crypto_checks = [] if 'validation_scope' in release_context else ['--require-crypto', '--require-shadow-moltenvk']
     subprocess.run([sys.executable, str(PROJECT / 'scripts/static-check.py'),
                     '--libraries', '--package', str(public / 'Libraries'),
                     '--max-minimum-macos', '27.0', *crypto_checks], check=True)

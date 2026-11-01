@@ -22,6 +22,10 @@ assert version_tuple(DEPLOYMENT_TARGET) == version_tuple('27.0'), 'Expected macO
 assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'Requires Apple Silicon host'
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=project, text=True).strip()
 source_dirs = [CROSSOVER_PORT / 'sources/wine']
+shadow_dir = WORK / 'moltenvk-shadow'
+assert (shadow_dir / 'shadow-import.patch').is_file(), 'Missing shadow-import patch'
+assert sha256_file(shadow_dir / 'shadow-import.patch') == '399f3cce04e8a65dc87901ed434380b91a3c7737e5ea53db332237fbbbaf938d', 'Unexpected shadow-import patch'
+assert (shadow_dir / 'src/MoltenVK/MoltenVK/GPUObjects/MVKDeviceMemory.mm').is_file(), 'Missing patched MoltenVK source'
 crossover_lock = json.loads((project / 'configs/crossover-source-lock.json').read_text())
 locks = json.loads((project / 'configs/dependency-lock.json').read_text())
 archives = [item for item in locks if item['archive'] in
@@ -50,6 +54,11 @@ def source_filter(info):
     parts = Path(info.name).parts
     if '.git' in parts or 'autom4te.cache' in parts or '__pycache__' in parts:
         return None
+    if parts[:3] in (('prepared', 'moltenvk-shadow', 'Package'),
+                     ('prepared', 'moltenvk-shadow', 'build')):
+        return None
+    if parts[:4] == ('prepared', 'moltenvk-shadow', 'External', 'build'):
+        return None
     info.uid = info.gid = 0
     info.uname = info.gname = ''
     info.pax_headers = {}
@@ -62,6 +71,8 @@ with tarfile.open(sources, 'w:gz') as tf:
         tf.add(archive_paths[item['archive']], arcname='archives/' + item['archive'], filter=source_filter)
     for directory in source_dirs:
         tf.add(directory, arcname='prepared/' + directory.name, filter=source_filter)
+    tf.add(shadow_dir / 'shadow-import.patch', arcname='patches/moltenvk-shadow-import.patch', filter=source_filter)
+    tf.add(shadow_dir / 'src', arcname='prepared/moltenvk-shadow', filter=source_filter)
 project_archive.unlink()
 manifest = {'commit': commit, 'target': 'macOS 27+ Apple Silicon', 'host_architecture': platform.machine(),
             'wine_core_architecture': 'x86_64', 'windows_architectures': ['i386', 'x86_64'],
@@ -69,7 +80,10 @@ manifest = {'commit': commit, 'target': 'macOS 27+ Apple Silicon', 'host_archite
              'runtime_tests': 'Wine/game playback not run; file architectures, signatures, dependencies and native FFmpeg capabilities checked by the release pipeline',
             'core': 'crossover-ge-media', 'wine_base': 'CrossOver 26.3.0',
             'crossover_source_sha256': crossover_lock['source_sha256'],
-            'runtime_asset': 'Libraries.tar.gz', 'source_asset': sources.name,
+             'runtime_asset': 'Libraries.tar.gz', 'source_asset': sources.name,
+             'moltenvk_shadow_import': {'source_revision': 'db66022459ffb663aa2b50f6b018bc2e124f5edf',
+                                        'patch_sha256': sha256_file(shadow_dir / 'shadow-import.patch'),
+                                        'default_enabled': False},
             'source_archives': archives, 'github_run_id': os.environ.get('GITHUB_RUN_ID')}
 (output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 (output / 'RELEASE-NOTES.md').write_text('Whisky Libraries runtime for macOS 27+ Apple Silicon. Requires Rosetta 2; Wine core is x86_64.\n\nIncludes CrossOver 26.3 Wine with GE media and fullscreen fixes, DXVK, corresponding prepared sources, locked source archives, recipes and license notices. Game playback requires target-device acceptance. Binaries use local ad-hoc signatures and have no Apple notarization.\n')

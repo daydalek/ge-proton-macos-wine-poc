@@ -1,0 +1,228 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later
+ * Included once by cocoa_opengl.m. GL resources belong to the producer context;
+ * Cocoa presentation belongs to the main thread. Original swaps always execute. */
+#import "cocoa_upscaler.h"
+#import <IOSurface/IOSurface.h>
+#import <OpenGL/CGLIOSurface.h>
+#include <dlfcn.h>
+
+@interface WineTemporalGLView : NSView
+@end
+@implementation WineTemporalGLView
+- (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }
+@end
+
+struct WineTemporalGLSlot {
+    IOSurfaceRef surface;
+    GLuint texture, framebuffer;
+    BOOL busy;
+    uint64_t generation;
+};
+
+@interface WineOpenGLTemporalBridge : NSObject
+{
+    NSView *targetView;
+    WineTemporalGLView *overlay;
+    WineGDIUpscaler *upscaler;
+    struct WineTemporalGLSlot slots[3];
+    NSUInteger sourceWidth, sourceHeight;
+    uint64_t generation;
+    BOOL retired, disabled, logged;
+    void (*bindFramebuffer)(GLenum, GLuint);
+    void (*genFramebuffers)(GLsizei, GLuint *);
+    void (*deleteFramebuffers)(GLsizei, const GLuint *);
+    void (*framebufferTexture)(GLenum, GLenum, GLenum, GLuint, GLint);
+    GLenum (*checkFramebuffer)(GLenum);
+    void (*blitFramebuffer)(GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLbitfield,GLenum);
+}
+- (id)initWithView:(NSView *)view;
+- (BOOL)matchesView:(NSView *)view;
+- (void)captureContext:(CGLContextObj)context;
+- (void)destroyGLResources:(CGLContextObj)context;
+- (void)retire;
+@end
+
+@implementation WineOpenGLTemporalBridge
+- (id)initWithView:(NSView *)view
+{
+    self=[super init]; if (!self) return nil;
+    if (![WineGDIUpscaler temporalEnabled] || !view.window || !view.window.isVisible) { [self release]; return nil; }
+    targetView=[view retain];
+    upscaler=[WineGDIUpscaler new];
+    if (![upscaler supportsTemporalSurfaces]) { [self release]; return nil; }
+    overlay=[[WineTemporalGLView alloc] initWithFrame:view.bounds];
+    overlay.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
+    overlay.wantsLayer=YES; overlay.layer.zPosition=1000; overlay.hidden=YES;
+    [view addSubview:overlay positioned:NSWindowAbove relativeTo:nil];
+    return self;
+}
+- (BOOL)matchesView:(NSView *)view { return targetView==view; }
+- (void)dealloc
+{
+    /* retire schedules main-thread release of Cocoa state before final release. */
+    for (unsigned i=0;i<3;++i) if (slots[i].surface) CFRelease(slots[i].surface);
+    [overlay release]; [upscaler release]; [targetView release];
+    [super dealloc];
+}
+- (void)retire
+{
+    @synchronized(self) { retired=YES; }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [upscaler cancelTemporalPresentation]; [overlay removeFromSuperview];
+        [overlay release]; overlay=nil; [upscaler release]; upscaler=nil;
+        [targetView release]; targetView=nil;
+    });
+}
+- (void)releaseSlot:(unsigned)index generation:(uint64_t)value
+{
+    @synchronized(self) { if (slots[index].generation==value) slots[index].busy=NO; }
+}
+- (void)redraw
+{
+    @synchronized(self) { if (retired) return; }
+    if (!targetView.window.isVisible || targetView.window.isMiniaturized) return;
+    overlay.frame=targetView.bounds;
+    NSRect backing=[overlay convertRectToBacking:overlay.bounds];
+    if (![upscaler redrawTemporalInLayer:overlay.layer frame:overlay.bounds width:(NSUInteger)backing.size.width
+        height:(NSUInteger)backing.size.height needsDisplay:^{ [self redraw]; }]) overlay.hidden=YES;
+}
+- (void)present:(IOSurfaceRef)surface slot:(unsigned)index generation:(uint64_t)value
+{
+    @synchronized(self) {
+        if (retired || value!=generation) { [self releaseSlot:index generation:value]; return; }
+    }
+    if (!targetView.window.isVisible || targetView.window.isMiniaturized) {
+        [self releaseSlot:index generation:value]; return;
+    }
+    overlay.frame=targetView.bounds; overlay.hidden=NO;
+    NSRect backing=[overlay convertRectToBacking:overlay.bounds];
+    BOOL ok=[upscaler presentSurface:surface inLayer:overlay.layer frame:overlay.bounds
+        width:(NSUInteger)backing.size.width height:(NSUInteger)backing.size.height
+        needsDisplay:^{ [self redraw]; } sourceConsumed:^{ [self releaseSlot:index generation:value]; }];
+    if (!ok) overlay.hidden=YES;
+    else if (!logged) {
+        logged=YES; NSLog(@"Wine temporal: OpenGL/WineD3D IOSurface bridge submitted %lux%lu source",
+            (unsigned long)IOSurfaceGetWidth(surface),(unsigned long)IOSurfaceGetHeight(surface));
+    }
+}
+- (BOOL)loadFunctions:(CGLContextObj)context
+{
+    if (bindFramebuffer) return YES;
+    GLint profile=0;
+    CGLDescribePixelFormat(CGLGetPixelFormat(context),0,kCGLPFAOpenGLProfile,&profile);
+    BOOL core=profile==kCGLOGLPVersion_3_2_Core || profile==kCGLOGLPVersion_GL4_Core;
+    void *library=dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL",RTLD_LAZY|RTLD_LOCAL);
+    if (!library) return NO;
+    const char *suffix=core ? "" : "EXT";
+    char name[80];
+#define WGDI_LOAD(member, symbol) do { snprintf(name,sizeof(name),"%s%s",symbol,suffix); \
+    *(void **)(&member)=dlsym(library,name); } while (0)
+    WGDI_LOAD(bindFramebuffer,"glBindFramebuffer");
+    WGDI_LOAD(genFramebuffers,"glGenFramebuffers");
+    WGDI_LOAD(deleteFramebuffers,"glDeleteFramebuffers");
+    WGDI_LOAD(framebufferTexture,"glFramebufferTexture2D");
+    WGDI_LOAD(checkFramebuffer,"glCheckFramebufferStatus");
+    WGDI_LOAD(blitFramebuffer,"glBlitFramebuffer");
+#undef WGDI_LOAD
+    dlclose(library);
+    return bindFramebuffer && genFramebuffers && deleteFramebuffers && framebufferTexture && checkFramebuffer && blitFramebuffer;
+}
+- (void)clearGL
+{
+    for (unsigned i=0;i<3;++i) {
+        if (slots[i].framebuffer && deleteFramebuffers) deleteFramebuffers(1,&slots[i].framebuffer);
+        if (slots[i].texture) glDeleteTextures(1,&slots[i].texture);
+        if (slots[i].surface) CFRelease(slots[i].surface);
+        memset(&slots[i],0,sizeof(slots[i]));
+    }
+    sourceWidth=sourceHeight=0; ++generation;
+}
+- (void)destroyGLResources:(CGLContextObj)context
+{
+    CGLContextObj previous=CGLGetCurrentContext();
+    if (CGLSetCurrentContext(context)==kCGLNoError) {
+        @synchronized(self) { [self clearGL]; }
+        CGLSetCurrentContext(previous);
+    }
+}
+- (void)captureContext:(CGLContextObj)context
+{
+    @synchronized(self) { if (retired || disabled) return; }
+    if (!context || CGLGetCurrentContext()!=context) return;
+    if (![self loadFunctions:context]) { @synchronized(self) { disabled=YES; } return; }
+    GLint size[2]={0,0},viewport[4]={0,0,0,0},enabled=0;
+    CGLIsEnabled(context,kCGLCESurfaceBackingSize,&enabled);
+    if (enabled) CGLGetParameter(context,kCGLCPSurfaceBackingSize,size);
+    if (size[0]<=0 || size[1]<=0) {
+        glGetIntegerv(GL_VIEWPORT,viewport); size[0]=viewport[0]+viewport[2]; size[1]=viewport[1]+viewport[3];
+    }
+    if (size[0]<=0 || size[1]<=0 || size[0]>4096 || size[1]>4096 ||
+        (uint64_t)size[0]*size[1]>2u*1024u*1024u) return;
+    unsigned index=3; uint64_t value;
+    @synchronized(self) {
+        if (sourceWidth!=(NSUInteger)size[0] || sourceHeight!=(NSUInteger)size[1]) {
+            [self clearGL]; sourceWidth=size[0]; sourceHeight=size[1];
+        }
+        for (unsigned i=0;i<3;++i) if (!slots[i].busy) { index=i; break; }
+        if (index==3) return;
+        slots[index].busy=YES; slots[index].generation=generation; value=generation;
+    }
+    struct WineTemporalGLSlot *slot=&slots[index];
+    GLint readFBO=0,drawFBO=0,rectangle=0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING_EXT,&readFBO);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING_EXT,&drawFBO);
+    glGetIntegerv(GL_TEXTURE_BINDING_RECTANGLE_ARB,&rectangle);
+    BOOL ok=YES;
+    if (!slot->surface) {
+        NSDictionary *properties=@{(id)kIOSurfaceWidth:@(size[0]),(id)kIOSurfaceHeight:@(size[1]),
+            (id)kIOSurfaceBytesPerElement:@4,(id)kIOSurfaceBytesPerRow:@(((size[0]*4)+255)&~255),
+            (id)kIOSurfacePixelFormat:@(0x42475241u)};
+        slot->surface=IOSurfaceCreate((CFDictionaryRef)properties);
+        if (!slot->surface) ok=NO;
+        if (ok) {
+            glGenTextures(1,&slot->texture); glBindTexture(GL_TEXTURE_RECTANGLE_ARB,slot->texture);
+            CGLError error=CGLTexImageIOSurface2D(context,GL_TEXTURE_RECTANGLE_ARB,GL_RGBA8,size[0],size[1],
+                GL_BGRA,GL_UNSIGNED_INT_8_8_8_8_REV,slot->surface,0);
+            if (error!=kCGLNoError) ok=NO;
+            genFramebuffers(1,&slot->framebuffer); bindFramebuffer(GL_FRAMEBUFFER_EXT,slot->framebuffer);
+            framebufferTexture(GL_FRAMEBUFFER_EXT,GL_COLOR_ATTACHMENT0_EXT,GL_TEXTURE_RECTANGLE_ARB,slot->texture,0);
+            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+            if (checkFramebuffer(GL_FRAMEBUFFER_EXT)!=GL_FRAMEBUFFER_COMPLETE_EXT) ok=NO;
+        }
+    }
+    glBindTexture(GL_TEXTURE_RECTANGLE_ARB,(GLuint)rectangle);
+    bindFramebuffer(GL_READ_FRAMEBUFFER_EXT,0);
+    GLint oldReadBuffer=0; GLboolean doubleBuffered=GL_FALSE;
+    glGetIntegerv(GL_READ_BUFFER,&oldReadBuffer); glGetBooleanv(GL_DOUBLEBUFFER,&doubleBuffered);
+    glReadBuffer(doubleBuffered ? GL_BACK : GL_FRONT);
+    bindFramebuffer(GL_DRAW_FRAMEBUFFER_EXT,slot->framebuffer);
+    if (checkFramebuffer(GL_READ_FRAMEBUFFER_EXT)!=GL_FRAMEBUFFER_COMPLETE_EXT) ok=NO;
+    GLboolean scissor=glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean srgb=glIsEnabled(GL_FRAMEBUFFER_SRGB_EXT);
+    if (srgb) glDisable(GL_FRAMEBUFFER_SRGB_EXT);
+    if (scissor) glDisable(GL_SCISSOR_TEST);
+    if (ok) {
+        /* GL origin is bottom-left. Normalize once into the top-first Metal source. */
+        blitFramebuffer(0,0,size[0],size[1],0,size[1],size[0],0,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+        /* Explicit inter-API publication: Metal starts only after GL finishes this copy. */
+        glFinish();
+    }
+    if (scissor) glEnable(GL_SCISSOR_TEST);
+    if (srgb) glEnable(GL_FRAMEBUFFER_SRGB_EXT);
+    glReadBuffer((GLenum)oldReadBuffer);
+    bindFramebuffer(GL_READ_FRAMEBUFFER_EXT,(GLuint)readFBO);
+    bindFramebuffer(GL_DRAW_FRAMEBUFFER_EXT,(GLuint)drawFBO);
+    if (!ok) {
+        @synchronized(self) { disabled=YES; }
+        NSLog(@"Wine temporal: OpenGL IOSurface unavailable; using original swap");
+        [self releaseSlot:index generation:value];
+        dispatch_async(dispatch_get_main_queue(), ^{ overlay.hidden=YES; });
+        return;
+    }
+    IOSurfaceRef surface=slot->surface; CFRetain(surface);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self present:surface slot:index generation:value]; CFRelease(surface);
+    });
+}
+@end

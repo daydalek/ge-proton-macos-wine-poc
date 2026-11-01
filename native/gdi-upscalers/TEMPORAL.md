@@ -85,3 +85,25 @@ unverified game behavior remains pending.
   helper compile. GPUI packaging and local installation are in progress.
 - User acceptance remains pending; see TEMPORAL-ACCEPTANCE.md. No game/UI or
   inference probes have been executed by the agent for this implementation.
+
+## WineD3D / OpenGL presentation
+
+The OpenGL swap hook shares the default backbuffer with Metal through a bounded
+three-slot IOSurface ring. It preserves framebuffer/texture bindings, default
+read buffer, scissor and framebuffer-sRGB state. A vertically flipped GPU blit
+normalizes GL coordinates to the existing top-first temporal input. Native
+NSCursor rendering stays separate. The transparent hit-test overlay forwards
+input to the original Wine content view. Original GL swaps always execute.
+
+Metal copies the surface into private immutable storage before releasing its
+producer slot. Difference detection and composition stay on the GPU. Core ML
+snapshot readback occurs after quiet-tile selection: the first snapshot seeds
+the CPU reference, subsequent snapshots copy selected 256x256 cores. Existing
+halo-aware cached inference and GPU stale-result admission remain shared with
+GDI. Context/view changes retire overlays; resolution changes invalidate jobs.
+
+This initial inter-API synchronization uses glFinish after the surface blit.
+Its frame-time cost requires user measurement. Eligibility follows the existing
+Real-CUGAN/adaptive temporal modes and source limit (4096 per edge, 2 Mi pixels).
+Vulkan and D3DMetal have separate presentation paths. See
+patches/wine-ge/macos-wined3d-temporal.patch and the patch synchronizer.

@@ -199,3 +199,45 @@ def external_dependencies(path):
     bad = [d for d in linked_libraries(path) if d.startswith('/') and not d.startswith(SYSTEM_PREFIXES)]
     bad += ['LC_RPATH ' + r for r in rpaths(path) if r.startswith('/') and not r.startswith(SYSTEM_PREFIXES)]
     return bad
+
+
+# DXVK ships as a digest-pinned payload; never take it from a mutable tree.
+# A DXVK build linked through winebuild carries the "Wine builtin DLL" DOS-stub
+# signature, which makes Wine treat it as a builtin and silently skip it, so the
+# only symptom is that 64-bit games fall back to wined3d.
+DXVK_BASE_URL = 'https://github.com/daydalek/ge-proton-macos-wine-poc/releases/download/v0.1.0/Libraries.tar.gz'
+DXVK_BASE_SHA256 = 'bb5f2f3d49e528e9200c02beb5b1e004c06ad00969a790285faa9ed46f900c60'
+DXVK_VERSION = '1.10.3'
+
+
+def resolve_pinned_dxvk(work=WORK, archive=None):
+    """Extract ``Libraries/DXVK`` from the pinned archive and return its path."""
+    work = Path(work)
+    archive = Path(archive) if archive else work / 'whisky-dxvk-bootstrap.tar.gz'
+    if not archive.exists():
+        work.mkdir(parents=True, exist_ok=True)
+        download_verified(DXVK_BASE_URL, archive, DXVK_BASE_SHA256)
+    elif sha256_file(archive) != DXVK_BASE_SHA256:
+        raise ValueError(f'DXVK bootstrap archive digest mismatch: {archive}')
+    destination = work / 'dxvk-pinned'
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    with tarfile.open(archive) as tf:
+        for member in tf:
+            if not member.name.startswith('Libraries/DXVK/') or not member.isfile():
+                continue
+            if Path(member.name).is_absolute() or '..' in Path(member.name).parts:
+                raise ValueError('unexpected DXVK archive path')
+            target = destination / member.name
+            if destination.resolve() not in target.resolve().parents:
+                raise ValueError('unexpected DXVK archive path')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with tf.extractfile(member) as source, target.open('wb') as output:
+                shutil.copyfileobj(source, output)
+    dxvk = destination / 'Libraries' / 'DXVK'
+    for arch in ('x64', 'x32'):
+        for name in ('d3d11.dll', 'd3d10core.dll'):
+            if not (dxvk / arch / name).is_file():
+                raise ValueError(f'incomplete DXVK payload: {dxvk / arch / name}')
+    return dxvk
