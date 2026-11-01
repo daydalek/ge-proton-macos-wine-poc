@@ -9,7 +9,10 @@
  */
 #define WGDI_COREML_MAGIC 0x5747434du
 #define WGDI_COREML_VERSION 1u
-#define WGDI_COREML_PIXELS (2u * 1024u * 1024u)
+/* Frames larger than this are left to MetalFX: four megapixels covers a
+ * 2560x1440 window, and the mapping is a sparse file, so the unused tail costs
+ * address space rather than memory. */
+#define WGDI_COREML_PIXELS (4u * 1024u * 1024u)
 struct wgdi_coreml_frame {
     uint32_t magic, version, sequence, width, height, status;
     uint64_t inference_ns;

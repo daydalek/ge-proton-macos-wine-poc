@@ -50,6 +50,63 @@ static CGImageRef make_image(unsigned width, unsigned height, BOOL changed)
     return image;
 }
 
+/* Seed a visibly distinct completed neural image and keep the worker busy.
+ * This tests presentation independently of model quality and inference time. */
+@interface CompositeUpscaler : WineGDIUpscaler
+- (void) seed:(CGImageRef)source width:(NSUInteger)width height:(NSUInteger)height;
+@end
+@implementation CompositeUpscaler
+- (void) seed:(CGImageRef)source width:(NSUInteger)width height:(NSUInteger)height
+{
+    NSUInteger iw = CGImageGetWidth(source), ih = CGImageGetHeight(source);
+    NSMutableData *pixels = [NSMutableData dataWithLength:iw * ih * 4];
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef bitmap = CGBitmapContextCreate(pixels.mutableBytes, iw, ih, 8, iw * 4, space,
+        kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGContextDrawImage(bitmap, CGRectMake(0, 0, iw, ih), source);
+    resultInput = [pixels copy];
+    CGContextRelease(bitmap);
+    bitmap = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
+        kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
+    unsigned char *bytes = CGBitmapContextGetData(bitmap);
+    for (NSUInteger i = 0; i < width * height; ++i)
+    { bytes[i*4] = 200; bytes[i*4+1] = 100; bytes[i*4+2] = 20; bytes[i*4+3] = 255; }
+    result = CGBitmapContextCreateImage(bitmap);
+    CGContextRelease(bitmap); CGColorSpaceRelease(space);
+    resultWidth = iw; resultHeight = ih;
+    resultOutputWidth = width; resultOutputHeight = height;
+    inFlight = YES;
+}
+@end
+
+static void test_composite(void)
+{
+    for (unsigned fractional = 0; fractional < 2; ++fractional)
+    {
+        unsigned width = 512 - fractional, height = 384 - fractional;
+        CompositeUpscaler *upscaler = [[CompositeUpscaler alloc] init];
+        CGImageRef first = make_image(256, 192, NO), changed = make_image(256, 192, YES);
+        [upscaler seed:first width:width height:height];
+        CGImageRef composite = [upscaler copyScaledImage:changed width:width height:height needsDisplay:nil];
+        assert(composite);
+        CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CGContextRef bitmap = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
+            kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
+        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), composite);
+        const unsigned char *bytes = CGBitmapContextGetData(bitmap);
+        // A stable distant patch retains neural pixels during active inference.
+        assert(bytes[(16 * width + 16) * 4] == 200);
+        // Changed patch displays the current frame immediately.
+        assert(bytes[((height - 1) * width + width - 1) * 4] < 60);
+        assert(upscaler.neuralInferenceCount == 0);
+        CGContextRelease(bitmap); CGColorSpaceRelease(space); CGImageRelease(composite);
+        // Reverting to the completed source restores the complete neural result.
+        composite = [upscaler copyScaledImage:first width:width height:height needsDisplay:nil];
+        assert(composite); CGImageRelease(composite);
+        CGImageRelease(first); CGImageRelease(changed); [upscaler release];
+    }
+}
+
 static void wait_callbacks(NSUInteger *count, NSUInteger target)
 {
     CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 10;
@@ -142,9 +199,9 @@ static void test_adaptive(void)
     assert(upscaler.fastInferenceCount == 2 && upscaler.neuralInferenceCount == 1);
     wait_callbacks(&callbacks, 1);
     testClock = 10.4;
-    scaled = [upscaler copyScaledImage:changed width:48 height:48 needsDisplay:nil];
+    scaled = [upscaler copyScaledImage:changed width:48 height:48 needsDisplay:^{ ++callbacks; }];
     assert(scaled); CGImageRelease(scaled);
-    assert(upscaler.neuralInferenceCount == 1);
+    assert(upscaler.neuralInferenceCount == 2);
     testClock = 10.6;
     scaled = [upscaler copyScaledImage:changed width:48 height:48 needsDisplay:^{ ++callbacks; }];
     assert(scaled); CGImageRelease(scaled);
@@ -226,6 +283,7 @@ int main(int argc, const char **argv)
     {
         assert(argc == 2);
         if (!strcmp(argv[1], "disabled")) assert(![WineGDIUpscaler enabled]);
+        else if (!strcmp(argv[1], "composite")) test_composite();
         else if (!strcmp(argv[1], "fast")) test_fast_cache();
         else if (!strcmp(argv[1], "neural")) test_neural_cache();
         else if (!strcmp(argv[1], "adaptive")) test_adaptive();

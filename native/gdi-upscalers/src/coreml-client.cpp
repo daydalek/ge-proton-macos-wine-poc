@@ -100,9 +100,10 @@ public:
     std::vector<uint8_t> upscale2x(const wgdi_image &input) override
     {
         const uint64_t shape = (uint64_t(input.width) << 32) | input.height;
-        const std::string model = resources + "/coreml/realcugan-" + std::to_string(input.width) +
-            "x" + std::to_string(input.height) + ".mlmodelc";
-        if (!disabled && !failedShapes.count(shape) && access(model.c_str(), R_OK) == 0) {
+        // No access() probe for an exact-size model: the helper tiles a frame with
+        // whichever model does ship, and only it knows whether one exists. Asking
+        // here would send every other window size straight to the CPU network.
+        if (!disabled && !failedShapes.count(shape)) {
             try {
                 if (!frame) start();
                 frame->magic = WGDI_COREML_MAGIC;

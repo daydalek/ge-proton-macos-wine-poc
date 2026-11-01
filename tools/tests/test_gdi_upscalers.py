@@ -107,6 +107,10 @@ class AdapterTests(unittest.TestCase):
     def test_fast_backend_reuses_100_identical_frames_and_detects_one_byte_changes(self):
         self.run_probe('metalfx', 'fast')
 
+    def test_persistent_neural_patches_during_local_changes(self):
+        self.run_probe('realcugan', 'composite')
+        self.run_probe('adaptive', 'composite')
+
     def test_missing_neural_backend_retains_standard_or_fast_presentation(self):
         self.run_probe('anime4k', 'failure', '/missing/wine-gdi-upscalers.dylib')
         self.run_probe('adaptive', 'adaptive-failure', '/missing/wine-gdi-upscalers.dylib')

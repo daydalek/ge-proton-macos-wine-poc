@@ -60,7 +60,7 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.m b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.m
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,352 @@
 +/*
 + * Optional GDI upscaler selection and asynchronous neural presentation.
 + * Copyright 2026 GE-Proton macOS Wine PoC contributors
@@ -137,6 +137,24 @@ new file mode 100644
 +    return api;
 +}
 +
++/* Scheduling heuristic only: changed 64-pixel spans account for at most a
++ * quarter of the image. Presentation still verifies every retained patch. */
++static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInteger height)
++{
++    if (old.length != current.length) return NO;
++    const uint8_t *a = old.bytes, *b = current.bytes;
++    NSUInteger changed = 0;
++    for (NSUInteger y = 0; y < height; ++y)
++        for (NSUInteger x = 0; x < width; x += 64)
++        {
++            NSUInteger count = MIN((NSUInteger)64, width - x);
++            if (memcmp(a + (y * width + x) * 4, b + (y * width + x) * 4, count * 4))
++                changed += count;
++            if (changed > width * height / 4) return NO;
++        }
++    return YES;
++}
++
 +@implementation WineGDIUpscaler
 +
 ++ (BOOL) enabled { return selected_algorithm() != UPSCALE_OFF; }
@@ -201,6 +219,65 @@ new file mode 100644
 +    return CGImageRetain(fastResult);
 +}
 +
++/* Persistent neural presentation: retain matching patches while changed
++ * patches show the current surface until the worker finishes. All state stays
++ * on the main thread; the worker owns immutable job snapshots. */
++- (CGImageRef) copyCompositeImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++{
++    if (algorithm != WGDI_REALCUGAN && algorithm != UPSCALE_ADAPTIVE) return NULL;
++    BOOL compatible = result && resultWidth == latestWidth && resultHeight == latestHeight &&
++        resultOutputWidth == width && resultOutputHeight == height;
++    if (!compatible)
++        return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++    const NSUInteger block = 64, halo = 18;
++    const NSUInteger iw = latestWidth, ih = latestHeight;
++    const uint8_t *old = resultInput.bytes, *now = latestInput.bytes;
++    CGMutablePathRef retained = CGPathCreateMutable();
++    NSUInteger patches = 0;
++    for (NSUInteger y = 0; y < ih; y += block)
++        for (NSUInteger x = 0; x < iw; x += block)
++        {
++            NSUInteger left = x > halo ? x - halo : 0;
++            NSUInteger bottom = y > halo ? y - halo : 0;
++            NSUInteger right = MIN(iw, x + block + halo), top = MIN(ih, y + block + halo);
++            BOOL equal = YES;
++            for (NSUInteger row = bottom; equal && row < top; ++row)
++                equal = !memcmp(old + (row * iw + left) * 4, now + (row * iw + left) * 4,
++                                (right - left) * 4);
++            if (equal)
++            {
++                // Integer output edges partition the surface at fractional scales.
++                NSUInteger x0 = x * width / iw, x1 = MIN(iw, x + block) * width / iw;
++                NSUInteger y0 = height - MIN(ih, y + block) * height / ih;
++                NSUInteger y1 = height - y * height / ih;
++                CGPathAddRect(retained, NULL, CGRectMake(x0, y0, x1 - x0, y1 - y0));
++                ++patches;
++            }
++        }
++    if (!patches)
++    {
++        CGPathRelease(retained);
++        return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++    }
++    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++    CGContextRef bitmap = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
++        kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst);
++    CGColorSpaceRelease(space);
++    if (!bitmap) { CGPathRelease(retained); return NULL; }
++    CGImageRef fast = algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++    CGContextSetBlendMode(bitmap, kCGBlendModeCopy);
++    CGContextSetInterpolationQuality(bitmap, kCGInterpolationLow);
++    CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), fast ? fast : image);
++    if (fast) CGImageRelease(fast);
++    CGContextAddPath(bitmap, retained);
++    CGContextClip(bitmap);
++    CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), result);
++    CGPathRelease(retained);
++    CGImageRef composite = CGBitmapContextCreateImage(bitmap);
++    CGContextRelease(bitmap);
++    return composite;
++}
++
 +- (void) requestStableRedisplay:(void (^)(void))needsDisplay after:(double)remaining
 +{
 +    if (stabilityTimerPending || !needsDisplay) return;
@@ -253,10 +330,13 @@ new file mode 100644
 +    if (algorithm == UPSCALE_ADAPTIVE)
 +    {
 +        double remaining = wgdi_stability_observe(&stability, frameChanged || geometryChanged, [self frameTime]);
-+        if (remaining > 0 || !neuralSize || neuralFailed)
++        BOOL incremental = result && resultWidth == iw && resultHeight == ih &&
++            resultOutputWidth == width && resultOutputHeight == height &&
++            sparse_change(resultInput, latestInput, iw, ih);
++        if ((remaining > 0 && !incremental) || !neuralSize || neuralFailed)
 +        {
 +            if (neuralSize && !neuralFailed) [self requestStableRedisplay:needsDisplay after:remaining];
-+            return [self copyFastImage:image width:width height:height];
++            return [self copyCompositeImage:image width:width height:height];
 +        }
 +    }
 +    /* Exact byte equality ties a completed neural image to the current Wine
@@ -269,7 +349,7 @@ new file mode 100644
 +        return CGImageRetain(result);
 +    }
 +    if (inFlight)
-+        return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++        return [self copyCompositeImage:image width:width height:height];
 +    ++inferenceCount;
 +    inFlight = YES;
 +    NSData *jobInput = latestInput;
@@ -330,7 +410,7 @@ new file mode 100644
 +            });
 +        }
 +    });
-+    return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
++    return [self copyCompositeImage:image width:width height:height];
 +}
 +@end
 diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
@@ -380,16 +460,17 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
      }
  
      - (void) updateLayer
-@@ -535,7 +535,7 @@
+@@ -535,7 +535,8 @@
          CGRect imageRect;
          CALayer* layer = [self layer];
  
 -        _spatialLayer.hidden = YES;
 +        _upscaleLayer.hidden = YES;
++
  
          if ([window contentView] != self)
              return;
-@@ -571,7 +571,7 @@
+@@ -571,7 +572,7 @@
              /* The original surface keeps its Wine pixel coordinates. Only the
               * presentation sublayer receives a physical-resolution image. */
              if (!_everHadGLContext && ![self hasGLDescendant] && !_metalView &&
@@ -398,7 +479,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
              {
                  CGFloat sourceScale = layer.contentsScale;
                  CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
-@@ -586,27 +586,28 @@
+@@ -586,27 +587,28 @@
                  NSUInteger height = (NSUInteger)floor(physical.size.height);
                  if (width > CGImageGetWidth(image) && height > CGImageGetHeight(image))
                  {
@@ -441,7 +522,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
                          CGImageRelease(scaled);
                      }
                  }
-@@ -662,7 +663,7 @@
+@@ -662,7 +664,7 @@
  
      - (void) addGLContext:(WineOpenGLContext*)context
      {
@@ -450,7 +531,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
          BOOL hadContext = _everHadGLContext;
          if (!glContexts)
              glContexts = [[NSMutableArray alloc] init];
-@@ -759,7 +760,7 @@
+@@ -759,7 +761,7 @@
  
      - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device
      {
@@ -581,3 +662,4 @@ new file mode 100644
 +}
 +#endif
 +#endif
+

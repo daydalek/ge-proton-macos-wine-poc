@@ -17,7 +17,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / 'native/gdi-upscalers'
-DEFAULT_SIZES = ('640x480', '800x600', '1024x768', '1280x720', '1920x1080')
+DEFAULT_SIZES = ('256x256', '640x480', '800x600', '1024x768', '1280x720', '1920x1080')
 
 
 def digest(path):

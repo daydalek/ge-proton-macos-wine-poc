@@ -76,7 +76,7 @@ install(FILES "${RESOURCES}/anime4k.metallib" DESTINATION "${WINE_UNIX_DIR}/gdi-
 install(DIRECTORY "${RESOURCES}/models-se" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
 # Core ML helper is built separately for arm64 even when Wine is x86_64.
 # A prepared bundle contains the helper, fixed-size compiled models and its
-# provenance manifest. Missing dimensions use the existing CPU backend.
+# provenance manifest. Other dimensions use overlapping fixed-size Core ML tiles.
 set(WGDI_COREML_BUNDLE "" CACHE PATH "Prepared arm64 Core ML resource bundle")
 if(WGDI_COREML_BUNDLE)
     if(NOT EXISTS "${WGDI_COREML_BUNDLE}/winegdi-coreml-helper" OR
