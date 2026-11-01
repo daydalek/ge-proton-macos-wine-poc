@@ -140,6 +140,8 @@ def main():
                      PROJECT / 'scripts/build-realcugan-coreml.py', PROJECT / 'scripts/convert-realcugan-coreml.py',
                      PROJECT / 'scripts/requirements-coreml.txt']
     manifest = {'abi_version': 1, 'architecture': args.arch, 'algorithms': lock['algorithms'],
+                'temporal_presenter': {'abi': 1, 'block': 16, 'tile': 256, 'quiet_ms': 200, 'fade_ms': 100,
+                                       'shader': str((resource_dir / 'temporal.metallib').relative_to(stage))},
                 'dependency_archives': lock['archives'],
                 'source_sha256': {str(p.relative_to(PROJECT)): digest(p) for p in source_files},
                 'files': {str(p.relative_to(stage)): digest(p) for p in files},

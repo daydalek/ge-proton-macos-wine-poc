@@ -58,6 +58,7 @@ REQUIRED_MODULES = ('bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.s
                     'lib/wine/x86_64-unix/ntdll.so', 'lib/wine/i386-windows/gdi32.dll',
                     'lib/wine/i386-windows/user32.dll', 'lib/wine/x86_64-unix/libwinegdiupscalers.dylib',
                     'lib/wine/x86_64-unix/gdi-upscalers/anime4k.metallib',
+                    'lib/wine/x86_64-unix/gdi-upscalers/temporal.metallib',
                     'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.param',
                     'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.bin')
 REQUIRED_PATCHES = crossover_patch_series()
