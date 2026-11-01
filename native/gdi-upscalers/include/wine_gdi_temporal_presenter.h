@@ -4,7 +4,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 #include <stdint.h>
-@class CALayer;
+#import <QuartzCore/CALayer.h>
 
 /* Snapshot BGRA is tightly packed, top row first. Neural output is always 2x.
  * Request returns YES only when the owner accepted the asynchronous job. */

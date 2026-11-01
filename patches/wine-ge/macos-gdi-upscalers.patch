@@ -19,16 +19,18 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.h b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,41 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#import "cocoa_spatial.h"
 +#include "wine_gdi_upscaler.h"
 +#include "wine_gdi_frame_diff.h"
 +#include "wine_gdi_upscale_policy.h"
++#import "wine_gdi_temporal_presenter.h"
 +
 +@interface WineGDIUpscaler : NSObject
 +{
 +    WineSpatialScaler *metalFX;
++    id<WGDITemporalPresenter> temporal;
 +    unsigned algorithm;
 +    void *context;
 +    BOOL inFlight, failed;
@@ -49,6 +51,9 @@ new file mode 100644
 +    NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
 +}
 ++ (BOOL) enabled;
++- (void)hideTemporalPresentation;
++- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw;
 +- (NSUInteger) inferenceCount;
 +- (NSUInteger) cacheHitCount;
 +- (NSUInteger) neuralInferenceCount;
@@ -60,7 +65,7 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.m b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.m
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,409 @@
 +/*
 + * Optional GDI upscaler selection and asynchronous neural presentation.
 + * Copyright 2026 GE-Proton macOS Wine PoC contributors
@@ -109,6 +114,8 @@ new file mode 100644
 +    return queue;
 +}
 +
++static wgdi_temporal_create_fn temporal_create;
++
 +static const struct wgdi_upscaler_api *backend_api(NSString **resources)
 +{
 +    static const struct wgdi_upscaler_api *api;
@@ -128,6 +135,7 @@ new file mode 100644
 +        if (get_api) api = get_api(WGDI_UPSCALER_ABI);
 +        if (api && (api->size != sizeof(*api) || api->abi_version != WGDI_UPSCALER_ABI ||
 +                    !api->create || !api->process || !api->destroy)) api = NULL;
++        if (api) temporal_create = (wgdi_temporal_create_fn)dlsym(handle, "wine_gdi_temporal_create");
 +        if (api) directory = [[[library stringByDeletingLastPathComponent]
 +                              stringByAppendingPathComponent:@"gdi-upscalers"] copy];
 +        /* Keep the library loaded: worker tasks and context destructors retain
@@ -169,11 +177,18 @@ new file mode 100644
 +        metalFX = [[WineSpatialScaler alloc] init];
 +        if (!metalFX && algorithm == UPSCALE_METALFX) { [self release]; return nil; }
 +    }
++    const char *mode = getenv("WINE_GDI_TEMPORAL");
++    if ((algorithm == WGDI_REALCUGAN || algorithm == UPSCALE_ADAPTIVE) && (!mode || strcmp(mode, "0"))) {
++        NSString *resources = nil;
++        backend_api(&resources);
++        if (temporal_create) temporal = temporal_create(WGDI_TEMPORAL_PRESENTER_ABI, resources.fileSystemRepresentation);
++    }
 +    return self;
 +}
 +
 +- (void) dealloc
 +{
++    [temporal cancel]; [temporal release];
 +    [metalFX release];
 +    [latestInput release];
 +    [resultInput release];
@@ -197,6 +212,53 @@ new file mode 100644
 +- (NSUInteger) fastInferenceCount { return fastInferenceCount; }
 +
 +- (NSTimeInterval) frameTime { return NSProcessInfo.processInfo.systemUptime; }
++
++- (void)hideTemporalPresentation { [[temporal layer] setHidden:YES]; }
++
++- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
++{
++    if (!temporal) return NO;
++    WGDITemporalRequest request = ^BOOL(NSData *snapshot, NSUInteger iw, NSUInteger ih, uint64_t token) {
++        if (neuralFailed) {
++            [temporal completeOutput:nil token:token needsDisplay:redraw];
++            return YES;
++        }
++        if (inFlight) return NO;
++        inFlight = YES; ++inferenceCount;
++        dispatch_async(inference_queue(), ^{
++            @autoreleasepool {
++                NSString *resources = nil;
++                const struct wgdi_upscaler_api *api = backend_api(&resources);
++                char error[512] = "native temporal refinement unavailable";
++                if (api && !context) {
++                    struct wgdi_options options = {sizeof(options), WGDI_REALCUGAN, resources.fileSystemRepresentation, 2};
++                    context = api->create(&options, error, sizeof(error));
++                }
++                NSData *completed = nil;
++                if (context) {
++                    NSMutableData *output = [NSMutableData dataWithLength:iw * ih * 16];
++                    struct wgdi_image input = {(uint8_t *)snapshot.bytes, snapshot.length, iw * 4, iw, ih};
++                    struct wgdi_image destination = {output.mutableBytes, output.length, iw * 8, iw * 2, ih * 2};
++                    if (!api->process(context, &input, &destination, error, sizeof(error))) completed = output;
++                }
++                NSString *message = completed ? nil : [NSString stringWithUTF8String:error];
++                dispatch_async(dispatch_get_main_queue(), ^{
++                    inFlight = NO;
++                    if (!completed) {
++                        neuralFailed = YES;
++                        NSLog(@"Wine temporal: neural refinement failed (%@)", message);
++                    }
++                    [temporal completeOutput:completed token:token needsDisplay:redraw];
++                    if (redraw) redraw();
++                });
++            }
++        });
++        return YES;
++    };
++    return [temporal presentImage:image inLayer:parent frame:frame width:width height:height
++        request:request needsDisplay:redraw];
++}
 +
 +- (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
 +{
@@ -460,17 +522,18 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
      }
  
      - (void) updateLayer
-@@ -535,7 +535,8 @@
+@@ -535,7 +535,9 @@
          CGRect imageRect;
          CALayer* layer = [self layer];
  
 -        _spatialLayer.hidden = YES;
 +        _upscaleLayer.hidden = YES;
++        [_gdiUpscaler hideTemporalPresentation];
 +
  
          if ([window contentView] != self)
              return;
-@@ -571,7 +572,7 @@
+@@ -571,7 +573,7 @@
              /* The original surface keeps its Wine pixel coordinates. Only the
               * presentation sublayer receives a physical-resolution image. */
              if (!_everHadGLContext && ![self hasGLDescendant] && !_metalView &&
@@ -479,7 +542,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
              {
                  CGFloat sourceScale = layer.contentsScale;
                  CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
-@@ -586,27 +587,28 @@
+@@ -586,29 +588,36 @@
                  NSUInteger height = (NSUInteger)floor(physical.size.height);
                  if (width > CGImageGetWidth(image) && height > CGImageGetHeight(image))
                  {
@@ -492,37 +555,48 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
 +                        _upscaleUnavailable = !_gdiUpscaler;
                      }
 -                    CGImageRef scaled = [_spatialScaler copyScaledImage:image width:width height:height];
-+                    CGImageRef scaled = [_gdiUpscaler copyScaledImage:image width:width height:height
-+                        needsDisplay:^{ [self setNeedsDisplay:YES]; }];
-                     if (scaled)
+-                    if (scaled)
++                    BOOL temporalPresented = [_gdiUpscaler presentImage:image inLayer:layer frame:target
++                        width:width height:height needsDisplay:^{ [self setNeedsDisplay:YES]; }];
++                    if (!temporalPresented)
                      {
 -                        if (!_spatialLayer)
-+                        if (!_upscaleLayer)
++                        CGImageRef scaled = [_gdiUpscaler copyScaledImage:image width:width height:height
++                            needsDisplay:^{ [self setNeedsDisplay:YES]; }];
++                        if (scaled)
                          {
 -                            _spatialLayer = [[CALayer alloc] init];
 -                            _spatialLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
-+                            _upscaleLayer = [[CALayer alloc] init];
-+                            _upscaleLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
-                                 @"position": [NSNull null], @"hidden": [NSNull null] };
+-                                @"position": [NSNull null], @"hidden": [NSNull null] };
 -                            _spatialLayer.contentsGravity = kCAGravityResize;
 -                            _spatialLayer.opaque = YES;
 -                            [layer addSublayer:_spatialLayer];
-+                            _upscaleLayer.contentsGravity = kCAGravityResize;
-+                            _upscaleLayer.opaque = YES;
-+                            [layer addSublayer:_upscaleLayer];
++                            if (!_upscaleLayer)
++                            {
++                                _upscaleLayer = [[CALayer alloc] init];
++                                _upscaleLayer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
++                                    @"position": [NSNull null], @"hidden": [NSNull null] };
++                                _upscaleLayer.contentsGravity = kCAGravityResize;
++                                _upscaleLayer.opaque = YES;
++                                [layer addSublayer:_upscaleLayer];
++                            }
++                            _upscaleLayer.frame = target;
++                            _upscaleLayer.contentsScale = width / target.size.width;
++                            _upscaleLayer.contents = (id)scaled;
++                            _upscaleLayer.hidden = NO;
++                            CGImageRelease(scaled);
                          }
 -                        _spatialLayer.frame = target;
 -                        _spatialLayer.contentsScale = width / target.size.width;
 -                        _spatialLayer.contents = (id)scaled;
 -                        _spatialLayer.hidden = NO;
-+                        _upscaleLayer.frame = target;
-+                        _upscaleLayer.contentsScale = width / target.size.width;
-+                        _upscaleLayer.contents = (id)scaled;
-+                        _upscaleLayer.hidden = NO;
-                         CGImageRelease(scaled);
+-                        CGImageRelease(scaled);
                      }
++
                  }
-@@ -662,7 +664,7 @@
+             }
+             CFRelease(image);
+@@ -662,7 +671,7 @@
  
      - (void) addGLContext:(WineOpenGLContext*)context
      {
@@ -531,7 +605,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
          BOOL hadContext = _everHadGLContext;
          if (!glContexts)
              glContexts = [[NSMutableArray alloc] init];
-@@ -759,7 +761,7 @@
+@@ -759,7 +768,7 @@
  
      - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device
      {
@@ -663,3 +737,40 @@ new file mode 100644
 +#endif
 +#endif
 
+
+diff --git a/dlls/winemac.drv/wine_gdi_temporal_presenter.h b/dlls/winemac.drv/wine_gdi_temporal_presenter.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/wine_gdi_temporal_presenter.h
+@@ -0,0 +1,31 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#ifndef WINE_GDI_TEMPORAL_PRESENTER_H
++#define WINE_GDI_TEMPORAL_PRESENTER_H
++#import <Foundation/Foundation.h>
++#import <CoreGraphics/CoreGraphics.h>
++#include <stdint.h>
++#import <QuartzCore/CALayer.h>
++
++/* Snapshot BGRA is tightly packed, top row first. Neural output is always 2x.
++ * Request returns YES only when the owner accepted the asynchronous job. */
++typedef BOOL (^WGDITemporalRequest)(NSData *input, NSUInteger width, NSUInteger height, uint64_t token);
++@protocol WGDITemporalPresenter <NSObject>
++- (CALayer *)layer;
++- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
++    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
++    needsDisplay:(void (^)(void))redraw;
++- (void)completeOutput:(NSData *)output token:(uint64_t)token needsDisplay:(void (^)(void))redraw;
++- (void)cancel;
++@end
++#define WGDI_TEMPORAL_PRESENTER_ABI 1u
++typedef id<WGDITemporalPresenter> (*wgdi_temporal_create_fn)(uint32_t abi, const char *resources);
++#ifdef __cplusplus
++extern "C" {
++#endif
++/* Returns a retained object. Optional extension of the unchanged upscaler ABI. */
++__attribute__((visibility("default"))) id<WGDITemporalPresenter>
++wine_gdi_temporal_create(uint32_t abi, const char *resources);
++#ifdef __cplusplus
++}
++#endif
++#endif

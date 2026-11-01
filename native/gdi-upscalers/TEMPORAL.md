@@ -76,3 +76,12 @@ unverified game behavior remains pending.
   hybrid jobs and per-block GPU admission. Static neighbouring tiles remain
   clean when a neighbour merely lacks neural detail. Wine call-site integration
   is the next stage; no functional or game claims are established yet.
+
+- Wine integration: Real-CUGAN and adaptive modes dynamically load the optional
+  presenter extension, submit immutable 2x refinement jobs on the existing serial
+  worker, and show the native Metal layer. Canonical presentation sources and a
+  patch synchronizer are tracked. Conventional presentation remains available.
+- Current builds: native library, Metal library, Wine driver and arm64 Core ML
+  helper compile. GPUI packaging and local installation are in progress.
+- User acceptance remains pending; see TEMPORAL-ACCEPTANCE.md. No game/UI or
+  inference probes have been executed by the agent for this implementation.

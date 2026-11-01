@@ -22,7 +22,7 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     NSUInteger inputWidth, inputHeight, inputStride, framesInFlight;
     uint64_t frameSequence, nextToken, pendingToken, pendingEpoch;
     double origin, fadeUntil;
-    BOOL cancelled, failed, neuralDisabled, timerPending, seeded;
+    BOOL cancelled, failed, neuralDisabled, timerPending, seeded, trace;
 }
 - (id)initWithResources:(NSString *)resources;
 @end
@@ -44,8 +44,11 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     self = [super init];
     if (!self) return nil;
     origin = NSProcessInfo.processInfo.systemUptime;
+    const char *traceMode=getenv("WINE_GDI_TEMPORAL_TRACE");
+    trace=traceMode && !strcmp(traceMode,"1");
     device = MTLCreateSystemDefaultDevice();
     queue = [device newCommandQueue];
+    queue.label=@"wine.gdi.temporal";
     NSError *error = nil;
     NSString *path = [resources stringByAppendingPathComponent:@"temporal.metallib"];
     id<MTLLibrary> library = [device newLibraryWithFile:path error:&error];
@@ -217,11 +220,13 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
             memcpy(destination+(row*inputWidth+x)*4,source+row*inputStride+x*4,(right-x)*4);
     }
     pendingToken = ++nextToken; pendingEpoch = schedule.epoch;
+    if (trace) NSLog(@"Wine temporal: request %llu epoch %llu tiles %u/%lu",
+        (unsigned long long)pendingToken,(unsigned long long)pendingEpoch,ready,(unsigned long)count);
     pendingInput = [candidate copy]; pendingSelection = [selection mutableCopy]; pendingVersions = [versions mutableCopy];
     if (!request(pendingInput,inputWidth,inputHeight,pendingToken)) {
         pendingToken = 0; [pendingInput release]; pendingInput=nil;
         [pendingSelection release]; pendingSelection=nil; [pendingVersions release]; pendingVersions=nil;
-        [self requestLater:0.025 request:request redraw:redraw];
+        [self requestLater:WGDI_TEMPORAL_QUIET_SECONDS request:request redraw:redraw];
     }
 }
 - (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
@@ -274,7 +279,8 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     [self detect:command current:texture previous:previousTexture changes:changesTexture metadata:metadata parameters:p];
     id<MTLComputeCommandEncoder> compute=[command computeCommandEncoder];
     [compute setComputePipelineState:maskPS]; [compute setTexture:changesTexture atIndex:0];
-    [compute setTexture:weightsTexture atIndex:1]; [compute setBytes:&p length:sizeof(p) atIndex:0];
+    [compute setTexture:weightsTexture atIndex:1]; [compute setBuffer:referenceTimes offset:0 atIndex:0];
+    [compute setBytes:&p length:sizeof(p) atIndex:1];
     [self dispatch:compute width:iw height:ih]; [compute endEncoding];
     MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];
     pass.colorAttachments[0].texture=drawable.texture;
@@ -282,7 +288,6 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
     id<MTLRenderCommandEncoder> render=[command renderCommandEncoderWithDescriptor:pass];
     [render setRenderPipelineState:renderPS]; [render setFragmentTexture:texture atIndex:0];
     [render setFragmentTexture:residualTexture atIndex:1]; [render setFragmentTexture:weightsTexture atIndex:2];
-    [render setFragmentBuffer:referenceTimes offset:0 atIndex:0]; [render setFragmentBytes:&p length:sizeof(p) atIndex:1];
     [render drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3]; [render endEncoding];
     uint64_t epoch=schedule.epoch, sequence=++frameSequence;
     double captured=[self now]; id<MTLBuffer> oldUpload=previousUpload;
@@ -296,6 +301,11 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
                 failed=YES; NSLog(@"Wine temporal: GPU presentation failed (%@)",completed.error);
                 [displayLayer removeFromSuperlayer]; if (redraw) redraw(); return;
             }
+            if (sequence==1) NSLog(@"Wine temporal: GPU presentation active, %lux%lu source, %lu metadata bytes",
+                (unsigned long)iw,(unsigned long)ih,(unsigned long)metadata.length);
+            if (trace && sequence%120==0 && completed.GPUEndTime>completed.GPUStartTime)
+                NSLog(@"Wine temporal: frame %llu GPU %.3f ms",(unsigned long long)sequence,
+                    (completed.GPUEndTime-completed.GPUStartTime)*1000.0);
             if (sequence>schedule.observed_sequence) {
                 wgdi_temporal_observe(&schedule,(const uint32_t *)metadata.contents,epoch,sequence,captured);
                 [analysedUpload release]; analysedUpload=[upload retain];
@@ -356,6 +366,11 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
         neuralDisabled=YES; [self clearPending]; if (redraw) redraw(); return;
     }
     id<MTLCommandBuffer> command=[queue commandBuffer];
+    if (!command) {
+        [job release]; [neural release]; [jobBuffer release]; [neuralBuffer release];
+        [selected release]; [accepted release]; [metadata release]; [admissionChanges release];
+        failed=YES; [self clearPending]; if (redraw) redraw(); return;
+    }
     [self detect:command current:currentTexture previous:job changes:admissionChanges metadata:metadata parameters:p];
     id<MTLComputeCommandEncoder> encoder=[command computeCommandEncoder];
     [encoder setComputePipelineState:acceptPS]; [encoder setTexture:admissionChanges atIndex:0];
@@ -395,6 +410,8 @@ static_assert(sizeof(wgdi_temporal_parameters) == 48, "Metal parameter layout ch
                         (const uint8_t *)jobInput.bytes+(row*iw+x)*4,(right-x)*4);
                 ++updated;
             }
+            if (trace) NSLog(@"Wine temporal: admitted %lu/%lu blocks for request %llu",
+                (unsigned long)updated,(unsigned long)blocks,(unsigned long long)token);
             if (updated) fadeUntil=MAX(fadeUntil,[self now]+WGDI_TEMPORAL_FADE_SECONDS);
             [self clearPending]; if (redraw) redraw();
         });
@@ -409,5 +426,7 @@ extern "C" __attribute__((visibility("default"))) id<WGDITemporalPresenter>
 wine_gdi_temporal_create(uint32_t abi, const char *resources)
 {
     if (abi!=WGDI_TEMPORAL_PRESENTER_ABI || !resources || resources[0]!='/') return nil;
-    return [[WGDITemporalRenderer alloc] initWithResources:[NSString stringWithUTF8String:resources]];
+    id<WGDITemporalPresenter> presenter=[[WGDITemporalRenderer alloc] initWithResources:[NSString stringWithUTF8String:resources]];
+    if (presenter) NSLog(@"Wine temporal: GPU residual enabled, 16x16 detection, 256x256 scheduling, 200 ms quiet interval");
+    return presenter;
 }

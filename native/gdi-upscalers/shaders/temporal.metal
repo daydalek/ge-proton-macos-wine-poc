@@ -147,36 +147,37 @@ vertex TemporalVertex temporal_vertex(uint index [[vertex_id]])
 
 kernel void temporal_mask(texture2d<uint, access::read> changes [[texture(0)]],
     texture2d<float, access::write> weights [[texture(1)]],
-    constant TemporalParameters &p [[buffer(0)]], uint2 pos [[thread_position_in_grid]])
+    device const float *times [[buffer(0)]], constant TemporalParameters &p [[buffer(1)]],
+    uint2 pos [[thread_position_in_grid]])
 {
     if (pos.x >= p.width || pos.y >= p.height) return;
     float2 source = float2(pos) + 0.5f;
     int2 block = clamp(int2(source / 16.0f), int2(0), int2(p.block_columns, p.block_rows) - 1);
     int radius = int(ceil((p.halo + p.feather) / 16.0f)) + 1;
-    float distance = p.halo + p.feather;
+    float distance = p.halo + p.feather, fade = 1.0f;
     for (int y = max(0, block.y-radius); y <= min(int(p.block_rows)-1, block.y+radius); ++y)
         for (int x = max(0, block.x-radius); x <= min(int(p.block_columns)-1, block.x+radius); ++x)
-            if (changes.read(uint2(x, y)).r & 1u) {
-                float2 low = float2(x, y) * 16.0f, high = low + 16.0f;
-                float2 delta = max(max(low-source, source-high), 0.0f);
-                distance = min(distance, max(delta.x, delta.y));
-            }
-    weights.write(float4(smoothstep(p.halo, p.halo + p.feather, distance)), pos);
+        {
+            float2 low = float2(x, y) * 16.0f, high = low + 16.0f;
+            float2 delta = max(max(low-source, source-high), 0.0f);
+            float separation = max(delta.x, delta.y);
+            if (changes.read(uint2(x, y)).r & 1u) distance = min(distance, separation);
+            float start = times[y * p.block_columns + x];
+            float maturity = start < 0 ? 0 : clamp((p.time-start) / max(p.fade_seconds, 0.001f), 0.0f, 1.0f);
+            float edge = smoothstep(0.0f, max(p.feather, 1.0f), separation);
+            fade = min(fade, mix(maturity, 1.0f, edge));
+        }
+    weights.write(float4(smoothstep(p.halo, p.halo + p.feather, distance) * fade), pos);
 }
 
 fragment float4 temporal_fragment(TemporalVertex varying [[stage_in]],
     texture2d<float, access::read> current [[texture(0)]],
     texture2d<float, access::sample> residual [[texture(1)]],
-    texture2d<float, access::sample> weights [[texture(2)]],
-    device const float *times [[buffer(0)]], constant TemporalParameters &p [[buffer(1)]])
+    texture2d<float, access::sample> weights [[texture(2)]])
 {
     constexpr sampler linear_sampler(coord::normalized, address::clamp_to_edge, filter::linear);
-    float2 source = varying.uv * float2(p.width, p.height);
-    int2 block = clamp(int2(source / 16.0f), int2(0), int2(p.block_columns, p.block_rows) - 1);
     float keep = weights.sample(linear_sampler, varying.uv).r;
-    float start = times[block.y * p.block_columns + block.x];
-    float maturity = start < 0 ? 0 : clamp((p.time-start) / max(p.fade_seconds, 0.001f), 0.0f, 1.0f);
     float3 base = bilinear_linear(current, varying.uv);
     float3 detail = residual.sample(linear_sampler, varying.uv).rgb;
-    return float4(encode_srgb(base + keep * maturity * detail), 1.0f);
+    return float4(encode_srgb(base + keep * detail), 1.0f);
 }
