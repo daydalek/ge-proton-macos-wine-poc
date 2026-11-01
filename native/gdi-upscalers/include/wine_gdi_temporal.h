@@ -13,6 +13,7 @@
 #define WGDI_TEMPORAL_FADE_SECONDS 0.100
 #define WGDI_TEMPORAL_REFERENCE_DIRTY 1u
 #define WGDI_TEMPORAL_FRAME_CHANGED 2u
+#define WGDI_TEMPORAL_INPUT_DELTA 4u
 
 /* Shared with temporal.metal. Source coordinates have their origin at top left. */
 struct wgdi_temporal_parameters {
@@ -79,15 +80,24 @@ static inline void wgdi_temporal_observe(struct wgdi_temporal_scheduler *state,
         unsigned right = x + WGDI_TEMPORAL_TILE + WGDI_TEMPORAL_HALO;
         unsigned bottom = y + WGDI_TEMPORAL_TILE + WGDI_TEMPORAL_HALO;
         unsigned bx, by, flags = 0;
+        unsigned core_right = x + WGDI_TEMPORAL_TILE < state->width ? x + WGDI_TEMPORAL_TILE : state->width;
+        unsigned core_bottom = y + WGDI_TEMPORAL_TILE < state->height ? y + WGDI_TEMPORAL_TILE : state->height;
         right = right < state->width ? right : state->width;
         bottom = bottom < state->height ? bottom : state->height;
         for (by = top / WGDI_TEMPORAL_BLOCK;
              by < (bottom + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK && by < br; ++by)
             for (bx = left / WGDI_TEMPORAL_BLOCK;
                  bx < (right + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK && bx < bc; ++bx)
-                flags |= blocks[by * bc + bx];
+            {
+                unsigned bits = blocks[by * bc + bx];
+                flags |= bits & (WGDI_TEMPORAL_FRAME_CHANGED | WGDI_TEMPORAL_INPUT_DELTA);
+                if (bx >= x / WGDI_TEMPORAL_BLOCK && by >= y / WGDI_TEMPORAL_BLOCK &&
+                    bx < (core_right + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK &&
+                    by < (core_bottom + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK)
+                    flags |= bits & WGDI_TEMPORAL_REFERENCE_DIRTY;
+            }
         struct wgdi_temporal_tile *tile = &state->tiles[ty * state->columns + tx];
-        tile->dirty = !!(flags & WGDI_TEMPORAL_REFERENCE_DIRTY);
+        tile->dirty = !!(flags & (WGDI_TEMPORAL_REFERENCE_DIRTY | WGDI_TEMPORAL_INPUT_DELTA));
         if ((flags & WGDI_TEMPORAL_FRAME_CHANGED) || now < tile->changed_at) {
             tile->changed_at = now;
             ++tile->version;

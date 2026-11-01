@@ -43,6 +43,15 @@ kernel void temporal_reset(texture2d<float, access::write> reference [[texture(0
     if (pos.x < p.block_columns && pos.y < p.block_rows) times[pos.y * p.block_columns + pos.x] = -1.0f;
 }
 
+/* Seed input identity even for blocks whose neural residual is still missing.
+ * This distinguishes missing detail from an actual neighbouring pixel change. */
+kernel void temporal_seed(texture2d<float, access::read> source [[texture(0)]],
+    texture2d<float, access::write> reference [[texture(1)]],
+    constant TemporalParameters &p [[buffer(0)]], uint2 pos [[thread_position_in_grid]])
+{
+    if (pos.x < p.width && pos.y < p.height) reference.write(source.read(pos), pos);
+}
+
 /* Dispatch exactly 16x16 threads per group. Only this compact block metadata
  * is exposed to the CPU scheduler; pixels remain in GPU presentation textures. */
 kernel void temporal_detect(texture2d<float, access::read> current [[texture(0)]],
@@ -60,8 +69,9 @@ kernel void temporal_detect(texture2d<float, access::read> current [[texture(0)]
     if (pos.x < p.width && pos.y < p.height) {
         float3 value = current.read(pos).rgb;
         uint bits = 0;
-        if (times[group.y * p.block_columns + group.x] < 0 ||
-            any(abs(value - reference.read(pos).rgb) > 0.5f / 255.0f)) bits |= 1u;
+        bool delta = any(abs(value - reference.read(pos).rgb) > 0.5f / 255.0f);
+        if (times[group.y * p.block_columns + group.x] < 0 || delta) bits |= 1u;
+        if (delta) bits |= 4u;
         if (!p.previous_valid || any(abs(value - previous.read(pos).rgb) > 0.5f / 255.0f)) bits |= 2u;
         atomic_fetch_or_explicit(&flags, bits, memory_order_relaxed);
     }
@@ -90,7 +100,7 @@ kernel void temporal_accept(texture2d<uint, access::read> changes [[texture(0)]]
     for (int y = first.y; y <= last.y; ++y)
         for (int x = first.x; x <= last.x; ++x) bits |= changes.read(uint2(x, y)).r;
     bool eligible = selected[tile.y * p.tile_columns + tile.x] != 0;
-    accepted[index] = eligible && !(bits & 2u) && ((bits & 1u) || times[index] < 0);
+    accepted[index] = eligible && !(bits & 2u) && ((bits & 4u) || times[index] < 0);
 }
 
 kernel void temporal_commit_input(texture2d<float, access::read> job [[texture(0)]],

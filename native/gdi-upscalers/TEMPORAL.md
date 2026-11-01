@@ -69,3 +69,10 @@ unverified game behavior remains pending.
   GPU rendering. A shared C scheduler tracks independent quiet times and tile
   versions. Runtime texture ownership, Wine integration and deployment remain
   in progress. Functional and game acceptance remain pending with the user.
+
+- Native renderer: the x86_64 library now builds and exports the optional
+  temporal presenter factory. It owns two bounded presentation submissions,
+  signed residual/reference textures, asynchronous compact metadata, immutable
+  hybrid jobs and per-block GPU admission. Static neighbouring tiles remain
+  clean when a neighbour merely lacks neural detail. Wine call-site integration
+  is the next stage; no functional or game claims are established yet.
