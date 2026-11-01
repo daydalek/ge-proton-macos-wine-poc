@@ -60,6 +60,16 @@ add_custom_command(OUTPUT "${RESOURCES}/anime4k.metallib"
     COMMAND ${XCRUN} -sdk macosx metal "${RESOURCES}/anime4k.air" -o "${RESOURCES}/anime4k.metallib"
     DEPENDS "${GENERATOR}" "${GLSL}" VERBATIM)
 add_custom_target(anime4k_shaders ALL DEPENDS "${RESOURCES}/anime4k.metallib")
+set(TEMPORAL_SHADER "${CMAKE_CURRENT_SOURCE_DIR}/shaders/temporal.metal")
+add_custom_command(OUTPUT "${RESOURCES}/temporal.metallib"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${RESOURCES}"
+    COMMAND ${XCRUN} -sdk macosx metal -c -std=macos-metal2.3 -mmacosx-version-min=11.0
+            "-fmodules-cache-path=${CMAKE_CURRENT_BINARY_DIR}/metal-module-cache"
+            "${TEMPORAL_SHADER}" -o "${RESOURCES}/temporal.air"
+    COMMAND ${XCRUN} -sdk macosx metallib "${RESOURCES}/temporal.air"
+            -o "${RESOURCES}/temporal.metallib"
+    DEPENDS "${TEMPORAL_SHADER}" VERBATIM)
+add_custom_target(temporal_shaders ALL DEPENDS "${RESOURCES}/temporal.metallib")
 file(MAKE_DIRECTORY "${RESOURCES}/models-se")
 configure_file("${WGDI_MODEL_DIR}/up2x-no-denoise.param" "${RESOURCES}/models-se/up2x-no-denoise.param" COPYONLY)
 configure_file("${WGDI_MODEL_DIR}/up2x-no-denoise.bin" "${RESOURCES}/models-se/up2x-no-denoise.bin" COPYONLY)
@@ -69,10 +79,10 @@ target_include_directories(winegdiupscalers PUBLIC include PRIVATE src)
 target_compile_options(winegdiupscalers PRIVATE -Wall -Wextra -Werror=return-type)
 target_link_libraries(winegdiupscalers PRIVATE ncnn "-framework Foundation" "-framework Metal" "-framework Accelerate")
 set_target_properties(winegdiupscalers PROPERTIES INSTALL_NAME_DIR "@rpath")
-add_dependencies(winegdiupscalers anime4k_shaders)
+add_dependencies(winegdiupscalers anime4k_shaders temporal_shaders)
 set(WINE_UNIX_DIR "lib/wine/x86_64-unix" CACHE STRING "Wine Unix architecture directory")
 install(TARGETS winegdiupscalers LIBRARY DESTINATION "${WINE_UNIX_DIR}")
-install(FILES "${RESOURCES}/anime4k.metallib" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
+install(FILES "${RESOURCES}/anime4k.metallib" "${RESOURCES}/temporal.metallib" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
 install(DIRECTORY "${RESOURCES}/models-se" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
 # Core ML helper is built separately for arm64 even when Wine is x86_64.
 # A prepared bundle contains the helper, fixed-size compiled models and its

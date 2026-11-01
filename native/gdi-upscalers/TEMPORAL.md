@@ -59,3 +59,13 @@ sources synchronized. Existing functional probes can be extended as artifacts;
 run game, inference and UI checks only at the user's explicit request.
 Completion requires the full implemented path and documented user acceptance;
 unverified game behavior remains pending.
+
+## Implementation log
+
+- Baseline committed: cached Core ML windows and persistent CPU presentation.
+- GPU foundation: temporal.metal compiles for macOS Metal 2.3 and links into
+  temporal.metallib. The kernels implement exact 16x16 differences, context-aware
+  admission, signed linear residuals, source-resolution feather masks and final
+  GPU rendering. A shared C scheduler tracks independent quiet times and tile
+  versions. Runtime texture ownership, Wine integration and deployment remain
+  in progress. Functional and game acceptance remain pending with the user.
