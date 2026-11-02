@@ -1,18 +1,17 @@
 # GDI temporal residual implementation
 
-Goal: GPU 16x16 change detection, masked temporal residual composition,
-independent 256x256 quiet intervals, asynchronous cached Core ML refinement,
-and gradual detail reveal. Game/UI acceptance is performed by the user.
-Computer Use remains disabled. Commit each coherent implementation stage.
+The temporal presenter combines GPU 16x16 change detection, masked residual
+composition, independent 256x256 quiet intervals, asynchronous cached Core ML
+refinement, and gradual detail reveal.
 
-## Existing baseline
+## Conventional presentation fallback
 
 The Core ML helper uses 18-pixel context and cached overlapping 256x256
-windows. Wine currently compares 64x64 patches on the CPU and presents CGImages.
-The native NSCursor path is separate from the supplied GDI surface.
-Game-rendered cursors and text participate in frame differences.
+windows. The conventional presentation path compares 64x64 patches on the CPU
+and presents CGImages. The native NSCursor path is separate from the supplied
+GDI surface. Game-rendered cursors and text participate in frame differences.
 
-## Required end state
+## Design constraints
 
 - Upload each CPU GDI frame once; detect changes on the GPU in 16x16 groups.
 - Keep a GPU reference input and signed linear-light residual atlas.
@@ -31,8 +30,6 @@ Game-rendered cursors and text participate in frame differences.
   a working conventional presentation path if Metal or inference fails.
 - Keep window/fullscreen geometry in the existing presentation layer. Region
   selection and manual exclusion remain archived and absent from this path.
-- Compile shader, Objective-C glue, x86_64 native library and arm64 helper;
-  commit changes and deploy with --manual-verification. User checks games.
 
 ## Architecture
 
@@ -51,40 +48,19 @@ B(X) uses the same bilinear filter and sRGB decode in residual creation and
 composition. Residual storage is signed RGBA16Float. Clamping and sRGB encode
 occur at final display. Refresh timestamps are per accepted block.
 
-## Evidence and handoff
+## Integration and validation
 
-Record compilation and commit IDs per stage. Authoritative implementation lives
-in native/gdi-upscalers and the maintained Wine patch. Keep generated build
-sources synchronized. Existing functional probes can be extended as artifacts;
-run game, inference and UI checks only at the user's explicit request.
-Completion requires the full implemented path and documented user acceptance;
-unverified game behavior remains pending.
+Real-CUGAN and adaptive modes dynamically load the optional presenter extension,
+submit immutable 2x refinement jobs on the existing serial worker, and show the
+native Metal layer. Conventional presentation remains available as a fallback.
 
-## Implementation log
+Canonical presentation sources live in `native/gdi-upscalers/presentation/`.
+`scripts/sync-gdi-temporal-patch.py` synchronizes them into the maintained Wine
+patches. Build instructions and dependencies are maintained by the build scripts.
 
-- Baseline committed: cached Core ML windows and persistent CPU presentation.
-- GPU foundation: temporal.metal compiles for macOS Metal 2.3 and links into
-  temporal.metallib. The kernels implement exact 16x16 differences, context-aware
-  admission, signed linear residuals, source-resolution feather masks and final
-  GPU rendering. A shared C scheduler tracks independent quiet times and tile
-  versions. Runtime texture ownership, Wine integration and deployment remain
-  in progress. Functional and game acceptance remain pending with the user.
-
-- Native renderer: the x86_64 library now builds and exports the optional
-  temporal presenter factory. It owns two bounded presentation submissions,
-  signed residual/reference textures, asynchronous compact metadata, immutable
-  hybrid jobs and per-block GPU admission. Static neighbouring tiles remain
-  clean when a neighbour merely lacks neural detail. Wine call-site integration
-  is the next stage; no functional or game claims are established yet.
-
-- Wine integration: Real-CUGAN and adaptive modes dynamically load the optional
-  presenter extension, submit immutable 2x refinement jobs on the existing serial
-  worker, and show the native Metal layer. Canonical presentation sources and a
-  patch synchronizer are tracked. Conventional presentation remains available.
-- Current builds: native library, Metal library, Wine driver and arm64 Core ML
-  helper compile. GPUI packaging and local installation are in progress.
-- User acceptance remains pending; see TEMPORAL-ACCEPTANCE.md. No game/UI or
-  inference probes have been executed by the agent for this implementation.
+Build success alone does not establish runtime or visual correctness. See
+[TEMPORAL-ACCEPTANCE.md](TEMPORAL-ACCEPTANCE.md) for manual regression checks;
+game acceptance remains pending.
 
 ## WineD3D / OpenGL presentation
 

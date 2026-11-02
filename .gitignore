@@ -29,3 +29,7 @@ logs/
 /configs/wow64-demuxer-cleanup-fix.json
 /scripts/test-haruoto.sh
 tools/probes/dwarf-divisor-fixture-*.dll
+
+# Local agent worktrees and generated image scratch files.
+/.delta/
+/generated_images/
