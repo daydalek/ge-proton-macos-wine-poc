@@ -1,7 +1,32 @@
 {
-  "date": "2026-10-31",
+  "date": "2026-11-02",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
+    {
+      "patch": "patches/linux/qasf-seek-flush.patch",
+      "source_file": "dlls/qasf/asfreader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared CrossOver Linux source after seek repairs, including modification notices",
+      "source_sha256": "14a61d1bb5b02369b84b346ffe9f16825f94773f0179ec4e231d02e6805ea161",
+      "copyright_notices": [
+        "Copyright 2020 Jactry Zeng for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/linux/winedmo-pause-preserve-queue.patch",
+      "source_file": "dlls/winedmo/winedmo_quartz_parser.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared CrossOver Linux source after seek repairs, including modification notices",
+      "source_sha256": "759970997e71838aec3508105e4ff8f5b3f3e89f29f531d3b8a6ec1aea26e38b",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2010 Maarten Lankhorst for CodeWeavers",
+        "Copyright 2010 Aric Stewart for CodeWeavers",
+        "Copyright 2019-2020 Zebediah Figura"
+      ]
+    },
     {
       "patch": "patches/crossover/crossover-26.3-media.patch",
       "source_file": ".gitignore",
@@ -2615,6 +2640,8 @@
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
   "patch_sha256": {
+    "patches/linux/qasf-seek-flush.patch": "9e993c895c84a65a7f7ab371722483b23a1d9585a7131775a0dc3d6603fe1a81",
+    "patches/linux/winedmo-pause-preserve-queue.patch": "fa7031ba081a1fb63c820d4cc5be3cabf97306dd004cbe49e77e2872fb03a2f7",
     "patches/crossover/crossover-26.3-media.patch": "0fd1d9ece2bf589f8959ffd0dd5322c084fdd1a87e256797039a5156c90f648d",
     "patches/wine-ge/macos-platform.patch": "3a9915bee10f8f2afe3bce8d7b992a984d58d43f4f14e4f00321a62b005bd459",
     "patches/wine-ge/macos-vmr7-window.patch": "8102ca5bdcc11d89761ad820ca2b364be2f2f8becf4b863431a147fc2f5f7d0c",

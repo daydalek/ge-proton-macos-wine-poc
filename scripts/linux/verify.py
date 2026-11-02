@@ -131,8 +131,10 @@ def main():
                 results.append(check('mpeg-format-' + bits,
                     [wine, build.work / 'probes' / ('mpeg-audio-format-probe-' + bits + '.exe'),
                      windows_path(PROJECT / 'tools/samples/test-mpeg1.mpg')], env, output))
-                # repeated-seek-probe is excluded: pause/resume after seeks republishes
-                # a cached EOS and jumps the graph position to stream_stop; unfixed.
+                for sample in ('test-wmv2.wmv', 'test-mpeg1.mpg'):
+                    results.append(check('repeated-seek-' + sample + '-' + bits,
+                        [wine, build.work / 'probes' / ('repeated-seek-probe-' + bits + '.exe'),
+                         windows_path(PROJECT / 'tools/samples' / sample)], env, output))
                 for name in ('child-window-probe', 'reconnect-probe'):
                     results.append(check(name + '-' + bits,
                         [wine, build.work / 'probes' / (name + '-' + bits + '.exe'),

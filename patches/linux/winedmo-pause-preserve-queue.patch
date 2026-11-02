@@ -1,0 +1,56 @@
+Subject: winedmo: preserve queued packets across Pause/Run
+License: LGPL-2.1-or-later
+Modification date: 2026-11-02
+
+The strmbase stop_stream callback runs for Pause as well as Stop. Flushing
+here advances read_flush_generation without rewinding the read-ahead
+demuxer. On resume queued packets are discarded as stale, leaving cached
+EOF to generate premature completion. Let paused renderers block delivery,
+retaining bounded queues and decoder state. Explicit seek and
+cleanup_stream still flush and invalidate generations.
+
+--- a/dlls/winedmo/winedmo_quartz_parser.c
++++ b/dlls/winedmo/winedmo_quartz_parser.c
+@@ -1674,36 +1674,6 @@
+-static HRESULT dmo_parser_stop_stream(struct strmbase_filter *iface)
+-{
+-    struct dmo_parser *filter = dmo_impl_from_strmbase_filter(iface);
+-    unsigned int i;
+-
+-    if (!filter->sink_connected)
+-        return S_OK;
+-
+-    EnterCriticalSection(&filter->streaming_cs);
+-    filter->flushing = true;
+-    filter->read_flushing = TRUE;
+-    ++filter->read_flush_generation;
+-    LeaveCriticalSection(&filter->streaming_cs);
+-
+-    dmo_parser_begin_downstream_flush(filter);
+-    WakeAllConditionVariable(&filter->flushing_cv);
+-
+-    for (i = 0; i < filter->source_count; ++i)
+-    {
+-        WakeConditionVariable(&filter->sources[i]->queue_cv);
+-        WakeConditionVariable(&filter->sources[i]->queue_space_cv);
+-    }
+-
+-    for (i = 0; i < filter->source_count; ++i)
+-    {
+-        struct dmo_parser_source *pin = filter->sources[i];
+-
+-        if (!dmo_parser_source_is_active(pin))
+-            continue;
+-        EnterCriticalSection(&pin->flushing_cs);
+-        LeaveCriticalSection(&pin->flushing_cs);
+-    }
+-
+-    return S_OK;
+-}
++static HRESULT dmo_parser_stop_stream(struct strmbase_filter *iface)
++{
++    /* Pause preserves queued data; cleanup_stream handles actual Stop. */
++    return S_OK;
++}
+ 
+ static HRESULT dmo_parser_cleanup_stream(struct strmbase_filter *iface)

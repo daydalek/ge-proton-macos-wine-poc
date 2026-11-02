@@ -1,7 +1,7 @@
 {
   "target": "linux-x86_64",
   "baseline": "CrossOver 26.3.0 + GE-Proton11-7 media",
-  "modification_date": "2026-10-24",
+  "modification_date": "2026-11-02",
   "windows_architectures": [
     "i386",
     "x86_64"
@@ -19,6 +19,8 @@
   "additional_patches": [
     "patches/linux/crossover-pulse-build.patch",
     "patches/linux/quartz-pause-position.patch",
-    "patches/linux/quartz-no-position-transition.patch"
+    "patches/linux/quartz-no-position-transition.patch",
+    "patches/linux/qasf-seek-flush.patch",
+    "patches/linux/winedmo-pause-preserve-queue.patch"
   ]
 }
