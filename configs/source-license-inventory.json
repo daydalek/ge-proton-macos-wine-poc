@@ -2635,7 +2635,7 @@
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 229,
+    "LGPL-2.1-or-later": 231,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
