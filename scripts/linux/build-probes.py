@@ -20,6 +20,7 @@ PROBES = {
     'directory-compat-probe': [],
     'hotpatch-probe': ['-lgdi32', '-luser32'],
     'reconnect-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
+    'repeated-seek-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'mpeg-audio-format-probe': ['-municode', '-lole32', '-loleaut32', '-lstrmiids', '-luuid'],
     'command-line-probe': ['-municode', '-ladvapi32'],
     'device-notify-probe': ['-luser32'],

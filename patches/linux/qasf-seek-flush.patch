@@ -1,0 +1,35 @@
+Subject: qasf: flush every connected output before stopping for a seek
+License: LGPL-2.1-or-later
+Modification date: 2026-11-02
+
+The flush loops used the requesting stream on every iteration. Seeking via
+audio therefore left the video renderer blocked in a paused Receive while
+the reader waited for its delivery thread to report WMT_STOPPED. Flush each
+connected output, and pair its EndFlush after stopping the reader.
+
+--- a/dlls/qasf/asfreader.c
++++ b/dlls/qasf/asfreader.c
+@@ -408,7 +408,10 @@
+     /* Send begin flush commands downstream. */
+     for (i = 0; i < filter->stream_count; ++i)
+     {
+-        if (FAILED(IPin_BeginFlush(stream->source.pin.peer)))
++        IPin *peer = filter->streams[i].source.pin.peer;
++        if (!peer)
++            continue;
++        if (FAILED(IPin_BeginFlush(peer)))
+             WARN("Failed to BeginFlush for stream %u.\n", i);
+     }
+ 
+@@ -418,7 +421,10 @@
+     /* Send end flush commands downstream. */
+     for (i = 0; i < filter->stream_count; ++i)
+     {
+-        if (FAILED(IPin_EndFlush(stream->source.pin.peer)))
++        IPin *peer = filter->streams[i].source.pin.peer;
++        if (!peer)
++            continue;
++        if (FAILED(IPin_EndFlush(peer)))
+             WARN("Failed to EndFlush for stream %u.\n", i);
+     }
+ 

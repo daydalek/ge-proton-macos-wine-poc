@@ -16,6 +16,13 @@ The Linux profile appends a PulseAudio integration patch for CrossOver's
 audio-stream model and udev linkage, preserving GE's smooth-playback timing.
 It also appends Quartz no-position transition handling and a position repair: no-position requests retain the graph
 clock snapshot, and repeated pauses account for each running interval once.
+
+Linux also flushes every connected ASF output before seeking, avoiding a
+reader-stop deadlock when only the requesting audio output was flushed.
+The winedmo parser preserves queued packets and decoder state across Pause/Run;
+only explicit seeks and Stop invalidate the packet generation. The regression
+suite runs WMV2 and MPEG-1 repeated-seek probes in both x86 and x64, including
+no-position queries, paused position stability, timely EOS and replay after EOS.
 Append-only patch additions can reuse an existing build tree; changes to an
 earlier patch or the source baseline require a fresh work directory.
 
