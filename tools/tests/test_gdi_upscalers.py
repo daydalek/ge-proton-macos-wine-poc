@@ -28,6 +28,15 @@ def new_patch_files(name):
 
 
 class FrameAndShaderTests(unittest.TestCase):
+    def test_exclusion_comparisons_validate_geometry_and_buffer_bounds(self):
+        with tempfile.TemporaryDirectory() as temp:
+            binary = Path(temp) / 'exclusions'
+            subprocess.run(['clang', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                            '-fsanitize=address,undefined',
+                            str(NATIVE / 'tests/exclusions-compare-test.c'), '-o', str(binary)],
+                           check=True, capture_output=True)
+            subprocess.run([str(binary)], check=True, capture_output=True, timeout=15)
+
     def test_exact_pixel_difference_and_stability_with_sanitizers(self):
         compiler = shutil.which('clang') or shutil.which('cc')
         if not compiler:
@@ -39,6 +48,22 @@ class FrameAndShaderTests(unittest.TestCase):
                             str(NATIVE / 'tests/frame-diff-test.c'), '-o', str(binary)],
                            check=True, capture_output=True)
             subprocess.run([str(binary)], check=True, capture_output=True, timeout=15)
+
+    def test_realcugan_coreml_default_and_explicit_sizes(self):
+        spec = importlib.util.spec_from_file_location('build_realcugan_coreml',
+                                                      ROOT / 'scripts/build-realcugan-coreml.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.DEFAULT_SIZES, ('256x256',))
+        self.assertEqual(module.DEFAULT_ESRGAN_SIZES, ('256x256', '384x384'))
+        self.assertEqual(module.parse_sizes(None, module.DEFAULT_SIZES), [(256, 256)])
+        self.assertEqual(module.parse_sizes(['640x480', '640x480', '800x600'],
+                                            module.DEFAULT_SIZES),
+                         [(640, 480), (800, 600)])
+        with self.assertRaises(ValueError):
+            module.parse_sizes(['1x1x1'], module.DEFAULT_SIZES)
+        with self.assertRaises(ValueError):
+            module.parse_sizes(['3000x3000'], module.DEFAULT_SIZES)
 
     def test_canonical_headers_match_distributed_wine_patch(self):
         files = new_patch_files('patches/wine-ge/macos-gdi-upscalers.patch')
@@ -76,11 +101,32 @@ class AdapterTests(unittest.TestCase):
         for name, content in files.items():
             (cls.path / name).write_text(content)
         cls.binary = cls.path / 'cache-probe'
+        cls.mock_library = cls.path / 'mock-upscaler.dylib'
+        cls.regions_library = cls.path / 'mock-regions.dylib'
+        subprocess.run(['clang', '-arch', 'x86_64', '-mmacosx-version-min=11.0',
+                        '-dynamiclib', '-fblocks', '-Wall', '-Wextra', '-Werror',
+                        '-I' + str(NATIVE / 'include'),
+                        str(ROOT / 'tools/probes/gdi-upscaler-test-backend.c'),
+                        str(ROOT / 'tools/probes/gdi-upscaler-test-temporal.m'),
+                        '-framework', 'Foundation', '-framework', 'QuartzCore',
+                        '-framework', 'IOSurface',
+                        '-o', str(cls.mock_library)], check=True, capture_output=True)
+        subprocess.run(['clang', '-arch', 'x86_64', '-mmacosx-version-min=11.0',
+                        '-dynamiclib', '-fblocks', '-Wall', '-Wextra', '-Werror',
+                        '-DWGDI_MOCK_HAS_SELECTION', '-I' + str(NATIVE / 'include'),
+                        str(ROOT / 'tools/probes/gdi-upscaler-test-backend.c'),
+                        str(ROOT / 'tools/probes/gdi-upscaler-test-temporal.m'),
+                        str(ROOT / 'tools/probes/gdi-upscaler-test-regions.c'),
+                        '-framework', 'Foundation', '-framework', 'QuartzCore',
+                        '-framework', 'IOSurface',
+                        '-o', str(cls.regions_library)], check=True, capture_output=True)
         subprocess.run(['clang', '-arch', 'x86_64', '-mmacosx-version-min=11.0', '-fblocks',
                         '-Wall', '-Wextra', '-Werror', '-I' + str(cls.path),
                         str(ROOT / 'tools/probes/gdi-upscaler-cache-probe.m'),
                         str(cls.path / 'cocoa_upscaler.m'), '-framework', 'AppKit',
-                        '-framework', 'Metal', '-o', str(cls.binary)],
+                        '-framework', 'Metal', '-framework', 'QuartzCore',
+                        '-framework', 'IOSurface',
+                        '-o', str(cls.binary)],
                        check=True, capture_output=True)
         if os.getenv('WGDI_TEST_NATIVE_LIBRARY'):
             native = Path(os.environ['WGDI_TEST_NATIVE_LIBRARY']).resolve()
@@ -110,6 +156,37 @@ class AdapterTests(unittest.TestCase):
     def test_persistent_neural_patches_during_local_changes(self):
         self.run_probe('realcugan', 'composite')
         self.run_probe('adaptive', 'composite')
+
+    def test_exclusions_keep_live_pixels_without_new_neural_jobs(self):
+        self.run_probe('realcugan', 'excluded', str(self.mock_library))
+
+    def test_excluded_gdi_present_still_uses_temporal_presenter(self):
+        self.run_probe('realcugan', 'temporal-excluded', str(self.mock_library))
+
+    def test_adaptive_temporal_defers_spatial_scaler_to_fast_fallback(self):
+        self.run_probe('adaptive', 'adaptive-temporal', str(self.mock_library))
+
+    def test_regions_symbol_receives_presenter_tile_selection(self):
+        self.run_probe('realcugan', 'regions', str(self.regions_library))
+
+    def test_missing_regions_symbol_uses_full_process(self):
+        self.run_probe('realcugan', 'regions-fallback', str(self.mock_library))
+
+    def test_async_jobs_reject_stale_frames_with_mock_backend(self):
+        self.run_probe('realcugan', 'neural', str(self.mock_library))
+
+    def test_picker_buttons_and_source_coordinates_in_real_panel(self):
+        binary = self.path / 'picker-probe'
+        subprocess.run(['clang', '-fblocks', '-Wall', '-Wextra', '-Werror',
+                        '-I' + str(NATIVE / 'presentation'), '-I' + str(NATIVE / 'include'),
+                        '-I' + str(NATIVE / 'tests/region-picker-stub'),
+                        str(NATIVE / 'tests/region-picker-probe.m'),
+                        '-framework', 'AppKit', '-framework', 'QuartzCore',
+                        '-framework', 'IOSurface', '-o', str(binary)],
+                       check=True, capture_output=True)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('all checks passed', result.stdout)
 
     def test_missing_neural_backend_retains_standard_or_fast_presentation(self):
         self.run_probe('anime4k', 'failure', '/missing/wine-gdi-upscalers.dylib')

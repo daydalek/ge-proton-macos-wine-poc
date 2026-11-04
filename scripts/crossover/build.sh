@@ -57,7 +57,9 @@ modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
             'lib/wine/i386-windows/user32.dll', 'lib/wine/x86_64-unix/libwinegdiupscalers.dylib',
             'lib/wine/x86_64-unix/gdi-upscalers/anime4k.metallib',
             'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.param',
-            'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.bin']
+            'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.bin',
+            'lib/wine/x86_64-unix/gdi-upscalers/models-animevideov3/realesr-animevideov3-x2.param',
+            'lib/wine/x86_64-unix/gdi-upscalers/models-animevideov3/realesr-animevideov3-x2.bin']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
           'source_archive_sha256': lock['source_sha256'],
           'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),

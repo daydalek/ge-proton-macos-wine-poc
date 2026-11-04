@@ -19,13 +19,20 @@ diff --git a/dlls/winemac.drv/cocoa_upscaler.h b/dlls/winemac.drv/cocoa_upscaler
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,60 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#import "cocoa_spatial.h"
 +#include "wine_gdi_upscaler.h"
 +#include "wine_gdi_frame_diff.h"
 +#include "wine_gdi_upscale_policy.h"
 +#import "wine_gdi_temporal_presenter.h"
++
++CGRect wgdi_presentation_frame(NSUInteger sourceWidth, NSUInteger sourceHeight,
++    CGFloat sourceScale, BOOL fullscreen, CGRect area, CGRect bounds);
++
++BOOL wine_gdi_region_picker_is_window(NSWindow *window);
++BOOL wine_gdi_region_picker_blocks_window(NSWindow *window);
++BOOL wine_gdi_region_picker_is_active(void);
 +
 +@interface WineGDIUpscaler : NSObject
 +{
@@ -49,6 +56,7 @@ new file mode 100644
 +    CGImageRef result;
 +    NSUInteger latestWidth, latestHeight, latestOutputWidth, latestOutputHeight;
 +    NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
++    NSView *presentationView;
 +}
 ++ (BOOL) enabled;
 ++ (BOOL)temporalEnabled;
@@ -68,23 +76,44 @@ new file mode 100644
 +- (NSUInteger) fastInferenceCount;
 +- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
 +                 needsDisplay:(void (^)(void))needsDisplay;
++- (void)setPresentationView:(NSView *)view;
++- (void)offerRegionSelectionForImage:(CGImageRef)image needsDisplay:(void (^)(void))redraw;
++- (void)offerRegionSelectionForSurface:(IOSurfaceRef)surface needsDisplay:(void (^)(void))redraw;
 +@end
 diff --git a/dlls/winemac.drv/cocoa_upscaler.m b/dlls/winemac.drv/cocoa_upscaler.m
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/cocoa_upscaler.m
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,573 @@
 +/*
 + * Optional GDI upscaler selection and asynchronous neural presentation.
 + * Copyright 2026 GE-Proton macOS Wine PoC contributors
 + * SPDX-License-Identifier: LGPL-2.1-or-later
 + */
 +#import "cocoa_upscaler.h"
++#import "cocoa_region_picker.h"
 +#include <dlfcn.h>
 +#include <stdlib.h>
 +#include <string.h>
 +
 +enum { UPSCALE_OFF = 0, UPSCALE_METALFX = 3, UPSCALE_ADAPTIVE = 4 };
++
++CGRect wgdi_presentation_frame(NSUInteger sourceWidth, NSUInteger sourceHeight,
++    CGFloat sourceScale, BOOL fullscreen, CGRect area, CGRect bounds)
++{
++    if (!sourceWidth || !sourceHeight) return CGRectZero;
++    if (!isfinite(sourceScale) || sourceScale <= 0) sourceScale = 1;
++    if (!fullscreen)
++        return CGRectMake(0, 0, sourceWidth / sourceScale, sourceHeight / sourceScale);
++    if (!CGRectIsEmpty(area)) area = CGRectIntersection(area, bounds);
++    if (CGRectIsNull(area)) area = CGRectZero;
++    if (CGRectIsEmpty(area)) area = bounds;
++    if (CGRectIsEmpty(area)) return CGRectZero;
++    CGFloat fit = MIN(area.size.width / sourceWidth, area.size.height / sourceHeight);
++    CGSize size = CGSizeMake(sourceWidth * fit, sourceHeight * fit);
++    return CGRectMake(CGRectGetMidX(area) - size.width / 2,
++                      CGRectGetMidY(area) - size.height / 2, size.width, size.height);
++}
 +
 +static unsigned selected_algorithm(void)
 +{
@@ -123,6 +152,7 @@ new file mode 100644
 +}
 +
 +static wgdi_temporal_create_fn temporal_create;
++static wgdi_upscaler_process_regions_fn temporal_regions;
 +
 +static const struct wgdi_upscaler_api *backend_api(NSString **resources)
 +{
@@ -144,6 +174,8 @@ new file mode 100644
 +        if (api && (api->size != sizeof(*api) || api->abi_version != WGDI_UPSCALER_ABI ||
 +                    !api->create || !api->process || !api->destroy)) api = NULL;
 +        if (api) temporal_create = (wgdi_temporal_create_fn)dlsym(handle, "wine_gdi_temporal_create");
++        if (api) temporal_regions = (wgdi_upscaler_process_regions_fn)
++            dlsym(handle, "wgdi_upscaler_process_regions");
 +        if (api) directory = [[[library stringByDeletingLastPathComponent]
 +                              stringByAppendingPathComponent:@"gdi-upscalers"] copy];
 +        /* Keep the library loaded: worker tasks and context destructors retain
@@ -192,10 +224,10 @@ new file mode 100644
 +    self = [super init];
 +    if (!self) return nil;
 +    algorithm = selected_algorithm();
-+    if (algorithm == UPSCALE_METALFX || algorithm == UPSCALE_ADAPTIVE)
++    if (algorithm == UPSCALE_METALFX)
 +    {
 +        metalFX = [[WineSpatialScaler alloc] init];
-+        if (!metalFX && algorithm == UPSCALE_METALFX) { [self release]; return nil; }
++        if (!metalFX) { [self release]; return nil; }
 +    }
 +    const char *mode = getenv("WINE_GDI_TEMPORAL");
 +    if ((algorithm == WGDI_REALCUGAN || algorithm == UPSCALE_ADAPTIVE) && (!mode || strcmp(mode, "0"))) {
@@ -206,8 +238,27 @@ new file mode 100644
 +    return self;
 +}
 +
++- (void)setPresentationView:(NSView *)view
++{
++    presentationView = view;
++}
++
++- (void)offerRegionSelectionForImage:(CGImageRef)image needsDisplay:(void (^)(void))redraw
++{
++    if (presentationView)
++        wgdi_offer_region_picker(presentationView, image, redraw);
++}
++
++- (void)offerRegionSelectionForSurface:(IOSurfaceRef)surface needsDisplay:(void (^)(void))redraw
++{
++    if (presentationView)
++        wgdi_offer_region_picker_surface(presentationView, surface, redraw);
++}
++
 +- (void) dealloc
 +{
++    if (presentationView)
++        wgdi_forget_region_view(presentationView);
 +    [temporal cancel]; [temporal release];
 +    [metalFX release];
 +    [latestInput release];
@@ -244,6 +295,10 @@ new file mode 100644
 +        }
 +        if (inFlight) return NO;
 +        inFlight = YES; ++inferenceCount;
++        id<WGDITemporalPresenter> presenter = temporal;
++        NSData *selection = nil;
++        if ([presenter respondsToSelector:@selector(selectedTilesForToken:)])
++            selection = [[presenter selectedTilesForToken:token] retain];
 +        dispatch_async(inference_queue(), ^{
 +            @autoreleasepool {
 +                NSString *resources = nil;
@@ -258,19 +313,28 @@ new file mode 100644
 +                    NSMutableData *output = [NSMutableData dataWithLength:iw * ih * 16];
 +                    struct wgdi_image input = {(uint8_t *)snapshot.bytes, snapshot.length, iw * 4, iw, ih};
 +                    struct wgdi_image destination = {output.mutableBytes, output.length, iw * 8, iw * 2, ih * 2};
-+                    if (!api->process(context, &input, &destination, error, sizeof(error))) completed = output;
++                    if (temporal_regions && selection &&
++                        !temporal_regions(context, &input, &destination,
++                            (const uint32_t *)selection.bytes, selection.length / 4,
++                            error, sizeof(error))) completed = output;
++                    else if ((!temporal_regions || !selection) &&
++                        !api->process(context, &input, &destination, error, sizeof(error)))
++                        completed = output;
 +                }
 +                NSString *message = completed ? nil : [NSString stringWithUTF8String:error];
 +                dispatch_async(dispatch_get_main_queue(), ^{
 +                    inFlight = NO;
-+                    if (!completed) {
++                    if (!completed && temporal == presenter) {
 +                        neuralFailed = YES;
 +                        NSLog(@"Wine temporal: neural refinement failed (%@)", message);
 +                    }
-+                    [temporal completeOutput:completed token:token needsDisplay:redraw];
-+                    if (redraw) redraw();
++                    if (temporal == presenter)
++                        [presenter completeOutput:completed token:token needsDisplay:redraw];
++                    else if (redraw)
++                        redraw();
 +                });
 +            }
++            [selection release];
 +        });
 +        return YES;
 +
@@ -278,6 +342,13 @@ new file mode 100644
 +- (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
 +    width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
 +{
++    if (!temporal && temporal_create && [WineGDIUpscaler temporalEnabled] && !neuralFailed &&
++        (algorithm == WGDI_REALCUGAN || algorithm == UPSCALE_ADAPTIVE))
++    {
++        NSString *resources = nil;
++        backend_api(&resources);
++        temporal = temporal_create(WGDI_TEMPORAL_PRESENTER_ABI, resources.fileSystemRepresentation);
++    }
 +    if (!temporal) return NO;
 +    return [temporal presentImage:image inLayer:parent frame:frame width:width height:height
 +        request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
@@ -306,7 +377,12 @@ new file mode 100644
 +
 +- (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
 +{
-+    if (!metalFX || fastFailed) return NULL;
++    if (fastFailed) return NULL;
++    if (!metalFX)
++    {
++        metalFX = [[WineSpatialScaler alloc] init];
++        if (!metalFX) { fastFailed = YES; return NULL; }
++    }
 +    if (fastResult && fastWidth == width && fastHeight == height &&
 +        fastInputWidth == latestWidth && fastInputHeight == latestHeight && [fastInput isEqualToData:latestInput])
 +    {
@@ -337,7 +413,10 @@ new file mode 100644
 +        return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
 +    const NSUInteger block = 64, halo = 18;
 +    const NSUInteger iw = latestWidth, ih = latestHeight;
-+    const uint8_t *old = resultInput.bytes, *now = latestInput.bytes;
++    struct wgdi_image previous = {(uint8_t *)resultInput.bytes, resultInput.length, iw * 4, iw, ih};
++    struct wgdi_image current = {(uint8_t *)latestInput.bytes, latestInput.length, iw * 4, iw, ih};
++    struct wgdi_exclusions mask;
++    wgdi_load_exclusions(&mask, iw, ih);
 +    CGMutablePathRef retained = CGPathCreateMutable();
 +    NSUInteger patches = 0;
 +    for (NSUInteger y = 0; y < ih; y += block)
@@ -346,10 +425,8 @@ new file mode 100644
 +            NSUInteger left = x > halo ? x - halo : 0;
 +            NSUInteger bottom = y > halo ? y - halo : 0;
 +            NSUInteger right = MIN(iw, x + block + halo), top = MIN(ih, y + block + halo);
-+            BOOL equal = YES;
-+            for (NSUInteger row = bottom; equal && row < top; ++row)
-+                equal = !memcmp(old + (row * iw + left) * 4, now + (row * iw + left) * 4,
-+                                (right - left) * 4);
++            BOOL equal = wgdi_region_equal_excluding(&previous, &current, &mask,
++                left, bottom, right - left, top - bottom);
 +            if (equal)
 +            {
 +                // Integer output edges partition the surface at fractional scales.
@@ -394,7 +471,7 @@ new file mode 100644
 +    });
 +}
 +
-+- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++- (CGImageRef) copyUpscaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
 +                 needsDisplay:(void (^)(void))needsDisplay
 +{
 +    NSAssert([NSThread isMainThread], @"Wine GDI upscaler presentation requires the main thread");
@@ -423,7 +500,9 @@ new file mode 100644
 +    struct wgdi_image previous = {(uint8_t *)latestInput.bytes, latestInput.length,
 +                                  latestWidth * 4, latestWidth, latestHeight};
 +    struct wgdi_image current = {capture.mutableBytes, capture.length, iw * 4, iw, ih};
-+    BOOL frameChanged = !wgdi_frames_equal(&previous, &current);
++    struct wgdi_exclusions mask;
++    wgdi_load_exclusions(&mask, iw, ih);
++    BOOL frameChanged = !wgdi_frames_equal_excluding(&previous, &current, &mask);
 +    BOOL geometryChanged = latestOutputWidth != width || latestOutputHeight != height;
 +    if (frameChanged)
 +    {
@@ -507,7 +586,7 @@ new file mode 100644
 +                {
 +                    if (algorithm == UPSCALE_ADAPTIVE) neuralFailed = YES;
 +                    else failed = YES;
-+                    NSString *fallback = algorithm == UPSCALE_ADAPTIVE && metalFX && !fastFailed
++                    NSString *fallback = algorithm == UPSCALE_ADAPTIVE && !fastFailed
 +                        ? @"MetalFX" : @"standard GDI";
 +                    NSLog(@"Wine GDI upscaler: %@ failed (%@); using %@ presentation",
 +                          algorithm == WGDI_ANIME4K ? @"Anime4K" : @"Real-CUGAN", message, fallback);
@@ -518,7 +597,186 @@ new file mode 100644
 +    });
 +    return [self copyCompositeImage:image width:width height:height];
 +}
++
++/* Apply exclusions last, including exact-cache hits and pending compositions. */
++- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
++                 needsDisplay:(void (^)(void))needsDisplay
++{
++    struct wgdi_exclusions mask;
++    if (!image) return NULL;
++    NSUInteger iw = CGImageGetWidth(image), ih = CGImageGetHeight(image);
++    if (!iw || !ih) return NULL;
++    wgdi_load_exclusions(&mask, (unsigned)iw, (unsigned)ih);
++    if (!mask.count)
++        return [self copyUpscaledImage:image width:width height:height needsDisplay:needsDisplay];
++    if (!iw || !ih || iw > 8192 || ih > 8192 || iw * ih > 32 * 1024 * 1024 ||
++        width > 8192 || height > 8192 || width * height > 32 * 1024 * 1024) return NULL;
++    BOOL fullCover = NO;
++    for (unsigned i = 0; i < mask.count; ++i)
++        if (!mask.rects[i].x && !mask.rects[i].y &&
++            mask.rects[i].width >= iw && mask.rects[i].height >= ih) fullCover = YES;
++    CGImageRef scaled = NULL;
++    if (!fullCover)
++    {
++        double factor = MIN(1.0, MIN((double)(iw * 2) / width, (double)(ih * 2) / height));
++        NSUInteger cw = MAX((NSUInteger)1, (NSUInteger)(width * factor));
++        NSUInteger ch = MAX((NSUInteger)1, (NSUInteger)(height * factor));
++        scaled = [self copyUpscaledImage:image width:cw height:ch needsDisplay:needsDisplay];
++    }
++    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++    CGContextRef bitmap = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
++        kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst);
++    CGColorSpaceRelease(space);
++    if (!bitmap) { if (scaled) CGImageRelease(scaled); return NULL; }
++    CGContextSetBlendMode(bitmap, kCGBlendModeCopy);
++    CGContextSetInterpolationQuality(bitmap, kCGInterpolationLow);
++    if (scaled)
++        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), scaled);
++    else
++        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), image);
++    CGMutablePathRef path = CGPathCreateMutable();
++    for (unsigned i = 0; i < mask.count; ++i)
++    {
++        const struct wgdi_exclusion *r = &mask.rects[i];
++        NSUInteger left = MIN(iw, r->x), right = MIN(iw, r->x + r->width);
++        NSUInteger top = MIN(ih, r->y), bottom = MIN(ih, r->y + r->height);
++        if (right <= left || bottom <= top) continue;
++        NSUInteger x0 = left * width / iw, x1 = (right * width + iw - 1) / iw;
++        NSUInteger y0 = height - (bottom * height + ih - 1) / ih, y1 = height - top * height / ih;
++        CGPathAddRect(path, NULL, CGRectMake(x0, y0, x1 - x0, y1 - y0));
++    }
++    if (!CGPathIsEmpty(path))
++    {
++        CGContextAddPath(bitmap, path);
++        CGContextClip(bitmap);
++        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), image);
++    }
++    CGPathRelease(path);
++    CGImageRef composed = CGBitmapContextCreateImage(bitmap);
++    CGContextRelease(bitmap);
++    if (scaled) CGImageRelease(scaled);
++    return composed;
++}
 +@end
+diff --git a/dlls/winemac.drv/cocoa_app.h b/dlls/winemac.drv/cocoa_app.h
+--- a/dlls/winemac.drv/cocoa_app.h
++++ b/dlls/winemac.drv/cocoa_app.h
+@@ -112,6 +112,9 @@
+ @property (readonly) BOOL clippingCursor;
+ @property (nonatomic) NSTimeInterval lastSetCursorPositionTime;
+ 
++    - (void) suspendClippingForRegionPicker;
++    - (void) resumeClippingForRegionPicker:(BOOL)ownerVisible;
++
+     + (WineApplicationController*) sharedController;
+ 
+     - (void) transformProcessToForeground:(BOOL)activateIfTransformed;
+diff --git a/dlls/winemac.drv/cocoa_app.m b/dlls/winemac.drv/cocoa_app.m
+--- a/dlls/winemac.drv/cocoa_app.m
++++ b/dlls/winemac.drv/cocoa_app.m
+@@ -20,6 +20,7 @@
+ 
+ #import "cocoa_app.h"
+ #import "cocoa_cursorclipping.h"
++#import "cocoa_upscaler.h"
+ #import "cocoa_event.h"
+ #import "cocoa_window.h"
+ #import "cocoa_icon_utils.h"
+@@ -53,6 +54,9 @@
+ static NSString* const WineExternalQuitNotificationSourcePIDKey = @"SourcePID";
+ static NSString* const WineExternalQuitNotificationWineConfigDirKey = @"WineConfigDir";
+ static NSString* const WineExternalQuitNotificationWinePrefixKey = @"WinePrefix";
++
++static BOOL regionPickerClipSuspended;
++static CGRect regionPickerPendingClip;
+ 
+ bool macdrv_err_on;
+ 
+@@ -1263,6 +1267,9 @@
+     {
+         BOOL ret;
+ 
++        if (wine_gdi_region_picker_is_active())
++            return TRUE;
++
+         if ([windowsBeingDragged count])
+             ret = FALSE;
+         else if (self.clippingCursor && [clipCursorHandler respondsToSelector:@selector(setCursorPosition:)])
+@@ -1328,6 +1335,13 @@
+ 
+     - (BOOL) startClippingCursor:(CGRect)rect
+     {
++        if (wine_gdi_region_picker_is_active())
++        {
++            regionPickerPendingClip = rect;
++            regionPickerClipSuspended = YES;
++            return TRUE;
++        }
++
+         if (!clipCursorHandler) {
+             if (use_confinement_cursor_clipping && [WineConfinementClipCursorHandler isAvailable])
+                 clipCursorHandler = [[WineConfinementClipCursorHandler alloc] init];
+@@ -1350,6 +1364,8 @@
+ 
+     - (BOOL) stopClippingCursor
+     {
++        regionPickerClipSuspended = NO;
++
+         if (!self.clippingCursor)
+             return TRUE;
+ 
+@@ -1366,6 +1382,28 @@
+     - (BOOL) clippingCursor
+     {
+         return clipCursorHandler.clippingCursor;
++    }
++
++    - (void) suspendClippingForRegionPicker
++    {
++        if (self.clippingCursor)
++        {
++            CGRect pending = clipCursorHandler.cursorClipRect;
++            [self stopClippingCursor];
++            regionPickerPendingClip = pending;
++            regionPickerClipSuspended = YES;
++        }
++    }
++
++    - (void) resumeClippingForRegionPicker:(BOOL)ownerVisible
++    {
++        if (regionPickerClipSuspended && ownerVisible)
++        {
++            regionPickerClipSuspended = NO;
++            [self startClippingCursor:regionPickerPendingClip];
++        }
++        else
++            regionPickerClipSuspended = NO;
+     }
+ 
+     - (BOOL) isKeyPressed:(uint16_t)keyCode
+@@ -1899,6 +1937,22 @@
+         BOOL ret = FALSE;
+         NSEventType type = [anEvent type];
+ 
++        if (wine_gdi_region_picker_is_window(anEvent.window))
++            return FALSE;
++        if (wine_gdi_region_picker_blocks_window(anEvent.window))
++            switch (type)
++            {
++                case NSEventTypeMouseMoved: case NSEventTypeLeftMouseDragged:
++                case NSEventTypeRightMouseDragged: case NSEventTypeOtherMouseDragged:
++                case NSEventTypeLeftMouseDown: case NSEventTypeLeftMouseUp:
++                case NSEventTypeRightMouseDown: case NSEventTypeRightMouseUp:
++                case NSEventTypeOtherMouseDown: case NSEventTypeOtherMouseUp:
++                case NSEventTypeScrollWheel: case NSEventTypeKeyDown: case NSEventTypeKeyUp:
++                    return TRUE;
++                default:
++                    break;
++            }
++
+         if (type == NSEventTypeFlagsChanged)
+             self.lastFlagsChanged = anEvent;
+         else if (type == NSEventTypeMouseMoved || type == NSEventTypeLeftMouseDragged ||
 diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
 --- a/dlls/winemac.drv/cocoa_window.m
 +++ b/dlls/winemac.drv/cocoa_window.m
@@ -577,7 +835,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
  
          if ([window contentView] != self)
              return;
-@@ -571,7 +573,7 @@
+@@ -571,44 +573,53 @@
              /* The original surface keeps its Wine pixel coordinates. Only the
               * presentation sublayer receives a physical-resolution image. */
              if (!_everHadGLContext && ![self hasGLDescendant] && !_metalView &&
@@ -585,8 +843,21 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
 +                !shapeImage && !window.usePerPixelAlpha && [WineGDIUpscaler enabled])
              {
                  CGFloat sourceScale = layer.contentsScale;
-                 CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
-@@ -586,29 +588,36 @@
+-                CGRect target = CGRectMake(0, 0, CGImageGetWidth(image) / sourceScale,
+-                                                CGImageGetHeight(image) / sourceScale);
+-                if (!CGRectIsEmpty(window.fullscreenContentRect))
+-                {
+-                    target.origin.x = (layer.bounds.size.width - target.size.width) / 2;
+-                    target.origin.y = (layer.bounds.size.height - target.size.height) / 2;
+-                }
++                BOOL fullscreenPresentation = window.fullscreen ||
++                    !CGRectIsEmpty(window.fullscreenContentRect) ||
++                    (window.styleMask & NSWindowStyleMaskFullScreen);
++                CGRect target = wgdi_presentation_frame(CGImageGetWidth(image),
++                    CGImageGetHeight(image), sourceScale, fullscreenPresentation,
++                    window.fullscreenContentRect, layer.bounds);
+                 CGRect physical = [self convertRectToBacking:NSRectFromCGRect(target)];
+                 NSUInteger width = (NSUInteger)floor(physical.size.width);
                  NSUInteger height = (NSUInteger)floor(physical.size.height);
                  if (width > CGImageGetWidth(image) && height > CGImageGetHeight(image))
                  {
@@ -600,6 +871,9 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
                      }
 -                    CGImageRef scaled = [_spatialScaler copyScaledImage:image width:width height:height];
 -                    if (scaled)
++                    [_gdiUpscaler setPresentationView:self];
++                    [_gdiUpscaler offerRegionSelectionForImage:image
++                                                   needsDisplay:^{ [self setNeedsDisplay:YES]; }];
 +                    BOOL temporalPresented = [_gdiUpscaler presentImage:image inLayer:layer frame:target
 +                        width:width height:height needsDisplay:^{ [self setNeedsDisplay:YES]; }];
 +                    if (!temporalPresented)
@@ -640,7 +914,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
                  }
              }
              CFRelease(image);
-@@ -662,7 +671,7 @@
+@@ -662,7 +673,7 @@
  
      - (void) addGLContext:(WineOpenGLContext*)context
      {
@@ -649,7 +923,7 @@ diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
          BOOL hadContext = _everHadGLContext;
          if (!glContexts)
              glContexts = [[NSMutableArray alloc] init];
-@@ -759,7 +768,7 @@
+@@ -759,7 +770,7 @@
  
      - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device
      {
@@ -730,7 +1004,7 @@ diff --git a/dlls/winemac.drv/wine_gdi_upscaler.h b/dlls/winemac.drv/wine_gdi_up
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/wine_gdi_upscaler.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,56 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#ifndef WINE_GDI_UPSCALER_H
 +#define WINE_GDI_UPSCALER_H
@@ -776,17 +1050,22 @@ new file mode 100644
 +
 +const struct wgdi_upscaler_api *wgdi_upscaler_get_api(uint32_t abi_version);
 +
++typedef int (*wgdi_upscaler_process_regions_fn)(void *context,
++    const struct wgdi_image *input, struct wgdi_image *output,
++    const uint32_t *selection, size_t selection_count, char *error, size_t error_size);
++int wgdi_upscaler_process_regions(void *context, const struct wgdi_image *input,
++    struct wgdi_image *output, const uint32_t *selection, size_t selection_count,
++    char *error, size_t error_size);
++
 +#ifdef __cplusplus
 +}
 +#endif
 +#endif
-
-
 diff --git a/dlls/winemac.drv/wine_gdi_temporal_presenter.h b/dlls/winemac.drv/wine_gdi_temporal_presenter.h
 new file mode 100644
 --- /dev/null
 +++ b/dlls/winemac.drv/wine_gdi_temporal_presenter.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,43 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#ifndef WINE_GDI_TEMPORAL_PRESENTER_H
 +#define WINE_GDI_TEMPORAL_PRESENTER_H
@@ -813,6 +1092,7 @@ new file mode 100644
 +- (BOOL)presentLatestInLayer:(CALayer *)parent frame:(CGRect)frame
 +    width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
 +    needsDisplay:(void (^)(void))redraw;
++- (NSData *)selectedTilesForToken:(uint64_t)token;
 +@required
 +- (void)completeOutput:(NSData *)output token:(uint64_t)token needsDisplay:(void (^)(void))redraw;
 +- (void)cancel;
@@ -828,4 +1108,697 @@ new file mode 100644
 +#ifdef __cplusplus
 +}
 +#endif
++#endif
+diff --git a/dlls/winemac.drv/cocoa_region_picker.h b/dlls/winemac.drv/cocoa_region_picker.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_region_picker.h
+@@ -0,0 +1,472 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later
++ * Included once by cocoa_upscaler.m. Selection uses the supplied GDI image;
++ * all window interaction and profile writes run on the Cocoa main thread.
++ */
++#import <AppKit/AppKit.h>
++#import <QuartzCore/QuartzCore.h>
++#import <IOSurface/IOSurface.h>
++#include "wine_gdi_exclusions.h"
++#include <math.h>
++
++BOOL wine_gdi_region_picker_is_window(NSWindow *window);
++BOOL wine_gdi_region_picker_blocks_window(NSWindow *window);
++BOOL wine_gdi_region_picker_is_active(void);
++
++static BOOL wgdi_picker_active, wgdi_picker_deferred;
++static NSWindow *wgdi_picker_owner;
++static NSPanel *wgdi_picker_panel;
++static NSView *wgdi_picker_offer_view;
++static CGImageRef wgdi_picker_image;
++static IOSurfaceRef wgdi_picker_surface;
++static void (^wgdi_picker_redraw)(void);
++static NSTimeInterval wgdi_picker_first_frame;
++
++BOOL wine_gdi_region_picker_is_window(NSWindow *window)
++{
++    return wgdi_picker_panel && window == wgdi_picker_panel;
++}
++
++BOOL wine_gdi_region_picker_blocks_window(NSWindow *window)
++{
++    return wgdi_picker_active && window && window == wgdi_picker_owner;
++}
++
++BOOL wine_gdi_region_picker_is_active(void)
++{
++    return wgdi_picker_active;
++}
++
++static NSString *wgdi_picker_token(void)
++{
++    const char *value = getenv("WINE_GDI_UPSCALER_PICK");
++    NSString *raw = value ? [NSString stringWithUTF8String:value] : @"auto";
++    NSCharacterSet *allowed = [NSCharacterSet alphanumericCharacterSet];
++    NSString *token = [[raw componentsSeparatedByCharactersInSet:[allowed invertedSet]] componentsJoinedByString:@""];
++    return token.length ? [token substringToIndex:MIN((NSUInteger)100, token.length)] : @"auto";
++}
++
++@protocol WGDIRegionClipController <NSObject>
+++ (instancetype)sharedController;
++- (void)suspendClippingForRegionPicker;
++- (void)resumeClippingForRegionPicker:(BOOL)ownerVisible;
++- (void)releaseMouseCapture;
++@end
++
++static id<WGDIRegionClipController> wgdi_clip_controller(void)
++{
++    Class cls = NSClassFromString(@"WineApplicationController");
++    if (!cls || ![cls respondsToSelector:@selector(sharedController)]) return nil;
++    id<WGDIRegionClipController> controller = [cls sharedController];
++    return controller;
++}
++
++/* The OpenGL presentation path keeps the latest IOSurface; a CGImage snapshot
++ * is materialized only when the panel actually opens. The provider holds a
++ * read lock for the image lifetime. */
++static void wgdi_picker_unlock_surface(void *info, const void *data, size_t size)
++{
++    (void)data; (void)size;
++    IOSurfaceRef surface = (IOSurfaceRef)info;
++    IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
++    CFRelease(surface);
++}
++
++static CGImageRef wgdi_picker_snapshot(void)
++{
++    if (wgdi_picker_image || !wgdi_picker_surface) return wgdi_picker_image;
++    IOSurfaceRef surface = wgdi_picker_surface;
++    size_t width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface);
++    size_t stride = IOSurfaceGetBytesPerRow(surface);
++    if (!width || !height || stride < width * 4 ||
++        IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess)
++        return NULL;
++    CFRetain(surface);
++    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++    CGDataProviderRef provider = CGDataProviderCreateWithData(surface,
++        IOSurfaceGetBaseAddress(surface), stride * height, wgdi_picker_unlock_surface);
++    wgdi_picker_image = CGImageCreate(width, height, 8, 32, stride, space,
++        kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst, provider, NULL, NO,
++        kCGRenderingIntentDefault);
++    CGColorSpaceRelease(space);
++    CGDataProviderRelease(provider);
++    return wgdi_picker_image;
++}
++
++static void wgdi_region_picker_teardown(BOOL ownerAlive);
++
++@interface WineGDIRegionPickerView : NSView
++{
++    NSImage *snapshot;
++    NSString *profile, *message;
++    NSMutableArray *selections;
++    NSPoint anchor;
++    NSRect dragRect;
++    BOOL dragging;
++    double sourceAspect;
++}
++- (id)initWithImage:(CGImageRef)image profile:(NSString *)path;
+++ (BOOL)shouldOfferForImage:(CGImageRef)image profile:(NSString *)file;
++@end
++
++@interface WineGDIRegionPickerPanel : NSPanel <NSWindowDelegate>
++- (id)initWithImage:(CGImageRef)image profile:(NSString *)path;
++- (void)placeOnScreen:(NSScreen *)screen;
++@end
++
++@implementation WineGDIRegionPickerView
+++ (BOOL)shouldOfferForImage:(CGImageRef)image profile:(NSString *)file
++{
++    (void)image;
++    if ([wgdi_picker_token() isEqualToString:@"off"]) return NO;
++    BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:file];
++    BOOL needed = !exists;
++    if (exists) {
++        NSString *content = [NSString stringWithContentsOfFile:file encoding:NSUTF8StringEncoding error:NULL];
++        char savedToken[128] = {0};
++        if (content) sscanf(content.UTF8String, "# request=%127s", savedToken);
++        NSString *request = wgdi_picker_token();
++        if (![request isEqualToString:@"auto"] && ![request isEqualToString:[NSString stringWithUTF8String:savedToken]]) needed = YES;
++    }
++    return needed;
++}
++- (BOOL)isFlipped { return YES; }
++- (BOOL)acceptsFirstResponder { return YES; }
++- (id)initWithImage:(CGImageRef)image profile:(NSString *)path
++{
++    self = [super initWithFrame:NSZeroRect];
++    if (!self) return nil;
++    snapshot = [[NSImage alloc] initWithCGImage:image size:NSMakeSize(CGImageGetWidth(image), CGImageGetHeight(image))];
++    sourceAspect = (double)CGImageGetWidth(image) / CGImageGetHeight(image);
++    profile = [path copy]; selections = [[NSMutableArray alloc] init];
++    message = [@"拖动框选文字区；可添加多个选区。⌘⇧U 可再次打开。" copy];
++    NSArray *titles = @[@"保存", @"全部超分", @"稍后", @"清空"];
++    SEL actions[] = {@selector(save:), @selector(clearAndSave:), @selector(postpone:), @selector(clear:)};
++    CGFloat x = 12;
++    for (NSUInteger i = 0; i < titles.count; ++i)
++    {
++        CGFloat width = i == 1 ? 80 : 60;
++        NSButton *button = [NSButton buttonWithTitle:titles[i] target:self action:actions[i]];
++        button.frame = NSMakeRect(x, 40, width, 28);
++        [self addSubview:button]; x += width + 8;
++    }
++    self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
++    [self restoreProfile];
++    return self;
++}
++- (void)restoreProfile
++{
++    NSString *content = [NSString stringWithContentsOfFile:profile encoding:NSUTF8StringEncoding error:NULL];
++    if (!content) return;
++    for (NSString *line in [content componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]])
++    {
++        if ([line hasPrefix:@"#"]) continue;
++        struct wgdi_exclusions mask;
++        if (!wgdi_parse_exclusions(line.UTF8String, &mask)) return;
++        CGFloat width = mask.relative ? 10000 : snapshot.size.width;
++        CGFloat height = mask.relative ? 10000 : snapshot.size.height;
++        for (unsigned i = 0; i < mask.count; ++i)
++        {
++            const struct wgdi_exclusion *r = &mask.rects[i];
++            NSRect rect = NSIntersectionRect(NSMakeRect(r->x / width, r->y / height,
++                r->width / width, r->height / height), NSMakeRect(0, 0, 1, 1));
++            if (!NSIsEmptyRect(rect)) [selections addObject:[NSValue valueWithRect:rect]];
++        }
++        return;
++    }
++}
++- (void)dealloc
++{
++    [snapshot release]; [profile release]; [message release]; [selections release];
++    [super dealloc];
++}
++- (NSRect)imageRect
++{
++    NSRect area = NSInsetRect(self.bounds, 12, 12);
++    area.origin.y += 94; area.size.height = MAX(1, area.size.height - 94);
++    CGFloat width = MIN(area.size.width, area.size.height * sourceAspect);
++    CGFloat height = width / sourceAspect;
++    return NSMakeRect(NSMidX(area) - width / 2, NSMidY(area) - height / 2, width, height);
++}
++- (NSRect)selectionDisplayRect:(NSRect)rect
++{
++    NSRect image = [self imageRect];
++    return NSMakeRect(image.origin.x + rect.origin.x * image.size.width,
++        image.origin.y + rect.origin.y * image.size.height,
++        rect.size.width * image.size.width, rect.size.height * image.size.height);
++}
++- (void)viewDidChangeEffectiveAppearance
++{
++    [super viewDidChangeEffectiveAppearance];
++    [self setNeedsDisplay:YES];
++}
++- (void)drawRect:(NSRect)dirty
++{
++    (void)dirty;
++    [NSColor.windowBackgroundColor setFill]; NSRectFill(self.bounds);
++    [@"为此游戏选择超分屏蔽区域" drawAtPoint:NSMakePoint(12, 13) withAttributes:@{
++        NSFontAttributeName:[NSFont boldSystemFontOfSize:14], NSForegroundColorAttributeName:NSColor.labelColor}];
++    [message drawInRect:NSMakeRect(12, 75, self.bounds.size.width - 24, 30) withAttributes:@{
++        NSFontAttributeName:[NSFont systemFontOfSize:11], NSForegroundColorAttributeName:NSColor.secondaryLabelColor}];
++    NSRect image = [self imageRect];
++    [snapshot drawInRect:image fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1 respectFlipped:YES hints:nil];
++    for (NSValue *value in selections)
++    {
++        NSRect rect = [self selectionDisplayRect:value.rectValue];
++        [[NSColor colorWithCalibratedRed:0 green:0.8 blue:0.7 alpha:0.25] setFill]; NSRectFillUsingOperation(rect, NSCompositingOperationSourceOver);
++        [NSColor.systemTealColor setStroke]; NSBezierPath *path = [NSBezierPath bezierPathWithRect:rect]; path.lineWidth = 2; [path stroke];
++    }
++    if (dragging) { [NSColor.systemYellowColor setStroke]; NSBezierPath *path = [NSBezierPath bezierPathWithRect:dragRect]; path.lineWidth = 2; [path stroke]; }
++}
++- (void)mouseDown:(NSEvent *)event
++{
++    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
++    if (!NSPointInRect(point, [self imageRect]) || selections.count >= WGDI_EXCLUSION_LIMIT) return;
++    anchor = point; dragRect = NSMakeRect(point.x, point.y, 0, 0); dragging = YES;
++}
++- (void)mouseDragged:(NSEvent *)event
++{
++    if (!dragging) return;
++    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
++    NSRect image = [self imageRect];
++    point.x = MAX(NSMinX(image), MIN(NSMaxX(image), point.x));
++    point.y = MAX(NSMinY(image), MIN(NSMaxY(image), point.y));
++    dragRect = NSMakeRect(MIN(anchor.x, point.x), MIN(anchor.y, point.y), fabs(point.x-anchor.x), fabs(point.y-anchor.y));
++    [self setNeedsDisplay:YES];
++}
++- (void)mouseUp:(NSEvent *)event
++{
++    [self mouseDragged:event];
++    if (dragging && dragRect.size.width >= 3 && dragRect.size.height >= 3)
++    {
++        NSRect image = [self imageRect];
++        NSRect normalized = NSMakeRect((dragRect.origin.x-image.origin.x)/image.size.width,
++            (dragRect.origin.y-image.origin.y)/image.size.height,
++            dragRect.size.width/image.size.width, dragRect.size.height/image.size.height);
++        [selections addObject:[NSValue valueWithRect:normalized]];
++    }
++    dragging = NO; [self setNeedsDisplay:YES];
++}
++- (void)writeSelection
++{
++    NSMutableArray *parts = [NSMutableArray array];
++    for (NSValue *value in selections)
++    {
++        NSRect r = value.rectValue;
++        unsigned x = (unsigned)floor(r.origin.x * 10000), y = (unsigned)floor(r.origin.y * 10000);
++        unsigned right = MIN(10000u, (unsigned)ceil(NSMaxX(r) * 10000));
++        unsigned bottom = MIN(10000u, (unsigned)ceil(NSMaxY(r) * 10000));
++        [parts addObject:[NSString stringWithFormat:@"%u,%u,%u,%u", x,y,right-x,bottom-y]];
++    }
++    NSString *content = [NSString stringWithFormat:@"# request=%@ aspect=%.8f\nrelative:%@\n",
++        wgdi_picker_token(), sourceAspect, [parts componentsJoinedByString:@";"]];
++    NSError *error = nil;
++    [[NSFileManager defaultManager] createDirectoryAtPath:[profile stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:&error];
++    if (!error && [content writeToFile:profile atomically:YES encoding:NSUTF8StringEncoding error:&error]) { wgdi_region_picker_teardown(YES); return; }
++    [message release]; message = [[NSString stringWithFormat:@"保存失败：%@", error.localizedDescription] copy]; [self setNeedsDisplay:YES];
++}
++- (void)save:(id)sender { (void)sender; [self writeSelection]; }
++- (void)clearAndSave:(id)sender { (void)sender; [selections removeAllObjects]; [self writeSelection]; }
++- (void)postpone:(id)sender { (void)sender; wgdi_picker_deferred = YES; wgdi_region_picker_teardown(YES); }
++- (void)clear:(id)sender { (void)sender; [selections removeAllObjects]; [self setNeedsDisplay:YES]; }
++- (void)keyDown:(NSEvent *)event { if (event.keyCode == 53) { wgdi_picker_deferred = YES; wgdi_region_picker_teardown(YES); } else [super keyDown:event]; }
++@end
++
++static NSRect wgdi_panel_frame(NSRect visible, NSSize size)
++{
++    size.width = MIN(size.width, MAX((CGFloat)308, visible.size.width - 40));
++    size.height = MIN(size.height, MAX((CGFloat)120, visible.size.height - 40));
++    size.width = MIN(size.width, visible.size.width);
++    size.height = MIN(size.height, visible.size.height);
++    NSRect frame = NSMakeRect(NSMidX(visible) - size.width / 2,
++        NSMidY(visible) - size.height / 2, size.width, size.height);
++    frame.origin.x = MAX(NSMinX(visible), MIN(NSMaxX(visible) - frame.size.width, frame.origin.x));
++    frame.origin.y = MAX(NSMinY(visible), MIN(NSMaxY(visible) - frame.size.height, frame.origin.y));
++    return frame;
++}
++
++@implementation WineGDIRegionPickerPanel
++- (id)initWithImage:(CGImageRef)image profile:(NSString *)path
++{
++    self = [super initWithContentRect:NSMakeRect(0, 0, 720, 560)
++        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
++        backing:NSBackingStoreBuffered defer:YES];
++    if (!self) return nil;
++    self.title = @"超分屏蔽区域";
++    self.delegate = self;
++    self.floatingPanel = YES;
++    self.releasedWhenClosed = NO;
++    self.collectionBehavior |= NSWindowCollectionBehaviorFullScreenAuxiliary |
++        NSWindowCollectionBehaviorMoveToActiveSpace;
++    WineGDIRegionPickerView *picker = [[WineGDIRegionPickerView alloc] initWithImage:image profile:path];
++    picker.frame = NSMakeRect(0, 0, 720, 560);
++    self.contentView = picker;
++    [picker release];
++    self.minSize = NSMakeSize(480, 360);
++    return self;
++}
++- (void)placeOnScreen:(NSScreen *)screen
++{
++    NSScreen *target = screen ? screen : [NSScreen mainScreen];
++    if (!target) target = NSScreen.screens.firstObject;
++    if (!target) return;
++    NSRect frame = wgdi_panel_frame(target.visibleFrame, self.frame.size);
++    self.minSize = NSMakeSize(MIN((CGFloat)480, frame.size.width), MIN((CGFloat)360, frame.size.height));
++    [self setFrame:frame display:NO];
++}
++- (void)ownerWillClose:(NSNotification *)notification
++{
++    (void)notification;
++    wgdi_region_picker_teardown(NO);
++}
++- (void)ownerScreenChanged:(NSNotification *)notification
++{
++    (void)notification;
++    if (wgdi_picker_owner)
++        [self placeOnScreen:wgdi_picker_owner.screen];
++}
++- (void)windowWillClose:(NSNotification *)notification
++{
++    if (notification.object == wgdi_picker_owner)
++        wgdi_region_picker_teardown(NO);
++}
++- (BOOL)windowShouldClose:(NSWindow *)sender
++{
++    (void)sender;
++    wgdi_picker_deferred = YES;
++    wgdi_region_picker_teardown(YES);
++    return NO;
++}
++@end
++
++static void wgdi_region_picker_teardown(BOOL ownerAlive)
++{
++    if (!wgdi_picker_panel) { wgdi_picker_active = NO; return; }
++    NSPanel *panel = wgdi_picker_panel;
++    NSWindow *owner = wgdi_picker_owner;
++    wgdi_picker_active = NO;
++    wgdi_picker_panel = nil;
++    wgdi_picker_owner = nil;
++    [[NSNotificationCenter defaultCenter] removeObserver:panel];
++    if (owner) [owner removeChildWindow:panel];
++    [panel close];
++    [panel autorelease];
++    BOOL ownerVisible = ownerAlive && owner && owner.isVisible;
++    if (ownerVisible) [owner makeKeyWindow];
++    if (ownerVisible && wgdi_picker_offer_view.window == owner)
++        [wgdi_picker_offer_view setNeedsDisplay:YES];
++    if (wgdi_picker_redraw) {
++        void (^redraw)(void) = [wgdi_picker_redraw retain];
++        [wgdi_picker_redraw release];
++        wgdi_picker_redraw = nil;
++        if (ownerVisible) redraw();
++        [redraw release];
++    }
++    [wgdi_clip_controller() resumeClippingForRegionPicker:ownerVisible];
++    if (!ownerAlive)
++    {
++        wgdi_picker_offer_view = nil;
++        CGImageRelease(wgdi_picker_image);
++        wgdi_picker_image = NULL;
++        if (wgdi_picker_surface) { CFRelease(wgdi_picker_surface); wgdi_picker_surface = NULL; }
++    }
++}
++
++static void wgdi_show_region_picker(NSView *view, CGImageRef image)
++{
++    const char *path = getenv("WINE_GDI_UPSCALER_EXCLUDE_PROFILE");
++    if (!path || !*path || !view.window || !image || wgdi_picker_active) return;
++    WineGDIRegionPickerPanel *panel = [[WineGDIRegionPickerPanel alloc]
++        initWithImage:image profile:[NSString stringWithUTF8String:path]];
++    [panel placeOnScreen:view.window.screen];
++    CGImageRef snapshot = CGImageRetain(image);
++    CGImageRelease(wgdi_picker_image);
++    wgdi_picker_image = snapshot;
++    wgdi_picker_offer_view = view;
++    wgdi_picker_panel = panel;
++    wgdi_picker_owner = view.window;
++    wgdi_picker_active = YES;
++    [view.window addChildWindow:panel ordered:NSWindowAbove];
++    [[NSNotificationCenter defaultCenter] addObserver:panel selector:@selector(ownerWillClose:)
++        name:NSWindowWillCloseNotification object:view.window];
++    [[NSNotificationCenter defaultCenter] addObserver:panel selector:@selector(ownerScreenChanged:)
++        name:NSWindowDidChangeScreenNotification object:view.window];
++    id<WGDIRegionClipController> controller = wgdi_clip_controller();
++    [controller suspendClippingForRegionPicker];
++    [controller releaseMouseCapture];
++    [panel makeKeyAndOrderFront:nil];
++    [panel makeFirstResponder:panel.contentView];
++}
++
++static void wgdi_forget_region_view(NSView *view)
++{
++    if (wgdi_picker_owner == view.window) wgdi_region_picker_teardown(NO);
++    if (wgdi_picker_offer_view != view) return;
++    wgdi_picker_offer_view = nil;
++    [wgdi_picker_redraw release];
++    wgdi_picker_redraw = nil;
++    if (wgdi_picker_image) { CGImageRelease(wgdi_picker_image); wgdi_picker_image = NULL; }
++    if (wgdi_picker_surface) { CFRelease(wgdi_picker_surface); wgdi_picker_surface = NULL; }
++}
++
++static BOOL wgdi_picker_offer_allowed(NSView *view)
++{
++    const char *path = getenv("WINE_GDI_UPSCALER_EXCLUDE_PROFILE");
++    if (!view || !path || !*path || [wgdi_picker_token() isEqualToString:@"off"]) return NO;
++    if (!view.window.isVisible || view.bounds.size.width < 320 || view.bounds.size.height < 180) return NO;
++    if (!wgdi_picker_active && !view.window.isKeyWindow) return NO;
++    if (wgdi_picker_active && view.window != wgdi_picker_owner) return NO;
++    return YES;
++}
++
++static void wgdi_offer_frame(NSView *view, void (^redraw)(void))
++{
++    if (wgdi_picker_active)
++    {
++        [wgdi_picker_redraw release];
++        wgdi_picker_redraw = redraw ? [redraw copy] : nil;
++    }
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) {
++            NSEventModifierFlags flags = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
++            if ((flags & (NSEventModifierFlagCommand|NSEventModifierFlagShift)) == (NSEventModifierFlagCommand|NSEventModifierFlagShift) &&
++                [event.charactersIgnoringModifiers.lowercaseString isEqualToString:@"u"] && wgdi_picker_offer_view &&
++                (wgdi_picker_image || wgdi_picker_surface) && event.window == wgdi_picker_offer_view.window) {
++                wgdi_show_region_picker(wgdi_picker_offer_view, wgdi_picker_snapshot()); return nil;
++            }
++            return event;
++        }];
++    });
++    if (wgdi_picker_active) return;
++    if (wgdi_picker_deferred) return;
++    if (!wgdi_picker_first_frame) {
++        wgdi_picker_first_frame = NSProcessInfo.processInfo.systemUptime;
++        if (redraw) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), redraw);
++        return;
++    }
++    if (NSProcessInfo.processInfo.systemUptime - wgdi_picker_first_frame < 0.9) return;
++    const char *path = getenv("WINE_GDI_UPSCALER_EXCLUDE_PROFILE");
++    NSString *file = [NSString stringWithUTF8String:path];
++    if ([WineGDIRegionPickerView shouldOfferForImage:NULL profile:file])
++        wgdi_show_region_picker(view, wgdi_picker_snapshot());
++}
++
++static void wgdi_offer_region_picker(NSView *view, CGImageRef image, void (^redraw)(void))
++{
++    if (!image || !wgdi_picker_offer_allowed(view)) return;
++    wgdi_picker_offer_view = view;
++    CGImageRelease(wgdi_picker_image); wgdi_picker_image = CGImageRetain(image);
++    if (wgdi_picker_surface) { CFRelease(wgdi_picker_surface); wgdi_picker_surface = NULL; }
++    wgdi_offer_frame(view, redraw);
++}
++
++static void wgdi_offer_region_picker_surface(NSView *view, IOSurfaceRef surface, void (^redraw)(void))
++{
++    if (!surface || !wgdi_picker_offer_allowed(view)) return;
++    wgdi_picker_offer_view = view;
++    CFRetain(surface);
++    if (wgdi_picker_surface) CFRelease(wgdi_picker_surface);
++    wgdi_picker_surface = surface;
++    CGImageRelease(wgdi_picker_image); wgdi_picker_image = NULL;
++    wgdi_offer_frame(view, redraw);
++}
+diff --git a/dlls/winemac.drv/wine_gdi_exclusions.h b/dlls/winemac.drv/wine_gdi_exclusions.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/winemac.drv/wine_gdi_exclusions.h
+@@ -0,0 +1,211 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#ifndef WINE_GDI_EXCLUSIONS_H
++#define WINE_GDI_EXCLUSIONS_H
++#include <ctype.h>
++#include "wine_gdi_frame_diff.h"
++#include <pthread.h>
++#include <stdlib.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/stat.h>
++
++#define WGDI_EXCLUSION_LIMIT 16
++struct wgdi_exclusion { unsigned x, y, width, height; };
++struct wgdi_exclusions { unsigned count, relative; struct wgdi_exclusion rects[WGDI_EXCLUSION_LIMIT]; };
++
++/* Source pixels, top-left origin. Invalid input disables the entire mask. */
++static inline int wgdi_parse_exclusions(const char *text, struct wgdi_exclusions *mask)
++{
++    struct wgdi_exclusions parsed = {0, 0, {{0, 0, 0, 0}}};
++    *mask = parsed;
++    if (!text) return 1;
++    if (!strncmp(text, "relative:", 9)) { parsed.relative = 1; text += 9; }
++    while (*text)
++    {
++        long values[4]; unsigned i;
++        while (isspace((unsigned char)*text)) ++text;
++        if (!*text) break;
++        if (parsed.count == WGDI_EXCLUSION_LIMIT) return 0;
++        for (i = 0; i < 4; ++i)
++        {
++            char *end;
++            values[i] = strtol(text, &end, 10);
++            if (text == end || values[i] < 0 || values[i] > (parsed.relative ? 10000 : 8192)) return 0;
++            text = end;
++            while (isspace((unsigned char)*text)) ++text;
++            if (i < 3) { if (*text != ',') return 0; ++text; }
++        }
++        if (!values[2] || !values[3] || values[0] + values[2] > (parsed.relative ? 10000 : 8192) || values[1] + values[3] > (parsed.relative ? 10000 : 8192))
++            return 0;
++        parsed.rects[parsed.count++] = (struct wgdi_exclusion){
++            (unsigned)values[0], (unsigned)values[1], (unsigned)values[2], (unsigned)values[3]};
++        if (*text && *text != ';') return 0;
++        if (*text) ++text;
++    }
++    *mask = parsed;
++    return 1;
++}
++
++/* Resolve a saved relative selection against the current game surface. */
++static inline void wgdi_resolve_exclusions(struct wgdi_exclusions *mask, unsigned width, unsigned height)
++{
++    unsigned i;
++    if (!mask->relative) return;
++    for (i = 0; i < mask->count; ++i)
++    {
++        struct wgdi_exclusion *r = &mask->rects[i];
++        unsigned right = ((r->x + r->width) * width + 9999) / 10000;
++        unsigned bottom = ((r->y + r->height) * height + 9999) / 10000;
++        r->x = r->x * width / 10000; r->y = r->y * height / 10000;
++        r->width = right - r->x; r->height = bottom - r->y;
++    }
++    mask->relative = 0;
++}
++
++/* A game profile overrides the legacy bottle mask, including an empty profile.
++ * Both presenter and helper re-read it so selections take effect immediately. */
++static inline int wgdi_load_exclusions(struct wgdi_exclusions *mask, unsigned width, unsigned height)
++{
++    const char *mode = getenv("WINE_GDI_UPSCALER_PICK");
++    const char *path = getenv("WINE_GDI_UPSCALER_EXCLUDE_PROFILE");
++    int valid;
++    if (mode && !strcmp(mode, "off")) return wgdi_parse_exclusions(NULL, mask);
++    if (path && *path)
++    {
++        static pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
++        static char *cache_path;
++        static int cached, cache_valid;
++        static dev_t cache_dev;
++        static ino_t cache_ino;
++        static off_t cache_size;
++        static struct timespec cache_mtime, cache_ctime;
++        static struct wgdi_exclusions cache_raw;
++        struct stat info;
++        if (!stat(path, &info))
++        {
++            FILE *file;
++            pthread_mutex_lock(&cache_lock);
++            if (cached && !strcmp(cache_path, path) && cache_dev == info.st_dev &&
++                cache_ino == info.st_ino && cache_size == info.st_size &&
++                cache_mtime.tv_sec == info.st_mtimespec.tv_sec &&
++                cache_mtime.tv_nsec == info.st_mtimespec.tv_nsec &&
++                cache_ctime.tv_sec == info.st_ctimespec.tv_sec &&
++                cache_ctime.tv_nsec == info.st_ctimespec.tv_nsec)
++            {
++                *mask = cache_raw;
++                valid = cache_valid;
++                pthread_mutex_unlock(&cache_lock);
++                wgdi_resolve_exclusions(mask, width, height);
++                return valid;
++            }
++            pthread_mutex_unlock(&cache_lock);
++            file = fopen(path, "r");
++            if (file)
++            {
++                struct stat opened_info;
++                int have_stat = !fstat(fileno(file), &opened_info);
++                char line[4096]; int found = 0;
++                struct wgdi_exclusions raw;
++                while (fgets(line, sizeof(line), file))
++                    if (line[0] != '#') { found = 1; break; }
++                fclose(file);
++                valid = wgdi_parse_exclusions(found ? line : "", &raw);
++                if (have_stat)
++                {
++                    char *copy = (char *)malloc(strlen(path) + 1);
++                    if (copy)
++                    {
++                        strcpy(copy, path);
++                        pthread_mutex_lock(&cache_lock);
++                        free(cache_path);
++                        cache_path = copy;
++                        cache_dev = opened_info.st_dev; cache_ino = opened_info.st_ino;
++                        cache_size = opened_info.st_size;
++                        cache_mtime = opened_info.st_mtimespec; cache_ctime = opened_info.st_ctimespec;
++                        cache_raw = raw; cache_valid = valid; cached = 1;
++                        pthread_mutex_unlock(&cache_lock);
++                    }
++                }
++                *mask = raw;
++                wgdi_resolve_exclusions(mask, width, height);
++                return valid;
++            }
++        }
++    }
++    valid = wgdi_parse_exclusions(getenv("WINE_GDI_UPSCALER_EXCLUDE"), mask);
++    wgdi_resolve_exclusions(mask, width, height);
++    return valid;
++}
++
++static inline int wgdi_excluded_window(const struct wgdi_exclusions *mask,
++    unsigned x, unsigned y, unsigned width, unsigned height)
++{
++    unsigned i;
++    for (i = 0; i < mask->count; ++i)
++    {
++        const struct wgdi_exclusion *r = &mask->rects[i];
++        if (x >= r->x && y >= r->y && x + width <= r->x + r->width && y + height <= r->y + r->height)
++            return 1;
++    }
++    return 0;
++}
++
++static inline int wgdi_pixel_excluded(const struct wgdi_exclusions *mask, unsigned x, unsigned y)
++{
++    unsigned i;
++    for (i = 0; i < mask->count; ++i)
++    {
++        const struct wgdi_exclusion *r = &mask->rects[i];
++        if (x >= r->x && x < r->x + r->width && y >= r->y && y < r->y + r->height)
++            return 1;
++    }
++    return 0;
++}
++
++static inline int wgdi_frames_equal_excluding(const struct wgdi_image *previous,
++    const struct wgdi_image *current, const struct wgdi_exclusions *mask)
++{
++    size_t row;
++    unsigned x, y;
++    if (!wgdi_frame_bounds_valid(previous) || !wgdi_frame_bounds_valid(current) ||
++        previous->width != current->width || previous->height != current->height)
++        return 0;
++    row = (size_t)previous->width * 4;
++    if (!mask || !mask->count) return wgdi_frames_equal(previous, current);
++    for (y = 0; y < previous->height; ++y)
++    {
++        const unsigned char *pa = previous->pixels + (size_t)y * previous->stride;
++        const unsigned char *pb = current->pixels + (size_t)y * current->stride;
++        if (!memcmp(pa, pb, row)) continue;
++        for (x = 0; x < previous->width; ++x)
++            if (memcmp(pa + (size_t)x * 4, pb + (size_t)x * 4, 4) &&
++                !wgdi_pixel_excluded(mask, x, y))
++                return 0;
++    }
++    return 1;
++}
++
++static inline int wgdi_region_equal_excluding(const struct wgdi_image *previous,
++    const struct wgdi_image *current, const struct wgdi_exclusions *mask,
++    unsigned rx, unsigned ry, unsigned rw, unsigned rh)
++{
++    unsigned x, y;
++    if (!wgdi_frame_bounds_valid(previous) || !wgdi_frame_bounds_valid(current) ||
++        previous->width != current->width || previous->height != current->height)
++        return 0;
++    if (!rw || !rh || rx > previous->width || rw > previous->width - rx ||
++        ry > previous->height || rh > previous->height - ry) return 0;
++    if (mask && !mask->count) mask = NULL;
++    for (y = ry; y < ry + rh; ++y)
++    {
++        const unsigned char *pa = previous->pixels + (size_t)y * previous->stride + (size_t)rx * 4;
++        const unsigned char *pb = current->pixels + (size_t)y * current->stride + (size_t)rx * 4;
++        if (!memcmp(pa, pb, (size_t)rw * 4)) continue;
++        for (x = rx; x < rx + rw; ++x)
++            if (memcmp(pa + (size_t)(x - rx) * 4, pb + (size_t)(x - rx) * 4, 4) &&
++                !(mask && wgdi_pixel_excluded(mask, x, y)))
++                return 0;
++    }
++    return 1;
++}
 +#endif

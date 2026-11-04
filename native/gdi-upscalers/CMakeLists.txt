@@ -25,13 +25,15 @@ set(NCNN_SHARED_LIB OFF CACHE BOOL "" FORCE)
 set(NCNN_INSTALL_SDK OFF CACHE BOOL "" FORCE)
 set(NCNN_AVX512 OFF CACHE BOOL "" FORCE)
 set(NCNN_VERSION 20240410 CACHE STRING "" FORCE)
-if(NOT EXISTS "${NCNN_SOURCE_DIR}/CMakeLists.txt" OR NOT EXISTS "${WGDI_MODEL_DIR}/up2x-no-denoise.bin")
+if(NOT EXISTS "${NCNN_SOURCE_DIR}/CMakeLists.txt" OR NOT EXISTS "${WGDI_MODEL_DIR}/up2x-no-denoise.bin"
+   OR NOT EXISTS "${WGDI_ESRGAN_MODEL_DIR}/realesr-animevideov3-x2.bin")
     message(FATAL_ERROR "Use scripts/build-gdi-upscalers.py to prepare locked sources and models")
 endif()
-# Include the fixed model's operations and ncnn's internal conversion helpers.
+# Include the fixed models' operations and ncnn's internal conversion helpers.
 # This keeps unrelated image operators out of the Wine presentation library.
 set(MODEL_LAYERS Input Convolution Split Pooling BinaryOp Crop Deconvolution InnerProduct
-                 ReLU Sigmoid Clip Mish HardSwish Gemm Packing Padding Flatten Reshape Cast Interp)
+                 ReLU Sigmoid Clip Mish HardSwish Gemm Packing Padding Flatten Reshape Cast Interp
+                 PReLU PixelShuffle)
 file(STRINGS "${NCNN_SOURCE_DIR}/src/CMakeLists.txt" LAYER_DECLARATIONS REGEX "^ncnn_add_layer\\(")
 foreach(DECLARATION IN LISTS LAYER_DECLARATIONS)
     string(REGEX MATCH "ncnn_add_layer\\(([A-Za-z0-9_]+)" MATCHED "${DECLARATION}")
@@ -73,8 +75,11 @@ add_custom_target(temporal_shaders ALL DEPENDS "${RESOURCES}/temporal.metallib")
 file(MAKE_DIRECTORY "${RESOURCES}/models-se")
 configure_file("${WGDI_MODEL_DIR}/up2x-no-denoise.param" "${RESOURCES}/models-se/up2x-no-denoise.param" COPYONLY)
 configure_file("${WGDI_MODEL_DIR}/up2x-no-denoise.bin" "${RESOURCES}/models-se/up2x-no-denoise.bin" COPYONLY)
+file(MAKE_DIRECTORY "${RESOURCES}/models-animevideov3")
+configure_file("${WGDI_ESRGAN_MODEL_DIR}/realesr-animevideov3-x2.param" "${RESOURCES}/models-animevideov3/realesr-animevideov3-x2.param" COPYONLY)
+configure_file("${WGDI_ESRGAN_MODEL_DIR}/realesr-animevideov3-x2.bin" "${RESOURCES}/models-animevideov3/realesr-animevideov3-x2.bin" COPYONLY)
 
-add_library(winegdiupscalers SHARED src/api.cpp src/anime4k.mm src/realcugan.cpp src/coreml-client.cpp src/resize.mm src/temporal.mm)
+add_library(winegdiupscalers SHARED src/api.cpp src/anime4k.mm src/realcugan.cpp src/realesrgan.cpp src/coreml-client.cpp src/resize.mm src/temporal.mm)
 target_include_directories(winegdiupscalers PUBLIC include PRIVATE src)
 target_compile_options(winegdiupscalers PRIVATE -Wall -Wextra -Werror=return-type)
 target_link_libraries(winegdiupscalers PRIVATE ncnn "-framework Foundation" "-framework Metal" "-framework Accelerate" "-framework QuartzCore" "-framework CoreGraphics" "-framework IOSurface")
@@ -84,6 +89,7 @@ set(WINE_UNIX_DIR "lib/wine/x86_64-unix" CACHE STRING "Wine Unix architecture di
 install(TARGETS winegdiupscalers LIBRARY DESTINATION "${WINE_UNIX_DIR}")
 install(FILES "${RESOURCES}/anime4k.metallib" "${RESOURCES}/temporal.metallib" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
 install(DIRECTORY "${RESOURCES}/models-se" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
+install(DIRECTORY "${RESOURCES}/models-animevideov3" DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers")
 # Core ML helper is built separately for arm64 even when Wine is x86_64.
 # A prepared bundle contains the helper, fixed-size compiled models and its
 # provenance manifest. Other dimensions use overlapping fixed-size Core ML tiles.
@@ -100,6 +106,7 @@ endif()
 install(FILES vendor/anime4k/LICENSE DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers/licenses" RENAME Anime4K-MIT.txt)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../licenses/RealCUGAN-ncnn-MIT.txt"
               "${CMAKE_CURRENT_SOURCE_DIR}/../../licenses/RealCUGAN-bilibili-MIT.txt"
+              "${CMAKE_CURRENT_SOURCE_DIR}/../../licenses/Real-ESRGAN-BSD-3-Clause.txt"
               "${CMAKE_CURRENT_SOURCE_DIR}/../../licenses/ncnn-BSD-3-Clause.txt"
         DESTINATION "${WINE_UNIX_DIR}/gdi-upscalers/licenses")
 
@@ -114,6 +121,13 @@ if(BUILD_TESTING)
     target_include_directories(gdi-frame-diff-test PRIVATE include)
     target_compile_options(gdi-frame-diff-test PRIVATE -UNDEBUG)
     add_test(NAME gdi-frame-difference-and-stability COMMAND gdi-frame-diff-test)
+    add_executable(gdi-exclusions-compare-test tests/exclusions-compare-test.c)
+    target_compile_options(gdi-exclusions-compare-test PRIVATE -UNDEBUG)
+    add_executable(gdi-content-cache-test tests/content-cache-test.cpp)
+    target_include_directories(gdi-content-cache-test PRIVATE src)
+    target_compile_options(gdi-content-cache-test PRIVATE -UNDEBUG)
+    add_test(NAME gdi-content-addressed-store COMMAND gdi-content-cache-test)
+    add_test(NAME gdi-exclusion-masked-comparison COMMAND gdi-exclusions-compare-test)
     add_executable(gdi-upscalers-test tests/api-test.cpp)
     target_link_libraries(gdi-upscalers-test PRIVATE winegdiupscalers)
     target_compile_options(gdi-upscalers-test PRIVATE -UNDEBUG)

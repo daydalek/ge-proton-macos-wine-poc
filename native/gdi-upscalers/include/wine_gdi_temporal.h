@@ -7,19 +7,32 @@
 
 #define WGDI_TEMPORAL_BLOCK 16u
 #define WGDI_TEMPORAL_TILE 256u
-#define WGDI_TEMPORAL_HALO 18u
+#define WGDI_TEMPORAL_HALO 19u
 #define WGDI_TEMPORAL_FEATHER 8u
 #define WGDI_TEMPORAL_QUIET_SECONDS 0.200
 #define WGDI_TEMPORAL_FADE_SECONDS 0.100
 #define WGDI_TEMPORAL_REFERENCE_DIRTY 1u
 #define WGDI_TEMPORAL_FRAME_CHANGED 2u
 #define WGDI_TEMPORAL_INPUT_DELTA 4u
+#define WGDI_TEMPORAL_PROVISIONAL 8u
 
 /* Shared with temporal.metal. Source coordinates have their origin at top left. */
 struct wgdi_temporal_parameters {
     uint32_t width, height, block_columns, block_rows;
-    uint32_t tile_columns, tile_rows, previous_valid, reserved;
+    uint32_t tile_columns, tile_rows, previous_valid, excluded;
     float time, fade_seconds, halo, feather;
+    uint32_t use_spatial;
+};
+/* Per-frame parameters for the multi-source block residual library. slot_order
+ * lists active slot indices newest first; only slot_count entries are valid. */
+struct wgdi_temporal_library_parameters {
+    uint32_t slot_count;
+    uint32_t table_mask;
+    uint32_t width, height;
+    uint32_t slot_order[16];
+    float time, fade_seconds;
+    uint32_t halo, exact_translation;
+    uint32_t excluded, ring_only;
 };
 struct wgdi_temporal_tile {
     double changed_at;
@@ -94,10 +107,11 @@ static inline void wgdi_temporal_observe(struct wgdi_temporal_scheduler *state,
                 if (bx >= x / WGDI_TEMPORAL_BLOCK && by >= y / WGDI_TEMPORAL_BLOCK &&
                     bx < (core_right + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK &&
                     by < (core_bottom + WGDI_TEMPORAL_BLOCK - 1) / WGDI_TEMPORAL_BLOCK)
-                    flags |= bits & WGDI_TEMPORAL_REFERENCE_DIRTY;
+                    flags |= bits & (WGDI_TEMPORAL_REFERENCE_DIRTY | WGDI_TEMPORAL_PROVISIONAL);
             }
         struct wgdi_temporal_tile *tile = &state->tiles[ty * state->columns + tx];
-        tile->dirty = !!(flags & (WGDI_TEMPORAL_REFERENCE_DIRTY | WGDI_TEMPORAL_INPUT_DELTA));
+        tile->dirty = !!(flags & (WGDI_TEMPORAL_REFERENCE_DIRTY | WGDI_TEMPORAL_INPUT_DELTA |
+                                  WGDI_TEMPORAL_PROVISIONAL));
         if ((flags & WGDI_TEMPORAL_FRAME_CHANGED) || now < tile->changed_at) {
             tile->changed_at = now;
             ++tile->version;

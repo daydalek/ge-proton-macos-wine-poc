@@ -43,6 +43,13 @@ struct wgdi_upscaler_api
 
 const struct wgdi_upscaler_api *wgdi_upscaler_get_api(uint32_t abi_version);
 
+typedef int (*wgdi_upscaler_process_regions_fn)(void *context,
+    const struct wgdi_image *input, struct wgdi_image *output,
+    const uint32_t *selection, size_t selection_count, char *error, size_t error_size);
+int wgdi_upscaler_process_regions(void *context, const struct wgdi_image *input,
+    struct wgdi_image *output, const uint32_t *selection, size_t selection_count,
+    char *error, size_t error_size);
+
 #ifdef __cplusplus
 }
 #endif

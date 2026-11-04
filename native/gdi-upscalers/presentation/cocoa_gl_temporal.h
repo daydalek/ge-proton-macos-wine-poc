@@ -13,6 +13,8 @@
 - (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }
 @end
 
+#define WGDI_GL_TEMPORAL_SLOTS 5
+
 struct WineTemporalGLSlot {
     IOSurfaceRef surface;
     GLuint texture, framebuffer;
@@ -25,9 +27,12 @@ struct WineTemporalGLSlot {
     NSView *targetView;
     WineTemporalGLView *overlay;
     WineGDIUpscaler *upscaler;
-    struct WineTemporalGLSlot slots[3];
+    IOSurfaceRef pickerSurface;
+    struct WineTemporalGLSlot slots[WGDI_GL_TEMPORAL_SLOTS];
     NSUInteger sourceWidth, sourceHeight;
     uint64_t generation;
+    int pendingSlot;
+    BOOL dispatchPending;
     BOOL retired, disabled, logged;
     void (*bindFramebuffer)(GLenum, GLuint);
     void (*genFramebuffers)(GLsizei, GLuint *);
@@ -47,10 +52,12 @@ struct WineTemporalGLSlot {
 - (id)initWithView:(NSView *)view
 {
     self=[super init]; if (!self) return nil;
+    pendingSlot=-1;
     if (![WineGDIUpscaler temporalEnabled] || !view.window || !view.window.isVisible) { [self release]; return nil; }
     targetView=[view retain];
     upscaler=[WineGDIUpscaler new];
     if (![upscaler supportsTemporalSurfaces]) { [self release]; return nil; }
+    [upscaler setPresentationView:view];
     overlay=[[WineTemporalGLView alloc] initWithFrame:view.bounds];
     overlay.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
     overlay.wantsLayer=YES; overlay.layer.zPosition=1000; overlay.hidden=YES;
@@ -61,13 +68,17 @@ struct WineTemporalGLSlot {
 - (void)dealloc
 {
     /* retire schedules main-thread release of Cocoa state before final release. */
-    for (unsigned i=0;i<3;++i) if (slots[i].surface) CFRelease(slots[i].surface);
+    for (unsigned i=0;i<WGDI_GL_TEMPORAL_SLOTS;++i) if (slots[i].surface) CFRelease(slots[i].surface);
+    if (pickerSurface) CFRelease(pickerSurface);
     [overlay release]; [upscaler release]; [targetView release];
     [super dealloc];
 }
 - (void)retire
 {
-    @synchronized(self) { retired=YES; }
+    @synchronized(self) {
+        retired=YES;
+        if (pendingSlot>=0) { slots[pendingSlot].busy=NO; pendingSlot=-1; }
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         [upscaler cancelTemporalPresentation]; [overlay removeFromSuperview];
         [overlay release]; overlay=nil; [upscaler release]; upscaler=nil;
@@ -78,11 +89,34 @@ struct WineTemporalGLSlot {
 {
     @synchronized(self) { if (slots[index].generation==value) slots[index].busy=NO; }
 }
+- (void)drainPending
+{
+    IOSurfaceRef surface=NULL;
+    unsigned index=0;
+    uint64_t value=0;
+    @synchronized(self) {
+        dispatchPending=NO;
+        if (retired || disabled || pendingSlot<0) {
+            if (pendingSlot>=0) { slots[pendingSlot].busy=NO; pendingSlot=-1; }
+            return;
+        }
+        index=(unsigned)pendingSlot;
+        pendingSlot=-1;
+        value=slots[index].generation;
+        surface=slots[index].surface;
+        if (surface) CFRetain(surface);
+    }
+    if (!surface) { [self releaseSlot:index generation:value]; return; }
+    [self present:surface slot:index generation:value];
+    CFRelease(surface);
+}
 - (void)redraw
 {
     @synchronized(self) { if (retired) return; }
     if (!targetView.window.isVisible || targetView.window.isMiniaturized) return;
     overlay.frame=targetView.bounds;
+    if (pickerSurface)
+        [upscaler offerRegionSelectionForSurface:pickerSurface needsDisplay:^{ [self redraw]; }];
     NSRect backing=[overlay convertRectToBacking:overlay.bounds];
     if (![upscaler redrawTemporalInLayer:overlay.layer frame:overlay.bounds width:(NSUInteger)backing.size.width
         height:(NSUInteger)backing.size.height needsDisplay:^{ [self redraw]; }]) overlay.hidden=YES;
@@ -96,6 +130,12 @@ struct WineTemporalGLSlot {
         [self releaseSlot:index generation:value]; return;
     }
     overlay.frame=targetView.bounds; overlay.hidden=NO;
+    if (pickerSurface != surface) {
+        CFRetain(surface);
+        if (pickerSurface) CFRelease(pickerSurface);
+        pickerSurface = surface;
+    }
+    [upscaler offerRegionSelectionForSurface:surface needsDisplay:^{ [self redraw]; }];
     NSRect backing=[overlay convertRectToBacking:overlay.bounds];
     BOOL ok=[upscaler presentSurface:surface inLayer:overlay.layer frame:overlay.bounds
         width:(NSUInteger)backing.size.width height:(NSUInteger)backing.size.height
@@ -130,12 +170,13 @@ struct WineTemporalGLSlot {
 }
 - (void)clearGL
 {
-    for (unsigned i=0;i<3;++i) {
+    for (unsigned i=0;i<WGDI_GL_TEMPORAL_SLOTS;++i) {
         if (slots[i].framebuffer && deleteFramebuffers) deleteFramebuffers(1,&slots[i].framebuffer);
         if (slots[i].texture) glDeleteTextures(1,&slots[i].texture);
         if (slots[i].surface) CFRelease(slots[i].surface);
         memset(&slots[i],0,sizeof(slots[i]));
     }
+    pendingSlot=-1;
     sourceWidth=sourceHeight=0; ++generation;
 }
 - (void)destroyGLResources:(CGLContextObj)context
@@ -159,13 +200,13 @@ struct WineTemporalGLSlot {
     }
     if (size[0]<=0 || size[1]<=0 || size[0]>4096 || size[1]>4096 ||
         (uint64_t)size[0]*size[1]>2u*1024u*1024u) return;
-    unsigned index=3; uint64_t value;
+    unsigned index=WGDI_GL_TEMPORAL_SLOTS; uint64_t value;
     @synchronized(self) {
         if (sourceWidth!=(NSUInteger)size[0] || sourceHeight!=(NSUInteger)size[1]) {
             [self clearGL]; sourceWidth=size[0]; sourceHeight=size[1];
         }
-        for (unsigned i=0;i<3;++i) if (!slots[i].busy) { index=i; break; }
-        if (index==3) return;
+        for (unsigned i=0;i<WGDI_GL_TEMPORAL_SLOTS;++i) if (!slots[i].busy) { index=i; break; }
+        if (index==WGDI_GL_TEMPORAL_SLOTS) return;
         slots[index].busy=YES; slots[index].generation=generation; value=generation;
     }
     struct WineTemporalGLSlot *slot=&slots[index];
@@ -220,9 +261,17 @@ struct WineTemporalGLSlot {
         dispatch_async(dispatch_get_main_queue(), ^{ overlay.hidden=YES; });
         return;
     }
-    IOSurfaceRef surface=slot->surface; CFRetain(surface);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self present:surface slot:index generation:value]; CFRelease(surface);
-    });
+    BOOL needDispatch=NO;
+    @synchronized(self) {
+        if (retired || disabled || value!=generation) {
+            if (slots[index].generation==value) slots[index].busy=NO;
+            return;
+        }
+        if (pendingSlot>=0) slots[pendingSlot].busy=NO;
+        pendingSlot=(int)index;
+        if (!dispatchPending) { dispatchPending=YES; needDispatch=YES; }
+    }
+    if (needDispatch)
+        dispatch_async(dispatch_get_main_queue(), ^{ [self drainPending]; });
 }
 @end

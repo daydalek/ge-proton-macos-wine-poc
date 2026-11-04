@@ -16,6 +16,8 @@ In the Whisky source, the Bottle's **GDI 超分算法** graphics picker offers:
 | `anime4k` | Anime4K (CNN x2 S) | Official v4.0.1 four-convolution x2 S network ported to Metal; background execution |
 | `realcugan` | Real-CUGAN (models-se x2) | Official 20220728 model; optional arm64 Core ML FP16 CPU/ANE helper, with ncnn FP32 CPU fallback |
 | `adaptive` | 动态 MetalFX／静态 Real-CUGAN | MetalFX during image changes; Real-CUGAN after a 250 ms quiet interval |
+| `realesrgan` | Real-ESRGAN AnimeVideo-v3 (x2) | Official 20220424 ncnn model; same Core ML/ncnn paths via `WINE_GDI_NEURAL_MODEL=animevideov3` |
+| `adaptive-realesrgan` | 动态快速缩放／静态 AnimeVideo-v3 | Adaptive scheduling with AnimeVideo-v3 as the neural model |
 
 Restart the game after changing the choice. The original `metalFXSpatial`
 boolean migrates to `metalfx`; an explicit new choice takes precedence. Whisky
@@ -30,7 +32,13 @@ WINE_GDI_UPSCALER=anime4k /path/to/wine /path/to/game.exe
 WINE_GDI_UPSCALER=realcugan /path/to/wine /path/to/game.exe
 WINE_GDI_UPSCALER=adaptive /path/to/wine /path/to/game.exe
 WINE_GDI_UPSCALER=off /path/to/wine /path/to/game.exe
+WINE_GDI_UPSCALER=realcugan WINE_GDI_NEURAL_MODEL=animevideov3 /path/to/wine /path/to/game.exe
 ```
+
+`WINE_GDI_NEURAL_MODEL` selects the network behind `realcugan`/`adaptive`:
+`animevideov3` runs the Real-ESRGAN AnimeVideo-v3 x2 model, while unset,
+`realcugan`, or an unrecognized value keeps Real-CUGAN. Older runtimes ignore
+the variable entirely and always run Real-CUGAN.
 
 The environment is read once per process. `WINE_GDI_UPSCALER` takes precedence
 over the original `WINE_METALFX=spatial` alias. The driver logs `Wine MetalFX: GDI
@@ -123,6 +131,12 @@ macOS 13+. The source graph and FP16-stored weights are read directly from the
 same SHA256-locked ncnn model, with explicit convolution/deconvolution layouts,
 SE reduction, activation, crop and skip operations. The original preprocessing,
 full-frame SE context, odd-dimension crop and BGRA output conversion are retained.
+
+The AnimeVideo-v3 family ships only fixed-size tile models
+(`animevideov3-WxH.mlmodelc`): SRVGGNetCompact has no global pooling, so its
+halo-18 windows are exact rather than approximations. The ncnn bicubic x0.5
+tail is reproduced as a stride-2 depthwise convolution inside the model, and
+the same tiling, blend, and per-tile cache machinery applies.
 
 Build tools run only on the developer/CI machine:
 

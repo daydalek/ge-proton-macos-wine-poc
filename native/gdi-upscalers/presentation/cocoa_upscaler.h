@@ -5,6 +5,13 @@
 #include "wine_gdi_upscale_policy.h"
 #import "wine_gdi_temporal_presenter.h"
 
+CGRect wgdi_presentation_frame(NSUInteger sourceWidth, NSUInteger sourceHeight,
+    CGFloat sourceScale, BOOL fullscreen, CGRect area, CGRect bounds);
+
+BOOL wine_gdi_region_picker_is_window(NSWindow *window);
+BOOL wine_gdi_region_picker_blocks_window(NSWindow *window);
+BOOL wine_gdi_region_picker_is_active(void);
+
 @interface WineGDIUpscaler : NSObject
 {
     WineSpatialScaler *metalFX;
@@ -27,6 +34,7 @@
     CGImageRef result;
     NSUInteger latestWidth, latestHeight, latestOutputWidth, latestOutputHeight;
     NSUInteger resultWidth, resultHeight, resultOutputWidth, resultOutputHeight;
+    NSView *presentationView;
 }
 + (BOOL) enabled;
 + (BOOL)temporalEnabled;
@@ -46,4 +54,7 @@
 - (NSUInteger) fastInferenceCount;
 - (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
                  needsDisplay:(void (^)(void))needsDisplay;
+- (void)setPresentationView:(NSView *)view;
+- (void)offerRegionSelectionForImage:(CGImageRef)image needsDisplay:(void (^)(void))redraw;
+- (void)offerRegionSelectionForSurface:(IOSurfaceRef)surface needsDisplay:(void (^)(void))redraw;
 @end

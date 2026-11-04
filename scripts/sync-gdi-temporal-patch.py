@@ -9,7 +9,10 @@ NATIVE = ROOT / 'native/gdi-upscalers'
 FILES = {
     'cocoa_upscaler.h': NATIVE / 'presentation/cocoa_upscaler.h',
     'cocoa_upscaler.m': NATIVE / 'presentation/cocoa_upscaler.m',
+    'cocoa_region_picker.h': NATIVE / 'presentation/cocoa_region_picker.h',
+    'wine_gdi_exclusions.h': NATIVE / 'include/wine_gdi_exclusions.h',
     'wine_gdi_temporal_presenter.h': NATIVE / 'include/wine_gdi_temporal_presenter.h',
+    'wine_gdi_upscaler.h': NATIVE / 'include/wine_gdi_upscaler.h',
 }
 
 

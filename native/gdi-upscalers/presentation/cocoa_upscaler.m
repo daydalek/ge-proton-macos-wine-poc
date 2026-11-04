@@ -4,11 +4,29 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 #import "cocoa_upscaler.h"
+#import "cocoa_region_picker.h"
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
 
 enum { UPSCALE_OFF = 0, UPSCALE_METALFX = 3, UPSCALE_ADAPTIVE = 4 };
+
+CGRect wgdi_presentation_frame(NSUInteger sourceWidth, NSUInteger sourceHeight,
+    CGFloat sourceScale, BOOL fullscreen, CGRect area, CGRect bounds)
+{
+    if (!sourceWidth || !sourceHeight) return CGRectZero;
+    if (!isfinite(sourceScale) || sourceScale <= 0) sourceScale = 1;
+    if (!fullscreen)
+        return CGRectMake(0, 0, sourceWidth / sourceScale, sourceHeight / sourceScale);
+    if (!CGRectIsEmpty(area)) area = CGRectIntersection(area, bounds);
+    if (CGRectIsNull(area)) area = CGRectZero;
+    if (CGRectIsEmpty(area)) area = bounds;
+    if (CGRectIsEmpty(area)) return CGRectZero;
+    CGFloat fit = MIN(area.size.width / sourceWidth, area.size.height / sourceHeight);
+    CGSize size = CGSizeMake(sourceWidth * fit, sourceHeight * fit);
+    return CGRectMake(CGRectGetMidX(area) - size.width / 2,
+                      CGRectGetMidY(area) - size.height / 2, size.width, size.height);
+}
 
 static unsigned selected_algorithm(void)
 {
@@ -47,6 +65,7 @@ static dispatch_queue_t inference_queue(void)
 }
 
 static wgdi_temporal_create_fn temporal_create;
+static wgdi_upscaler_process_regions_fn temporal_regions;
 
 static const struct wgdi_upscaler_api *backend_api(NSString **resources)
 {
@@ -68,6 +87,8 @@ static const struct wgdi_upscaler_api *backend_api(NSString **resources)
         if (api && (api->size != sizeof(*api) || api->abi_version != WGDI_UPSCALER_ABI ||
                     !api->create || !api->process || !api->destroy)) api = NULL;
         if (api) temporal_create = (wgdi_temporal_create_fn)dlsym(handle, "wine_gdi_temporal_create");
+        if (api) temporal_regions = (wgdi_upscaler_process_regions_fn)
+            dlsym(handle, "wgdi_upscaler_process_regions");
         if (api) directory = [[[library stringByDeletingLastPathComponent]
                               stringByAppendingPathComponent:@"gdi-upscalers"] copy];
         /* Keep the library loaded: worker tasks and context destructors retain
@@ -116,10 +137,10 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
     self = [super init];
     if (!self) return nil;
     algorithm = selected_algorithm();
-    if (algorithm == UPSCALE_METALFX || algorithm == UPSCALE_ADAPTIVE)
+    if (algorithm == UPSCALE_METALFX)
     {
         metalFX = [[WineSpatialScaler alloc] init];
-        if (!metalFX && algorithm == UPSCALE_METALFX) { [self release]; return nil; }
+        if (!metalFX) { [self release]; return nil; }
     }
     const char *mode = getenv("WINE_GDI_TEMPORAL");
     if ((algorithm == WGDI_REALCUGAN || algorithm == UPSCALE_ADAPTIVE) && (!mode || strcmp(mode, "0"))) {
@@ -130,8 +151,27 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
     return self;
 }
 
+- (void)setPresentationView:(NSView *)view
+{
+    presentationView = view;
+}
+
+- (void)offerRegionSelectionForImage:(CGImageRef)image needsDisplay:(void (^)(void))redraw
+{
+    if (presentationView)
+        wgdi_offer_region_picker(presentationView, image, redraw);
+}
+
+- (void)offerRegionSelectionForSurface:(IOSurfaceRef)surface needsDisplay:(void (^)(void))redraw
+{
+    if (presentationView)
+        wgdi_offer_region_picker_surface(presentationView, surface, redraw);
+}
+
 - (void) dealloc
 {
+    if (presentationView)
+        wgdi_forget_region_view(presentationView);
     [temporal cancel]; [temporal release];
     [metalFX release];
     [latestInput release];
@@ -168,6 +208,10 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
         }
         if (inFlight) return NO;
         inFlight = YES; ++inferenceCount;
+        id<WGDITemporalPresenter> presenter = temporal;
+        NSData *selection = nil;
+        if ([presenter respondsToSelector:@selector(selectedTilesForToken:)])
+            selection = [[presenter selectedTilesForToken:token] retain];
         dispatch_async(inference_queue(), ^{
             @autoreleasepool {
                 NSString *resources = nil;
@@ -182,19 +226,28 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
                     NSMutableData *output = [NSMutableData dataWithLength:iw * ih * 16];
                     struct wgdi_image input = {(uint8_t *)snapshot.bytes, snapshot.length, iw * 4, iw, ih};
                     struct wgdi_image destination = {output.mutableBytes, output.length, iw * 8, iw * 2, ih * 2};
-                    if (!api->process(context, &input, &destination, error, sizeof(error))) completed = output;
+                    if (temporal_regions && selection &&
+                        !temporal_regions(context, &input, &destination,
+                            (const uint32_t *)selection.bytes, selection.length / 4,
+                            error, sizeof(error))) completed = output;
+                    else if ((!temporal_regions || !selection) &&
+                        !api->process(context, &input, &destination, error, sizeof(error)))
+                        completed = output;
                 }
                 NSString *message = completed ? nil : [NSString stringWithUTF8String:error];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     inFlight = NO;
-                    if (!completed) {
+                    if (!completed && temporal == presenter) {
                         neuralFailed = YES;
                         NSLog(@"Wine temporal: neural refinement failed (%@)", message);
                     }
-                    [temporal completeOutput:completed token:token needsDisplay:redraw];
-                    if (redraw) redraw();
+                    if (temporal == presenter)
+                        [presenter completeOutput:completed token:token needsDisplay:redraw];
+                    else if (redraw)
+                        redraw();
                 });
             }
+            [selection release];
         });
         return YES;
 
@@ -202,6 +255,13 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
 - (BOOL)presentImage:(CGImageRef)image inLayer:(CALayer *)parent frame:(CGRect)frame
     width:(NSUInteger)width height:(NSUInteger)height needsDisplay:(void (^)(void))redraw
 {
+    if (!temporal && temporal_create && [WineGDIUpscaler temporalEnabled] && !neuralFailed &&
+        (algorithm == WGDI_REALCUGAN || algorithm == UPSCALE_ADAPTIVE))
+    {
+        NSString *resources = nil;
+        backend_api(&resources);
+        temporal = temporal_create(WGDI_TEMPORAL_PRESENTER_ABI, resources.fileSystemRepresentation);
+    }
     if (!temporal) return NO;
     return [temporal presentImage:image inLayer:parent frame:frame width:width height:height
         request:^BOOL(NSData *input,NSUInteger iw,NSUInteger ih,uint64_t token) {
@@ -230,7 +290,12 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
 
 - (CGImageRef) copyFastImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
 {
-    if (!metalFX || fastFailed) return NULL;
+    if (fastFailed) return NULL;
+    if (!metalFX)
+    {
+        metalFX = [[WineSpatialScaler alloc] init];
+        if (!metalFX) { fastFailed = YES; return NULL; }
+    }
     if (fastResult && fastWidth == width && fastHeight == height &&
         fastInputWidth == latestWidth && fastInputHeight == latestHeight && [fastInput isEqualToData:latestInput])
     {
@@ -261,7 +326,10 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
         return algorithm == UPSCALE_ADAPTIVE ? [self copyFastImage:image width:width height:height] : NULL;
     const NSUInteger block = 64, halo = 18;
     const NSUInteger iw = latestWidth, ih = latestHeight;
-    const uint8_t *old = resultInput.bytes, *now = latestInput.bytes;
+    struct wgdi_image previous = {(uint8_t *)resultInput.bytes, resultInput.length, iw * 4, iw, ih};
+    struct wgdi_image current = {(uint8_t *)latestInput.bytes, latestInput.length, iw * 4, iw, ih};
+    struct wgdi_exclusions mask;
+    wgdi_load_exclusions(&mask, iw, ih);
     CGMutablePathRef retained = CGPathCreateMutable();
     NSUInteger patches = 0;
     for (NSUInteger y = 0; y < ih; y += block)
@@ -270,10 +338,8 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
             NSUInteger left = x > halo ? x - halo : 0;
             NSUInteger bottom = y > halo ? y - halo : 0;
             NSUInteger right = MIN(iw, x + block + halo), top = MIN(ih, y + block + halo);
-            BOOL equal = YES;
-            for (NSUInteger row = bottom; equal && row < top; ++row)
-                equal = !memcmp(old + (row * iw + left) * 4, now + (row * iw + left) * 4,
-                                (right - left) * 4);
+            BOOL equal = wgdi_region_equal_excluding(&previous, &current, &mask,
+                left, bottom, right - left, top - bottom);
             if (equal)
             {
                 // Integer output edges partition the surface at fractional scales.
@@ -318,7 +384,7 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
     });
 }
 
-- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
+- (CGImageRef) copyUpscaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
                  needsDisplay:(void (^)(void))needsDisplay
 {
     NSAssert([NSThread isMainThread], @"Wine GDI upscaler presentation requires the main thread");
@@ -347,7 +413,9 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
     struct wgdi_image previous = {(uint8_t *)latestInput.bytes, latestInput.length,
                                   latestWidth * 4, latestWidth, latestHeight};
     struct wgdi_image current = {capture.mutableBytes, capture.length, iw * 4, iw, ih};
-    BOOL frameChanged = !wgdi_frames_equal(&previous, &current);
+    struct wgdi_exclusions mask;
+    wgdi_load_exclusions(&mask, iw, ih);
+    BOOL frameChanged = !wgdi_frames_equal_excluding(&previous, &current, &mask);
     BOOL geometryChanged = latestOutputWidth != width || latestOutputHeight != height;
     if (frameChanged)
     {
@@ -431,7 +499,7 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
                 {
                     if (algorithm == UPSCALE_ADAPTIVE) neuralFailed = YES;
                     else failed = YES;
-                    NSString *fallback = algorithm == UPSCALE_ADAPTIVE && metalFX && !fastFailed
+                    NSString *fallback = algorithm == UPSCALE_ADAPTIVE && !fastFailed
                         ? @"MetalFX" : @"standard GDI";
                     NSLog(@"Wine GDI upscaler: %@ failed (%@); using %@ presentation",
                           algorithm == WGDI_ANIME4K ? @"Anime4K" : @"Real-CUGAN", message, fallback);
@@ -441,5 +509,65 @@ static BOOL sparse_change(NSData *old, NSData *current, NSUInteger width, NSUInt
         }
     });
     return [self copyCompositeImage:image width:width height:height];
+}
+
+/* Apply exclusions last, including exact-cache hits and pending compositions. */
+- (CGImageRef) copyScaledImage:(CGImageRef)image width:(NSUInteger)width height:(NSUInteger)height
+                 needsDisplay:(void (^)(void))needsDisplay
+{
+    struct wgdi_exclusions mask;
+    if (!image) return NULL;
+    NSUInteger iw = CGImageGetWidth(image), ih = CGImageGetHeight(image);
+    if (!iw || !ih) return NULL;
+    wgdi_load_exclusions(&mask, (unsigned)iw, (unsigned)ih);
+    if (!mask.count)
+        return [self copyUpscaledImage:image width:width height:height needsDisplay:needsDisplay];
+    if (!iw || !ih || iw > 8192 || ih > 8192 || iw * ih > 32 * 1024 * 1024 ||
+        width > 8192 || height > 8192 || width * height > 32 * 1024 * 1024) return NULL;
+    BOOL fullCover = NO;
+    for (unsigned i = 0; i < mask.count; ++i)
+        if (!mask.rects[i].x && !mask.rects[i].y &&
+            mask.rects[i].width >= iw && mask.rects[i].height >= ih) fullCover = YES;
+    CGImageRef scaled = NULL;
+    if (!fullCover)
+    {
+        double factor = MIN(1.0, MIN((double)(iw * 2) / width, (double)(ih * 2) / height));
+        NSUInteger cw = MAX((NSUInteger)1, (NSUInteger)(width * factor));
+        NSUInteger ch = MAX((NSUInteger)1, (NSUInteger)(height * factor));
+        scaled = [self copyUpscaledImage:image width:cw height:ch needsDisplay:needsDisplay];
+    }
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef bitmap = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
+        kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst);
+    CGColorSpaceRelease(space);
+    if (!bitmap) { if (scaled) CGImageRelease(scaled); return NULL; }
+    CGContextSetBlendMode(bitmap, kCGBlendModeCopy);
+    CGContextSetInterpolationQuality(bitmap, kCGInterpolationLow);
+    if (scaled)
+        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), scaled);
+    else
+        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), image);
+    CGMutablePathRef path = CGPathCreateMutable();
+    for (unsigned i = 0; i < mask.count; ++i)
+    {
+        const struct wgdi_exclusion *r = &mask.rects[i];
+        NSUInteger left = MIN(iw, r->x), right = MIN(iw, r->x + r->width);
+        NSUInteger top = MIN(ih, r->y), bottom = MIN(ih, r->y + r->height);
+        if (right <= left || bottom <= top) continue;
+        NSUInteger x0 = left * width / iw, x1 = (right * width + iw - 1) / iw;
+        NSUInteger y0 = height - (bottom * height + ih - 1) / ih, y1 = height - top * height / ih;
+        CGPathAddRect(path, NULL, CGRectMake(x0, y0, x1 - x0, y1 - y0));
+    }
+    if (!CGPathIsEmpty(path))
+    {
+        CGContextAddPath(bitmap, path);
+        CGContextClip(bitmap);
+        CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), image);
+    }
+    CGPathRelease(path);
+    CGImageRef composed = CGBitmapContextCreateImage(bitmap);
+    CGContextRelease(bitmap);
+    if (scaled) CGImageRelease(scaled);
+    return composed;
 }
 @end

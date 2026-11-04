@@ -24,6 +24,7 @@ typedef BOOL (^WGDITemporalRequest)(NSData *input, NSUInteger width, NSUInteger 
 - (BOOL)presentLatestInLayer:(CALayer *)parent frame:(CGRect)frame
     width:(NSUInteger)width height:(NSUInteger)height request:(WGDITemporalRequest)request
     needsDisplay:(void (^)(void))redraw;
+- (NSData *)selectedTilesForToken:(uint64_t)token;
 @required
 - (void)completeOutput:(NSData *)output token:(uint64_t)token needsDisplay:(void (^)(void))redraw;
 - (void)cancel;

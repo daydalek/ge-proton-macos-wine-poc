@@ -2453,7 +2453,7 @@
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
       "source_origin": "GE-Proton macOS Wine PoC new source",
-      "source_sha256": "50528ca5ad4174882309f938df5c7666ee5b555fc5fe766345d5c5529efc567b",
+      "source_sha256": "8636f1af70ba9afda19748c6dce0a285b8d8c46e4e7627469e600a453f775014",
       "copyright_notices": []
     },
     {
@@ -2462,7 +2462,7 @@
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
       "source_origin": "GE-Proton macOS Wine PoC new source",
-      "source_sha256": "0a845675c7d01ed9f678e4921b8155e482f37d8d916215cb586aaef0d8461e53",
+      "source_sha256": "d5f5263649237d6717155ded2a470c4de9a09a4143dd7797d8ccc8d2b6a6257c",
       "copyright_notices": [
         "Copyright 2026 GE-Proton macOS Wine PoC contributors"
       ]
@@ -2502,7 +2502,7 @@
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
       "source_origin": "GE-Proton macOS Wine PoC new source",
-      "source_sha256": "e76ffce5db8b355f82d639292ed07ad3c9519c3d1e793ef2333c3bf97c615ebf",
+      "source_sha256": "c791381f681ff7d15551d10d290b308287f671d09c6e801d8d5d3049ab72f0f2",
       "copyright_notices": []
     },
     {
@@ -2590,7 +2590,7 @@
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
       "source_origin": "GE-Proton macOS Wine PoC new source",
-      "source_sha256": "b2a9da3deaf46ed37601a57d164a816c72a68e17afdc2c1f89f6e0897525affc",
+      "source_sha256": "d872f5e943e10efe372efcd52dc6c1dd25b36298d187e9c53a4c4196b9e0684a",
       "copyright_notices": []
     },
     {
@@ -2608,7 +2608,7 @@
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
       "source_origin": "GE-Proton macOS Wine PoC new source",
-      "source_sha256": "9afc0674ed13f6c8efc861050de7a849bed98edb107dc2206bc46b0d9af06794",
+      "source_sha256": "f1287d2ac2b04f07721ac508ade75d6bc05022776c4a4dab0ee21317eed6a22d",
       "copyright_notices": []
     },
     {
@@ -2631,6 +2631,46 @@
       "source_sha256": "8ae7340c952a6cb0442bdef56394e34e6940cd0b5f0a51e76c25c745a4e6706e",
       "copyright_notices": [
         "Copyright 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_region_picker.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "530b81fc05cf86731da93291468fdf36c31de6f08573c87baabd89df398b14db",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/wine_gdi_exclusions.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "fe9ce229834d1458484c253bb3c8385f7bca94e345431e991bbb4f9e59691eda",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_app.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with MetalFX Spatial",
+      "source_sha256": "2ce955c7b185df3f28edbecd0fe327d383019b59f8f74028fa7e17c44f75bf95",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-gdi-upscalers.patch",
+      "source_file": "dlls/winemac.drv/cocoa_app.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with MetalFX Spatial",
+      "source_sha256": "b9d0434dc8ecaf0379f8300e94f2e8c70b3b320c45b4cb9f7d6877acd2e94c30",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
       ]
     }
   ],
@@ -2676,12 +2716,12 @@
     "patches/wine-ge/macos-gdi-fullscreen-centering.patch": "e00b0a4609c2a1f0a96e9c41eb0d01635bcc18eda6b85883a0b87831bede6db6",
     "patches/wine-ge/ddraw-external-mode-loss.patch": "3fa1bea92474b7d277dfb2d35d6899c1aad2b99a21da48438b0b45aee4dee8bc",
     "patches/wine-ge/macos-metalfx-spatial.patch": "2601c79bd715d5e4833271838961410f7292376fe6527aacfb94a122b6fb56b3",
-    "patches/wine-ge/macos-gdi-upscalers.patch": "793477e72cbbbf97ad0bb3881032f39b41e6db530bfe46d43f8c2480b385576d",
+    "patches/wine-ge/macos-gdi-upscalers.patch": "3552a2e696ac133198f5d19119f213053709856ff79330718761a59dbc07d0d0",
     "patches/crossover/mfreadwrite-d3d11-allocator-attributes.patch": "0e5264ebd573ffd6f05fbc4d6f91c7c0391335b9fc3f9f715615ee04b44ef46f",
     "patches/crossover/winedmo-decoder-output-allocator-attributes.patch": "f363f99caba055b9091e6fdc49a8976ace52e779ca97184081103f0e239ef369",
     "patches/crossover/quartz-vfs-probe-lifetime.patch": "2bc09520e95438cc76730897d183ca6d8f81502458a4b24db73dede9cf065fe2",
     "patches/crossover/win32u-vulkan-wow64-mach-vm-remap.patch": "d4aac436e4789031036bcfa0527c835771d0fc185412bb0a22ad73637450860e",
     "patches/wine-ge/macos-gdi-metal-presentation-exclusion.patch": "9afafd2f211dd1fbd7a396d32e9a10a4bef5f8acf0bc401714133309e07eeede",
-    "patches/wine-ge/macos-wined3d-temporal.patch": "68aaed9e6f6de16998608d426a9464171138d1b1ed0da8fd1f5da3e6d4f7bca1"
+    "patches/wine-ge/macos-wined3d-temporal.patch": "2e11b96aa99c4a9508082a84410e5acf552d90483e7551f6e4c8b27fc3dc931e"
   }
 }

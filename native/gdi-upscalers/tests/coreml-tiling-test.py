@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Exercise the real helper protocol with a compiled fixed-size model bundle.
-Usage: python3 coreml-tiling-test.py HELPER RESOURCES [WxH ...]
+Usage: python3 coreml-tiling-test.py HELPER RESOURCES [realcugan|animevideov3] [WxH ...]
 Select a small model bundle for fast regression runs.
 """
 import mmap
@@ -19,7 +19,11 @@ SIZE = HEADER + 4 * 1024 * 1024 * 20
 
 def main():
     helper, resources = map(lambda s: str(Path(s).resolve()), sys.argv[1:3])
-    sizes = [tuple(map(int, size.split('x'))) for size in sys.argv[3:]]
+    rest = list(sys.argv[3:])
+    family = 'realcugan'
+    if rest and rest[0] in ('realcugan', 'animevideov3'):
+        family = rest.pop(0)
+    sizes = [tuple(map(int, size.split('x'))) for size in rest]
     sizes = sizes or [(1, 1), (65, 49), (129, 97), (65, 49)]
     with tempfile.TemporaryFile() as shared:
         shared.truncate(SIZE)
@@ -31,8 +35,10 @@ def main():
             def setup():
                 os.dup2(shared_fd, 3)
                 os.dup2(server_fd, 4)
-            process = subprocess.Popen([helper, '--serve', resources],
-                                       close_fds=False, preexec_fn=setup)
+            command = [helper, '--serve', resources]
+            if family != 'realcugan':
+                command.append(family)
+            process = subprocess.Popen(command, close_fds=False, preexec_fn=setup)
             os.close(shared_fd)
             os.close(server_fd)
             server.close()

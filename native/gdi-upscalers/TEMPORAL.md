@@ -48,6 +48,26 @@ B(X) uses the same bilinear filter and sRGB decode in residual creation and
 composition. Residual storage is signed RGBA16Float. Clamping and sRGB encode
 occur at final display. Refresh timestamps are per accepted block.
 
+## Block residual library
+
+Accepted (input, residual) state is snapshotted into up to 16 slots after each
+successful admission. Every even-offset 16x16 window of a slot input is indexed
+by content hash in a per-slot open-addressed table on the GPU. Each presented
+frame probes reference-dirty 16x16 blocks against all active slots at the four
+parities, so a block can be matched to a source under any pixel translation d.
+The first candidate whose 8px context verifies exactly wins; matches found at
+parity (0,0) that also verify the full 18px context are *exact* and leave the
+dirty set immediately. Other matches are *provisional*: the translated residual
+is shown at once but the block stays dirty and is refined by the normal quiet
+interval inference, which clears the provisional flag on commit. Matched blocks
+publish their current input into the reference and its CPU mirror, and their
+verified 8px context ring takes the same residual so stale boundary residual
+cannot persist. Slots are replaced LRU-by-last-hit; a new snapshot frees an
+older slot only when that slot's differing blocks are still covered by another
+active slot. `WINE_GDI_TEMPORAL_LIBRARY_MB` (default 384, 0 disables) bounds
+total slot memory. `WINE_GDI_TEMPORAL_TRACE=1` logs per-frame probe counts and
+slot store/evict/redundant-free events.
+
 ## Integration and validation
 
 Real-CUGAN and adaptive modes dynamically load the optional presenter extension,

@@ -19,3 +19,6 @@ struct wgdi_coreml_frame {
     char error[256];
 };
 #define WGDI_COREML_BYTES (sizeof(struct wgdi_coreml_frame) + (size_t)WGDI_COREML_PIXELS * 20)
+#define WGDI_COREML_VERSION_REGIONS 2u
+#define WGDI_COREML_SELECTION_WORDS 8u
+#define WGDI_COREML_EXTENDED_BYTES (WGDI_COREML_BYTES + WGDI_COREML_SELECTION_WORDS * 4u)

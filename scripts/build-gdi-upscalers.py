@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tarfile
 import urllib.request
+import zipfile
 
 PROJECT = Path(__file__).resolve().parents[1]
 NATIVE = PROJECT / 'native/gdi-upscalers'
@@ -25,7 +26,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def prepare_archive(item, work, cache=None, offline=False):
+def prepare_archive(item, work, cache=None, offline=False, members=None):
     archive = work / 'archives' / item['archive']
     archive.parent.mkdir(parents=True, exist_ok=True)
     if not archive.exists() and cache and (cache / item['archive']).is_file():
@@ -52,16 +53,42 @@ def prepare_archive(item, work, cache=None, offline=False):
             raise ValueError('Use a fresh work directory for changed dependency inputs')
         return destination
     (work / 'sources').mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive) as source:
-        members = source.getmembers()
-        # These pinned archives contain ordinary files/directories. Reject links
-        # before extraction so an archive can never redirect a later member.
-        for member in members:
-            name = Path(member.name)
-            if (name.is_absolute() or '..' in name.parts or name.parts[0] != item['directory'] or
-                    not (member.isfile() or member.isdir())):
-                raise ValueError('Unsafe source archive member: ' + member.name)
-        source.extractall(work / 'sources', members=members)
+    if item.get('format') == 'zip':
+        # Zip archives bundle demo material beside the models, so extraction is
+        # restricted to the exact SHA-locked members passed in `members`.
+        if not members:
+            raise ValueError('Zip source archive requires locked members: ' + item['id'])
+        with zipfile.ZipFile(archive) as source:
+            selected = {}
+            for info in source.infolist():
+                name = Path(info.filename)
+                if name.is_absolute() or '..' in name.parts or '\\' in info.filename:
+                    raise ValueError('Unsafe source archive member: ' + info.filename)
+                if info.filename in members:
+                    if info.is_dir():
+                        raise ValueError('Locked member is not a file: ' + info.filename)
+                    selected[info.filename] = info
+            missing = set(members) - set(selected)
+            if missing:
+                raise ValueError('Locked member missing from archive: ' + ', '.join(sorted(missing)))
+            for name, info in selected.items():
+                target = destination.joinpath(*Path(name).parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with source.open(info) as source_file, target.open('wb') as output:
+                    shutil.copyfileobj(source_file, output)
+                if digest(target) != members[name]:
+                    raise ValueError('Extracted model digest mismatch: ' + name)
+    else:
+        with tarfile.open(archive) as source:
+            members = source.getmembers()
+            # These pinned archives contain ordinary files/directories. Reject links
+            # before extraction so an archive can never redirect a later member.
+            for member in members:
+                name = Path(member.name)
+                if (name.is_absolute() or '..' in name.parts or name.parts[0] != item['directory'] or
+                        not (member.isfile() or member.isdir())):
+                    raise ValueError('Unsafe source archive member: ' + member.name)
+            source.extractall(work / 'sources', members=members)
     marker.write_text(item['sha256'] + '\n')
     return destination
 
@@ -90,11 +117,16 @@ def main():
     glsl = NATIVE / 'vendor/anime4k' / lock['algorithms']['anime4k']['shader']
     if digest(glsl) != lock['algorithms']['anime4k']['sha256']:
         raise ValueError('Pinned Anime4K shader changed; review the source lock')
-    sources = {item['id']: prepare_archive(item, work, args.archive_cache, args.offline)
+    locked_members = {'realesrgan': lock['animevideov3_model_sha256']}
+    sources = {item['id']: prepare_archive(item, work, args.archive_cache, args.offline,
+                                          locked_members.get(item['id']))
                for item in lock['archives']}
     for name, expected in lock['model_sha256'].items():
         if digest(sources['realcugan'] / name) != expected:
             raise ValueError('Real-CUGAN model digest mismatch: ' + name)
+    for name, expected in lock['animevideov3_model_sha256'].items():
+        if digest(sources['realesrgan'] / name) != expected:
+            raise ValueError('Real-ESRGAN model digest mismatch: ' + name)
     build = work / ('build-' + args.arch)
     unix_dir = 'lib/wine/' + args.arch + '-unix'
     coreml_bundle = ''
@@ -107,7 +139,8 @@ def main():
         bundle = parent / 'bundle'
         # A virtualenv is identified by its executable path, including symlinks.
         command = [str(args.coreml_python.absolute()), str(PROJECT / 'scripts/build-realcugan-coreml.py'),
-                   '--model-dir', str(sources['realcugan'] / 'models/models-se'), '--output', str(bundle)]
+                   '--model-dir', str(sources['realcugan'] / 'models/models-se'), '--output', str(bundle),
+                   '--esrgan-model-dir', str(sources['realesrgan'] / 'models')]
         for size in args.coreml_size or []:
             command += ['--size', size]
         subprocess.run(command, check=True)
@@ -123,6 +156,7 @@ def main():
                     '-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0', '-DCMAKE_INSTALL_PREFIX=' + str(stage),
                     '-DNCNN_SOURCE_DIR=' + str(sources['ncnn']),
                     '-DWGDI_MODEL_DIR=' + str(sources['realcugan'] / 'models/models-se'),
+                    '-DWGDI_ESRGAN_MODEL_DIR=' + str(sources['realesrgan'] / 'models'),
                     '-DWINE_UNIX_DIR=' + unix_dir,
                     '-DWGDI_COREML_BUNDLE=' + coreml_bundle,
                     '-DBUILD_TESTING=' + ('ON' if args.test else 'OFF')], check=True)
@@ -138,7 +172,7 @@ def main():
     source_files = [p for p in sorted(NATIVE.rglob('*')) if p.is_file()]
     source_files += [Path(__file__), PROJECT / 'scripts/generate-anime4k-metal.py',
                      PROJECT / 'scripts/build-realcugan-coreml.py', PROJECT / 'scripts/convert-realcugan-coreml.py',
-                     PROJECT / 'scripts/requirements-coreml.txt']
+                     PROJECT / 'scripts/convert-realesrgan-coreml.py', PROJECT / 'scripts/requirements-coreml.txt']
     manifest = {'abi_version': 1, 'architecture': args.arch, 'algorithms': lock['algorithms'],
                 'temporal_presenter': {'abi': 1, 'block': 16, 'tile': 256, 'quiet_ms': 200, 'fade_ms': 100,
                                        'shader': str((resource_dir / 'temporal.metallib').relative_to(stage))},
