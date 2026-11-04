@@ -1,0 +1,74 @@
+Subject: winedmo: abort demux-thread reads during flushes
+License: LGPL-2.1-or-later
+Modification date: 2026-11-04
+
+Record the demux thread id and make the read callbacks return an empty
+read when a flush is active only on the demux thread itself, leaving the
+unconditional shutdown check and seek/worker-thread reads untouched.
+
+diff --git a/dlls/winedmo/media_source.c b/dlls/winedmo/media_source.c
+index e4dea76..b32bedb 100644
+--- a/dlls/winedmo/media_source.c
++++ b/dlls/winedmo/media_source.c
+@@ -348,6 +348,7 @@ struct media_source
+     } demuxer_stream;
+ 
+     HANDLE demux_thread;
++    DWORD demux_thread_id;
+     bool demux_thread_shutdown;
+     bool read_flushing;
+     bool flushing;
+@@ -735,7 +736,10 @@ static NTSTATUS CDECL source_stream_read_cb(struct winedmo_stream *stream, BYTE
+     bool known_size = source->file_size != (UINT64)-1;
+     HRESULT hr;
+ 
+-    if (source->read_flushing || source->demux_thread_shutdown)
++    /* Seeks issue demuxer-side reads (e.g. ASF index scans) on the seeking
++     * thread; the flush only aborts the demux thread's in-flight reads. */
++    if (source->demux_thread_shutdown
++            || (source->read_flushing && GetCurrentThreadId() == source->demux_thread_id))
+     {
+         *size = 0;
+         return STATUS_SUCCESS;
+@@ -2308,7 +2312,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+     object->state = SOURCE_STOPPED;
+ 
+     /* Start the background demux thread. */
+-    object->demux_thread = CreateThread(NULL, 0, source_demux_thread, object, 0, NULL);
++    object->demux_thread = CreateThread(NULL, 0, source_demux_thread, object, 0, &object->demux_thread_id);
+     if (!object->demux_thread)
+     {
+         hr = HRESULT_FROM_WIN32(GetLastError());
+diff --git a/dlls/winedmo/wm_reader.c b/dlls/winedmo/wm_reader.c
+index a40cd80..a34b52e 100644
+--- a/dlls/winedmo/wm_reader.c
++++ b/dlls/winedmo/wm_reader.c
+@@ -106,6 +106,7 @@ struct wm_reader
+     } demuxer_stream;
+     INT64 duration;           /* in 100ns units, from winedmo_demuxer_create */
+     HANDLE demux_thread;
++    DWORD demux_thread_id;
+     bool demux_shutdown;
+     bool read_flushing;
+     unsigned int read_flush_generation;
+@@ -957,7 +958,10 @@ static NTSTATUS CDECL wm_stream_read_cb(struct winedmo_stream *ws, BYTE *buffer,
+     ULONG ret_size = 0;
+     HRESULT hr;
+ 
+-    if (reader->read_flushing || reader->demux_shutdown)
++    /* Seeks issue demuxer-side reads (e.g. ASF index scans) on the seeking
++     * thread; the flush only aborts the demux thread's in-flight reads. */
++    if (reader->demux_shutdown
++            || (reader->read_flushing && GetCurrentThreadId() == reader->demux_thread_id))
+     {
+         *size = 0;
+         return STATUS_SUCCESS;
+@@ -2291,7 +2295,7 @@ static HRESULT init_stream(struct wm_reader *reader)
+ 
+     reader->demux_shutdown = false;
+     reader->read_flushing = false;
+-    if (!(reader->demux_thread = CreateThread(NULL, 0, wm_demux_thread, reader, 0, NULL)))
++    if (!(reader->demux_thread = CreateThread(NULL, 0, wm_demux_thread, reader, 0, &reader->demux_thread_id)))
+     {
+         ERR("Failed to create demux thread.\n");
+         free_stream_buffers(reader);

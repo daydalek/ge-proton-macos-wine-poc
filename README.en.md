@@ -203,6 +203,31 @@ image, audible volume, synchronization and natural completion.
 - Falls back to legacy `GetFileSize` when a virtual handle rejects `GetFileSizeEx`, preventing `ERROR_INVALID_HANDLE` (0x80070006) during filter graph construction;
 - Provides synchronous seek and read fallbacks along with `IAsyncReader` request scheduling for VFS handles that only hook synchronous Win32 file APIs, allowing archive-backed media to play smoothly without manual extraction.
 
+`patches/crossover/winedmo-seek-read-flushing.patch` records the demux
+thread id and returns an empty read from the read callbacks only while a
+flush is active on the demux thread itself; shutdown still aborts
+unconditionally and seek/worker-thread reads are unaffected.
+
+`patches/crossover/quartz-vmr7-native-presentation.patch` adds a private
+ExtEscape for VMR7 presentation on macOS: the presenter copies packed 32bpp
+BGRX rows and winemac.drv turns them into a CGImage shown in a borderless,
+non-activating child NSWindow scoped to the presenter's lifetime, drawn
+above that window's in-front OpenGL/Metal surfaces; any failure falls back
+to the original GDI StretchBlt path. The native VMR7 path itself does not
+require a 3D renderer; for applications requiring 3D, keep the normal 3D
+renderer rather than `renderer=gdi` as a video workaround; that option
+disables the required 3D support. User testing confirmed video playback
+in the tested application; fullscreen, scaling, occlusion and other
+application scenarios are not individually certified.
+
+All three checks are standalone headless assertions (no Wine/GUI launch):
+
+```sh
+python3 tools/tests/test_vmr7_native_video.py
+python3 tools/tests/test_vmr7_native_lifecycle.py
+python3 tools/tests/test_winedmo_seek_flushing.py
+```
+
 ---
 
 ## Packaging and release checks

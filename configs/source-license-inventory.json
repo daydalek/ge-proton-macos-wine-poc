@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-02",
+  "date": "2026-11-04",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -2672,10 +2672,107 @@
       "copyright_notices": [
         "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
       ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-seek-read-flushing.patch",
+      "source_file": "dlls/winedmo/media_source.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "ffcf2924f5bcf29387d28e9b143e514fcba7a0df2716dd6e7e3ac21942fb0cb2",
+      "copyright_notices": [
+        "Copyright 2020 Derek Lesho",
+        "Copyright 2020 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-seek-read-flushing.patch",
+      "source_file": "dlls/winedmo/wm_reader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "9618ad05ccbb23ba295d24e5056f6f331985aacc8a428feca8c5d1c7549d6f7e",
+      "copyright_notices": [
+        "Copyright 2012 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/quartz/vmr7_presenter.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "17166ec548cf24b495a3c26ef61884a9cf8865f096d52047506884b859b9f33d",
+      "copyright_notices": [
+        "Copyright 2023 Zebediah Figura for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/winemac.drv/cocoa_vmr7.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "086ff54d9def04a61d68d5c4e3d35ffc81231a12407dde4841cb34251629be4c",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "575f3f5912739501f04527fcda322977e7e2c2ff563b2f5893540f4df930b16d",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "b99a315426730b0a0cfdc18607679e303f2ec01a0c18520628b4a61c9313f8c8",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/winemac.drv/gdi.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "58ea81888ce3b936eccbf5b5ffa78a1b3ba135e23ed15b0d4e50ec9538b93921",
+      "copyright_notices": [
+        "Copyright 1996 Alexandre Julliard",
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers, Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "dlls/winemac.drv/macdrv_cocoa.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "46076b6cb21c0b4ebe4516d3412039961e907f0fc0f08103ea428c297b15a10a",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "include/wine/macdrv_video.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches, before generated modification notices",
+      "source_sha256": "b6fc1fd39643491d010a03d5637504ae03cb9de9cac465e3375de75d58d7c001",
+      "copyright_notices": []
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 231,
+    "LGPL-2.1-or-later": 244,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2722,6 +2819,8 @@
     "patches/crossover/quartz-vfs-probe-lifetime.patch": "2bc09520e95438cc76730897d183ca6d8f81502458a4b24db73dede9cf065fe2",
     "patches/crossover/win32u-vulkan-wow64-mach-vm-remap.patch": "d4aac436e4789031036bcfa0527c835771d0fc185412bb0a22ad73637450860e",
     "patches/wine-ge/macos-gdi-metal-presentation-exclusion.patch": "9afafd2f211dd1fbd7a396d32e9a10a4bef5f8acf0bc401714133309e07eeede",
-    "patches/wine-ge/macos-wined3d-temporal.patch": "2e11b96aa99c4a9508082a84410e5acf552d90483e7551f6e4c8b27fc3dc931e"
+    "patches/wine-ge/macos-wined3d-temporal.patch": "2e11b96aa99c4a9508082a84410e5acf552d90483e7551f6e4c8b27fc3dc931e",
+    "patches/crossover/winedmo-seek-read-flushing.patch": "7c4ea59c7510e97bf07b1e0e4cf99c82b91ccff80b517e0d28310802c064655d",
+    "patches/crossover/quartz-vmr7-native-presentation.patch": "c86265965642be30a05619e7d1ff34b534c26ed16dc63c5877327ad3f3e39112"
   }
 }

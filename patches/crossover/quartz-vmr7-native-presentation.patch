@@ -1,0 +1,965 @@
+Subject: quartz: present VMR7 video through a native child NSWindow on macOS
+License: LGPL-2.1-or-later
+Modification date: 2026-11-04
+
+Ordinary GDI frames can be hidden beneath winemac's in-front OpenGL
+surfaces or Metal content, leaving DirectShow OP video black.  A dedicated
+native child window bypasses that ordering issue:  winemac.drv
+gains a private versioned ExtEscape (include/wine/macdrv_video.h): the VMR7
+allocator-presenter locks its read-only 32bpp surface, copies rows honouring
+the signed pitch and hands packed BGRX frames to the driver, which builds an
+sRGB CGImage and shows it in a borderless opaque child NSWindow scoped to the
+presenter token, clipped/cropped to the parent content bounds.  RELEASE goes
+through the cached root HWND and survives the video child's destruction; any
+failure falls back to the previous StretchBlt path.  The video window is only
+a canvas: it cannot take key/main status, ignores mouse events and is never
+shown for a hidden or empty video HWND.
+
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -1172,6 +1172,8 @@
+     {
+         [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
+         [[NSNotificationCenter defaultCenter] removeObserver:self];
++        [self wine_clearVideoSurfaces];
++        [videoSurfaces release];
+         [queue release];
+         [latentChildWindows release];
+         [latentParentWindow release];
+@@ -3116,11 +3118,18 @@
+     - (void) windowDidChangeOcclusionState:(NSNotification*)notification
+     {
+         [self checkWineDisplayLink];
++        [self wine_updateVideoSurfaces];
+     }
+ 
+     - (void) windowDidChangeScreen:(NSNotification*)notification
+     {
+         [self checkWineDisplayLink];
++        [self wine_updateVideoSurfaces];
++    }
++
++    - (void) windowDidChangeBackingProperties:(NSNotification*)notification
++    {
++        [self wine_updateVideoSurfaces];
+     }
+ 
+     - (void)windowDidDeminiaturize:(NSNotification *)notification
+@@ -3150,6 +3159,7 @@
+ 
+         [self windowDidResize:notification];
+         [self checkWineDisplayLink];
++        [self wine_updateVideoSurfaces];
+     }
+ 
+     - (void) windowDidEndLiveResize:(NSNotification *)notification
+@@ -3207,6 +3217,8 @@
+         event = macdrv_create_event(WINDOW_DID_MINIMIZE, self);
+         [queue postEvent:event];
+         macdrv_release_event(event);
++
++        [self wine_updateVideoSurfaces];
+     }
+ 
+     - (void)windowDidMove:(NSNotification *)notification
+@@ -3230,6 +3242,8 @@
+     {
+         NSRect frame = self.wine_fractionalFrame;
+ 
++        [self wine_updateVideoSurfaces];
++
+         if ([self inLiveResize])
+         {
+             if (NSMinX(frame) != NSMinX(frameAtResizeStart))
+@@ -3306,6 +3320,8 @@
+                 child.latentParentWindow = nil;
+         }
+         [latentChildWindows removeAllObjects];
++
++        [self wine_clearVideoSurfaces];
+     }
+ 
+     - (void) windowWillEnterFullScreen:(NSNotification*)notification
+@@ -4282,3 +4298,5 @@
+             [[window contentView] clearMarkedText];
+     });
+ }
++
++#include "cocoa_vmr7.h"
+--- a/dlls/winemac.drv/macdrv_cocoa.h
++++ b/dlls/winemac.drv/macdrv_cocoa.h
+@@ -613,5 +613,8 @@
+ extern void macdrv_client_surface_presented(const macdrv_event *event);
+ extern void *macdrv_get_view_d3dmetal_client_surface(macdrv_view v);
+ void macdrv_set_view_d3dmetal_client_surface(macdrv_view v, void *client_surface);
++extern bool macdrv_window_present_video(macdrv_window w, uint64_t token,
++                                        CGImageRef image, CGRect rect);
++extern void macdrv_window_clear_video(macdrv_window w, uint64_t token);
+ 
+ #endif  /* __WINE_MACDRV_COCOA_H */
+--- a/dlls/winemac.drv/cocoa_window.h
++++ b/dlls/winemac.drv/cocoa_window.h
+@@ -84,6 +84,9 @@
+     BOOL fakingClose;
+ 
+     CAShapeLayer* contentViewMaskLayer;
++
++    /* VMR7 native video child windows, keyed by presenter token. */
++    NSMutableDictionary* videoSurfaces;
+ }
+ 
+ @property (retain, readonly, nonatomic) WineEventQueue* queue;
+@@ -113,3 +116,14 @@
+     - (void) setRetinaMode:(BOOL)mode;
+ 
+ @end
++
++
++/* VMR7 native video presentation surfaces (implemented in cocoa_vmr7.h). */
++@interface WineWindow (WineVMR7VideoSurfaces)
++
++    - (BOOL) wine_presentVideoWithToken:(uint64_t)token image:(CGImageRef)image target:(CGRect)rect;
++    - (void) wine_clearVideoWithToken:(uint64_t)token;
++    - (void) wine_updateVideoSurfaces;
++    - (void) wine_clearVideoSurfaces;
++
++@end
+--- a/dlls/winemac.drv/gdi.c
++++ b/dlls/winemac.drv/gdi.c
+@@ -27,6 +27,7 @@
+ 
+ #include "macdrv.h"
+ #include "winreg.h"
++#include "wine/macdrv_video.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(macdrv);
+ 
+@@ -143,10 +144,120 @@
+     if (!(physDev = calloc(1, sizeof(*physDev)))) return NULL;
+ 
+     return physDev;
++}
++
++
++/**********************************************************************
++ *              macdrv_video_escape
++ *
++ * Present or release a VMR7 video frame in a native child window layered
++ * above any OpenGL or Metal surfaces of the same top-level window.
++ * Returns non-zero when the escape was handled.
++ */
++static INT macdrv_video_escape(PHYSDEV dev, INT count, const void *data)
++{
++    const struct macdrv_video_header *header = data;
++    const void *payload;
++    uint64_t payload_size;
++    uint32_t command;
++    HWND hwnd, toplevel;
++    struct macdrv_win_data *win_data;
++    macdrv_window window;
++    CGRect target;
++    RECT rect;
++    INT ret = 0;
++
++    if (count < 0 || !(command = macdrv_video_message_parse(data, count, &payload, &payload_size)))
++        return 0;
++
++    if (!(hwnd = NtUserWindowFromDC(dev->hdc))) return 0;
++    if (!(toplevel = NtUserGetAncestor(hwnd, GA_ROOT))) toplevel = hwnd;
++
++    if (command == MACDRV_VIDEO_CMD_PRESENT)
++    {
++        /* Map the video window's client rect into the top-level window's
++         * content area, exactly like macdrv_client_surface_update(). */
++        if (!NtUserGetClientRect(hwnd, &rect, NtUserGetWinMonitorDpi(hwnd, MDT_RAW_DPI)))
++            return 0;   /* video window may have been destroyed concurrently */
++        NtUserMapWindowPoints(hwnd, toplevel, (POINT *)&rect, 2,
++                              NtUserGetWinMonitorDpi(toplevel, MDT_RAW_DPI));
++        /* A hidden or empty video window must drop any existing native
++         * frame instead of popping it on screen. */
++        if (!NtUserIsWindowVisible(hwnd) || IsRectEmpty(&rect))
++            command = MACDRV_VIDEO_CMD_RELEASE;
++    }
++
++    if (!(win_data = get_win_data(toplevel))) return 0;
++    if (command == MACDRV_VIDEO_CMD_PRESENT)
++        OffsetRect(&rect, win_data->rects.client.left - win_data->rects.visible.left,
++                   win_data->rects.client.top - win_data->rects.visible.top);
++    window = win_data->cocoa_window;
++    if (window) CFRetain(window);
++    release_win_data(win_data);
++    if (!window) return 0;
++
++    if (command == MACDRV_VIDEO_CMD_RELEASE)
++    {
++        macdrv_window_clear_video(window, header->token);
++        CFRelease(window);
++        return 1;
++    }
++
++    target = cgrect_from_rect(rect);
++
++    /* Clone the caller's pixels synchronously; the frame buffer is not
++     * referenced once this call returns. */
++    {
++        CGDataProviderRef provider = NULL;
++        CGColorSpaceRef colorspace = NULL;
++        CFDataRef frame_data;
++        CGImageRef image = NULL;
++
++        if ((frame_data = CFDataCreate(NULL, payload, payload_size)))
++        {
++            provider = CGDataProviderCreateWithCFData(frame_data);
++            colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++            if (provider && colorspace)
++                image = CGImageCreate(header->width, header->height, 8, 32,
++                        header->stride, colorspace,
++                        kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
++                        provider, NULL, false, kCGRenderingIntentDefault);
++            if (image)
++                ret = macdrv_window_present_video(window, header->token, image, target);
++            CGImageRelease(image);
++            CGColorSpaceRelease(colorspace);
++            CGDataProviderRelease(provider);
++            CFRelease(frame_data);
++        }
++    }
++
++    CFRelease(window);
++    return ret;
+ }
+ 
+ 
+ /**********************************************************************
++ *              ExtEscape (MACDRV.@)
++ */
++static INT macdrv_ExtEscape(PHYSDEV dev, INT escape, INT in_count, LPCVOID in_data,
++                            INT out_count, LPVOID out_data)
++{
++    if (escape == QUERYESCSUPPORT && in_data && in_count >= sizeof(USHORT))
++    {
++        DWORD code = in_count < sizeof(DWORD) ? *(const USHORT *)in_data : *(const DWORD *)in_data;
++        if (code == MACDRV_VIDEO_ESCAPE_ID) return TRUE;
++    }
++    else if (escape == MACDRV_VIDEO_ESCAPE_ID)
++    {
++        return macdrv_video_escape(dev, in_count, in_data);
++    }
++
++    dev = GET_NEXT_PHYSDEV( dev, pExtEscape );
++    return dev->funcs->pExtEscape( dev, escape, in_count, in_data, out_count, out_data );
++}
++
++
++/**********************************************************************
+  *              CreateDC (MACDRV.@)
+  */
+ static BOOL macdrv_CreateDC(PHYSDEV *pdev, LPCWSTR device, LPCWSTR output, const DEVMODEW* initData)
+@@ -237,6 +348,7 @@
+     .dc_funcs.pCreateDC = macdrv_CreateDC,
+     .dc_funcs.pDeleteDC = macdrv_DeleteDC,
+     .dc_funcs.pGetDeviceCaps = macdrv_GetDeviceCaps,
++    .dc_funcs.pExtEscape = macdrv_ExtEscape,
+     .dc_funcs.pGetDeviceGammaRamp = macdrv_GetDeviceGammaRamp,
+     .dc_funcs.pSetDeviceGammaRamp = macdrv_SetDeviceGammaRamp,
+     .dc_funcs.priority = GDI_PRIORITY_GRAPHICS_DRV,
+--- a/dlls/quartz/vmr7_presenter.c
++++ b/dlls/quartz/vmr7_presenter.c
+@@ -22,6 +22,7 @@
+ #include "quartz_private.h"
+ 
+ #include "wine/debug.h"
++#include "wine/macdrv_video.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(quartz);
+ 
+@@ -40,6 +41,15 @@
+     HWND window;
+     BOOL yuv_to_rgb;
+ 
++    /* Native winemac video presentation state.  native_support is 0 while
++     * unprobed, 1 when the driver accepted QUERYESCSUPPORT, -1 otherwise.
++     * native_root is the root HWND the native surface lives on; it can
++     * outlive the video child window, so release goes through it. */
++    int native_support;
++    HWND native_root;
++    BYTE *native_frame;
++    SIZE_T native_frame_size;
++
+     SIZE native_size, aspect_ratio;
+ };
+ 
+@@ -48,6 +58,8 @@
+     return CONTAINING_RECORD(iface, struct vmr7_presenter, IVMRImagePresenter_iface);
+ }
+ 
++static void vmr7_presenter_release_native(struct vmr7_presenter *presenter);
++
+ static HRESULT WINAPI image_presenter_QueryInterface(IVMRImagePresenter *iface, REFIID iid, void **out)
+ {
+     struct vmr7_presenter *presenter = impl_from_IVMRImagePresenter(iface);
+@@ -88,6 +100,8 @@
+     TRACE("%p decreasing refcount to %lu.\n", presenter, refcount);
+     if (!refcount)
+     {
++        vmr7_presenter_release_native(presenter);
++        free(presenter->native_frame);
+         if (presenter->frontbuffer)
+             IDirectDrawSurface7_Release(presenter->frontbuffer);
+         IDirectDrawSurface7_Release(presenter->primary);
+@@ -97,14 +111,147 @@
+     return refcount;
+ }
+ 
++static BOOL vmr7_presenter_native_supported(struct vmr7_presenter *presenter)
++{
++    DWORD escape = MACDRV_VIDEO_ESCAPE_ID;
++    HDC dc;
++
++    if (!presenter->window) return FALSE;
++    if (presenter->native_support) return presenter->native_support > 0;
++    if (!(dc = GetDC(presenter->window))) return FALSE;
++    presenter->native_support =
++            ExtEscape(dc, QUERYESCSUPPORT, sizeof(escape), (const char *)&escape, 0, NULL) > 0 ? 1 : -1;
++    ReleaseDC(presenter->window, dc);
++    return presenter->native_support > 0;
++}
++
++static void vmr7_presenter_release_native(struct vmr7_presenter *presenter)
++{
++    struct macdrv_video_header header;
++    HDC dc;
++
++    if (!presenter->native_root) return;
++    memset(&header, 0, sizeof(header));
++    header.version = MACDRV_VIDEO_PROTOCOL_VERSION;
++    header.command = MACDRV_VIDEO_CMD_RELEASE;
++    header.token = (uint64_t)(ULONG_PTR)presenter;
++    /* Release through the root HWND: the video child window may already
++     * be destroyed while the game window still exists. */
++    if ((dc = GetDC(presenter->native_root)))
++    {
++        ExtEscape(dc, MACDRV_VIDEO_ESCAPE_ID, sizeof(header), (const char *)&header, 0, NULL);
++        ReleaseDC(presenter->native_root, dc);
++    }
++    presenter->native_root = NULL;
++}
++
++static BOOL vmr7_presenter_present_native(struct vmr7_presenter *presenter, IDirectDrawSurface7 *surface)
++{
++    struct macdrv_video_header *header;
++    DDSURFACEDESC2 desc = {.dwSize = sizeof(desc)};
++    uint64_t payload_size, total_size;
++    BOOL ret = FALSE;
++    HDC dc;
++
++    if (!vmr7_presenter_native_supported(presenter))
++        return FALSE;
++
++    if (FAILED(IDirectDrawSurface7_Lock(surface, NULL, &desc, DDLOCK_READONLY | DDLOCK_WAIT, NULL)))
++        return FALSE;
++
++    if ((desc.ddpfPixelFormat.dwFlags & DDPF_RGB)
++            && desc.ddpfPixelFormat.dwRGBBitCount == 32
++            && desc.ddpfPixelFormat.dwRBitMask == 0x00ff0000
++            && desc.ddpfPixelFormat.dwGBitMask == 0x0000ff00
++            && desc.ddpfPixelFormat.dwBBitMask == 0x000000ff
++            && desc.lPitch != INT_MIN && desc.lPitch != 0
++            && desc.dwWidth && desc.dwHeight
++            && (uint64_t)desc.dwWidth * 4 <= (uint64_t)INT_MAX
++            && (desc.lPitch < 0 ? -(int64_t)desc.lPitch : desc.lPitch) >= (int64_t)desc.dwWidth * 4
++            && macdrv_video_present_payload_size(desc.dwWidth, desc.dwHeight,
++                                                 desc.dwWidth * 4, &payload_size))
++    {
++        total_size = sizeof(*header) + payload_size;
++        if (presenter->native_frame_size < total_size)
++        {
++            BYTE *frame = realloc(presenter->native_frame, (size_t)total_size);
++            if (frame)
++            {
++                presenter->native_frame = frame;
++                presenter->native_frame_size = (size_t)total_size;
++            }
++        }
++        if (presenter->native_frame_size >= total_size
++                && macdrv_video_copy_rows(presenter->native_frame + sizeof(*header),
++                        desc.lpSurface, desc.lPitch, desc.dwWidth, desc.dwHeight))
++        {
++            header = (struct macdrv_video_header *)presenter->native_frame;
++            memset(header, 0, sizeof(*header));
++            header->version = MACDRV_VIDEO_PROTOCOL_VERSION;
++            header->command = MACDRV_VIDEO_CMD_PRESENT;
++            header->token = (uint64_t)(ULONG_PTR)presenter;
++            header->width = desc.dwWidth;
++            header->height = desc.dwHeight;
++            header->stride = desc.dwWidth * 4;
++            ret = TRUE;
++        }
++    }
++
++    IDirectDrawSurface7_Unlock(surface, NULL);
++
++    if (!ret) return FALSE;
++    ret = FALSE;
++    if ((dc = GetDC(presenter->window)))
++    {
++        HWND root = GetAncestor(presenter->window, GA_ROOT);
++        if (root)
++        {
++            if (presenter->native_root && presenter->native_root != root)
++                /* The video window moved to a different root; drop the
++                 * surface on the old root before presenting to the new. */
++                vmr7_presenter_release_native(presenter);
++            ret = ExtEscape(dc, MACDRV_VIDEO_ESCAPE_ID, (INT)total_size,
++                    (const char *)presenter->native_frame, 0, NULL) > 0;
++            if (ret) presenter->native_root = root;
++        }
++        /* No root means a native success could never be released; skip the
++         * present so the caller releases any stale frame and falls back. */
++        ReleaseDC(presenter->window, dc);
++    }
++    return ret;
++}
++
++static BOOL vmr7_presenter_try_native(struct vmr7_presenter *presenter, IDirectDrawSurface7 *surface)
++{
++    /* Every failed native attempt must drop a stale native frame before
++     * the GDI fallback paints underneath it. */
++    if (vmr7_presenter_present_native(presenter, surface))
++        return TRUE;
++    vmr7_presenter_release_native(presenter);
++    return FALSE;
++}
++
+ static HRESULT WINAPI image_presenter_StartPresenting(IVMRImagePresenter *iface, DWORD_PTR cookie)
+ {
++    if (GetModuleHandleW(L"winemac.drv"))
++    {
++        TRACE("iface %p, cookie %#Ix.\n", iface, cookie);
++        return S_OK;
++    }
+     FIXME("iface %p, cookie %#Ix, stub!\n", iface, cookie);
+     return E_NOTIMPL;
+ }
+ 
+ static HRESULT WINAPI image_presenter_StopPresenting(IVMRImagePresenter *iface, DWORD_PTR cookie)
+ {
++    struct vmr7_presenter *presenter = impl_from_IVMRImagePresenter(iface);
++
++    if (GetModuleHandleW(L"winemac.drv"))
++    {
++        TRACE("iface %p, cookie %#Ix.\n", iface, cookie);
++        vmr7_presenter_release_native(presenter);
++        return S_OK;
++    }
+     FIXME("iface %p, cookie %#Ix, stub!\n", iface, cookie);
+     return E_NOTIMPL;
+ }
+@@ -135,6 +282,9 @@
+     {
+         HDC source_dc, target_dc;
+         DDSURFACEDESC2 desc = {.dwSize = sizeof(desc)};
++
++        if (vmr7_presenter_try_native(presenter, info->lpSurf))
++            return S_OK;
+ 
+         if (SUCCEEDED(hr = IDirectDrawSurface7_GetSurfaceDesc(info->lpSurf, &desc))
+                 && SUCCEEDED(hr = IDirectDrawSurface7_GetDC(info->lpSurf, &source_dc)))
+@@ -323,6 +473,11 @@
+     DDSURFACEDESC2 surface_desc = {.dwSize = sizeof(surface_desc)};
+ 
+     TRACE("presenter %p, id %#Ix.\n", presenter, id);
++
++    vmr7_presenter_release_native(presenter);
++    free(presenter->native_frame);
++    presenter->native_frame = NULL;
++    presenter->native_frame_size = 0;
+ 
+     if (presenter->frontbuffer)
+     {
+@@ -467,6 +622,8 @@
+ 
+     if (GetModuleHandleW(L"winemac.drv"))
+     {
++        if (window != presenter->window)
++            vmr7_presenter_release_native(presenter);
+         presenter->window = window;
+         return S_OK;
+     }
+--- /dev/null
++++ b/include/wine/macdrv_video.h
+@@ -0,0 +1,144 @@
++/*
++ * Private ExtEscape protocol for native macOS video presentation
++ *
++ * Shared between the PE side (dlls/quartz VMR7 presenter, which produces
++ * frames) and the Unix side of winemac.drv (which displays them in a
++ * native child window above OpenGL/Metal surfaces).  The header is plain
++ * C so it can also be compiled standalone by headless tests.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINE_WINE_MACDRV_VIDEO_H
++#define __WINE_WINE_MACDRV_VIDEO_H
++
++#include <limits.h>
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdint.h>
++#include <string.h>
++
++/* Private ExtEscape() escape code, fits a signed INT.  ASCII "WMVR". */
++#define MACDRV_VIDEO_ESCAPE_ID 0x574d5652
++
++#define MACDRV_VIDEO_PROTOCOL_VERSION 1
++
++enum macdrv_video_command
++{
++    MACDRV_VIDEO_CMD_PRESENT = 1,
++    MACDRV_VIDEO_CMD_RELEASE = 2,
++};
++
++/* Fixed-layout, pointer-free wire header.  For PRESENT it is immediately
++ * followed by stride*height bytes of tightly packed top-down BGRX rows.
++ * For RELEASE the buffer contains only this header. */
++struct macdrv_video_header
++{
++    uint32_t version;   /* MACDRV_VIDEO_PROTOCOL_VERSION */
++    uint32_t command;   /* enum macdrv_video_command */
++    uint64_t token;     /* opaque producer identity, never dereferenced */
++    uint32_t width;     /* payload width in pixels */
++    uint32_t height;    /* payload height in pixels */
++    uint32_t stride;    /* payload bytes per row */
++    uint32_t reserved;  /* must be zero */
++};
++
++#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
++_Static_assert(sizeof(struct macdrv_video_header) == 32, "header must be exactly 32 bytes");
++_Static_assert(offsetof(struct macdrv_video_header, token) == 8, "token must be at offset 8");
++#else
++typedef char macdrv_video_header_size_assert[(sizeof(struct macdrv_video_header) == 32) ? 1 : -1];
++typedef char macdrv_video_header_token_assert[(offsetof(struct macdrv_video_header, token) == 8) ? 1 : -1];
++#endif
++
++/* Computes the pixel payload size for a PRESENT message, or returns false
++ * when the geometry is invalid or the total message size would not fit an
++ * ExtEscape() INT count. */
++static inline bool macdrv_video_present_payload_size(uint32_t width, uint32_t height,
++        uint32_t stride, uint64_t *payload_size)
++{
++    uint64_t row, payload;
++
++    if (!width || !height) return false;
++    row = (uint64_t)width * 4;
++    if (row > UINT32_MAX || stride < row) return false;
++    payload = (uint64_t)stride * height;
++    if (payload + sizeof(struct macdrv_video_header) > (uint64_t)INT_MAX) return false;
++#if SIZE_MAX < UINT64_MAX
++    if (payload + sizeof(struct macdrv_video_header) > (uint64_t)SIZE_MAX) return false;
++#endif
++    if (payload_size) *payload_size = payload;
++    return true;
++}
++
++/* Validates a complete escape input buffer.  Returns MACDRV_VIDEO_CMD_PRESENT
++ * or MACDRV_VIDEO_CMD_RELEASE on success, 0 on malformed input.  For a valid
++ * PRESENT, *payload and *payload_size locate the pixel data in the buffer. */
++static inline uint32_t macdrv_video_message_parse(const void *data, uint32_t count,
++        const void **payload, uint64_t *payload_size)
++{
++    const struct macdrv_video_header *header = data;
++    uint64_t size;
++
++    if (!data || count < sizeof(*header)) return 0;
++    if (header->version != MACDRV_VIDEO_PROTOCOL_VERSION) return 0;
++    if (header->reserved) return 0;
++
++    switch (header->command)
++    {
++    case MACDRV_VIDEO_CMD_PRESENT:
++        if (!macdrv_video_present_payload_size(header->width, header->height,
++                                             header->stride, &size)) return 0;
++        if ((uint64_t)count < sizeof(*header) + size) return 0;
++        if (payload) *payload = header + 1;
++        if (payload_size) *payload_size = size;
++        return MACDRV_VIDEO_CMD_PRESENT;
++    case MACDRV_VIDEO_CMD_RELEASE:
++        if (count != sizeof(*header)) return 0;
++        return MACDRV_VIDEO_CMD_RELEASE;
++    default:
++        return 0;
++    }
++}
++
++/* Validates a signed DirectDraw lPitch and copies the frame into a tightly
++ * packed top-down destination buffer of width*4 bytes per row (height*width*4
++ * bytes total).  src is the base pointer reported by Lock(); successive
++ * scanlines are src + i*src_pitch, so a negative pitch walks to lower
++ * addresses.  Returns false without copying when the arguments are invalid. */
++static inline bool macdrv_video_copy_rows(void *dst, const void *src,
++        int32_t src_pitch, uint32_t width, uint32_t height)
++{
++    uint64_t row = (uint64_t)width * 4;
++    uint64_t abs_pitch;
++    uint32_t i;
++
++    if (!dst || !src || !width || !height) return false;
++    if (row > UINT32_MAX) return false;
++    if (src_pitch == 0 || src_pitch == INT32_MIN) return false;
++    abs_pitch = (uint64_t)(src_pitch < 0 ? -(int64_t)src_pitch : src_pitch);
++    if (abs_pitch < row) return false;
++    /* Bound the tightly packed destination like a PRESENT payload and the
++     * signed source span for this platform's pointer range (PE32 too). */
++    if (!macdrv_video_present_payload_size(width, height, (uint32_t)row, NULL)) return false;
++    if ((uint64_t)(height - 1) * abs_pitch > (uint64_t)PTRDIFF_MAX) return false;
++
++    for (i = 0; i < height; ++i)
++        memcpy((char *)dst + (uint64_t)i * row,
++               (const char *)src + (int64_t)i * src_pitch, (size_t)row);
++    return true;
++}
++
++#endif  /* __WINE_WINE_MACDRV_VIDEO_H */
+--- /dev/null
++++ b/dlls/winemac.drv/cocoa_vmr7.h
+@@ -0,0 +1,327 @@
++/*
++ * VMR7 native video presentation surfaces
++ *
++ * Implements macdrv_window_present_video() / macdrv_window_clear_video().
++ * A private ExtEscape from the quartz VMR7 presenter hands BGRX frames to
++ * the graphics driver; each presenter token gets a borderless child
++ * NSWindow of the top-level WineWindow, composited above the window's
++ * in-front OpenGL surfaces and Metal content where ordinary GDI layer
++ * updates never appear.  Included exactly once at the end of
++ * cocoa_window.m, so it can see the WineWindow class extension.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINE_MACDRV_COCOA_VMR7_H
++#define __WINE_MACDRV_COCOA_VMR7_H
++
++/* AppKit/QuartzCore come from the including cocoa_window.m. */
++
++@interface WineVMR7VideoWindow : NSWindow
++@end
++
++@implementation WineVMR7VideoWindow
++    - (BOOL) canBecomeKeyWindow { return NO; }
++    - (BOOL) canBecomeMainWindow { return NO; }
++@end
++
++
++@interface WineVMR7VideoSurface : NSObject
++{
++    WineWindow* parent;         /* not retained; the parent owns us */
++    NSWindow* child;
++    NSView* content;            /* not retained; owned by child */
++    CGImageRef image;           /* latest frame, retained */
++    CGRect target;              /* in parent contentView coordinates */
++    NSRect appliedFrame;        /* last applied screen frame */
++    uint64_t token;
++    BOOL ordered;               /* child is currently ordered in */
++    BOOL updatingLayout;        /* re-entrancy guard */
++}
++
++    - (id) initWithParent:(WineWindow*)parentWindow token:(uint64_t)presenterToken;
++    - (void) setImage:(CGImageRef)frame target:(CGRect)rect;
++    - (void) updateLayout;
++    - (void) detach;
++
++@end
++
++@implementation WineVMR7VideoSurface
++
++    - (id) initWithParent:(WineWindow*)parentWindow token:(uint64_t)presenterToken
++    {
++        self = [super init];
++        if (self)
++        {
++            parent = parentWindow;
++            token = presenterToken;
++        }
++        return self;
++    }
++
++    - (void) dealloc
++    {
++        [self detach];
++        [super dealloc];
++    }
++
++    - (void) detach
++    {
++        if (child)
++        {
++            if ([child parentWindow] == parent)
++                [parent removeChildWindow:child];
++            [child orderOut:nil];
++            [child release];
++            child = nil;
++            content = nil;
++            ordered = NO;
++            appliedFrame = NSZeroRect;
++        }
++        if (image)
++        {
++            CGImageRelease(image);
++            image = nil;
++        }
++        parent = nil;
++    }
++
++    - (void) setImage:(CGImageRef)frame target:(CGRect)rect
++    {
++        if (frame != image)
++        {
++            CGImageRetain(frame);
++            CGImageRelease(image);
++            image = frame;
++        }
++        target = rect;
++        [self updateLayout];
++    }
++
++    - (void) createChild
++    {
++        NSRect frame = NSMakeRect(0, 0, MAX(1, target.size.width), MAX(1, target.size.height));
++
++        child = [[WineVMR7VideoWindow alloc] initWithContentRect:frame
++                                                       styleMask:NSWindowStyleMaskBorderless
++                                                         backing:NSBackingStoreBuffered
++                                                           defer:NO];
++        [child setReleasedWhenClosed:NO];
++        [child setOpaque:YES];
++        [child setBackgroundColor:[NSColor blackColor]];
++        [child setHasShadow:NO];
++        [child setIgnoresMouseEvents:YES];
++        child.collectionBehavior = (child.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenPrimary)
++                | NSWindowCollectionBehaviorFullScreenAuxiliary
++                | NSWindowCollectionBehaviorIgnoresCycle;
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++        [child setExcludedFromWindowsMenu:YES];
++#pragma clang diagnostic pop
++
++        content = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)];
++        [content setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
++        [content setWantsLayer:YES];
++        [content setLayerContentsRedrawPolicy:NSViewLayerContentsRedrawNever];
++        content.layer.actions = @{ @"contents": [NSNull null], @"bounds": [NSNull null],
++                @"position": [NSNull null], @"frame": [NSNull null] };
++        content.layer.contentsGravity = kCAGravityResize;
++        content.layer.opaque = YES;
++        [child setContentView:content];
++        [content release];   /* child owns it now; content is a weak alias */
++    }
++
++    - (void) updateLayout
++    {
++        /* Ordering or resizing the child can synchronously deliver parent
++         * notifications that call us back; drop the nested update. */
++        if (updatingLayout || !parent) return;
++        updatingLayout = YES;
++        @try
++        {
++            [self performLayout];
++        }
++        @finally
++        {
++            updatingLayout = NO;
++        }
++    }
++
++    - (void) performLayout
++    {
++        NSView* parentView = [parent contentView];
++        CGRect bounds, visible;
++
++        if (!image || !parentView || parent.closing ||
++                ![parent isVisible] || [parent isMiniaturized])
++        {
++            if (ordered) { [child orderOut:nil]; ordered = NO; }
++            return;
++        }
++
++        bounds = NSRectToCGRect([parentView bounds]);
++        visible = CGRectIntersection(target, bounds);
++        if (CGRectIsEmpty(visible) || CGRectIsNull(visible))
++        {
++            if (ordered) { [child orderOut:nil]; ordered = NO; }
++            return;
++        }
++
++        if (!child) [self createChild];
++        if (!child) return;
++
++        /* Crop the frame to the part inside the parent content bounds; the
++         * cropped pixels cover only the still-visible part of the target. */
++        {
++            CGFloat sx = (CGFloat)CGImageGetWidth(image) / target.size.width;
++            CGFloat sy = (CGFloat)CGImageGetHeight(image) / target.size.height;
++            CGRect imageBounds = CGRectMake(0, 0, CGImageGetWidth(image), CGImageGetHeight(image));
++            CGRect crop = CGRectIntersection(imageBounds, CGRectIntegral(CGRectMake(
++                    (CGRectGetMinX(visible) - CGRectGetMinX(target)) * sx,
++                    (CGRectGetMinY(visible) - CGRectGetMinY(target)) * sy,
++                    CGRectGetWidth(visible) * sx, CGRectGetHeight(visible) * sy)));
++            CGImageRef cropped = CGRectEqualToRect(crop, imageBounds) ? NULL
++                    : CGImageCreateWithImageInRect(image, crop);
++            NSRect winRect, screenRect;
++
++            content.layer.contentsScale = [child backingScaleFactor];
++            content.layer.contents = (id)(cropped ? cropped : image);
++            if (cropped) CGImageRelease(cropped);
++
++            /* The parent content view is flipped; go through window/screen
++             * coordinates rather than flipping Y by hand. */
++            winRect = [parentView convertRect:NSRectFromCGRect(visible) toView:nil];
++            screenRect = [parent convertRectToScreen:winRect];
++            if ([child level] != [parent level])
++                [child setLevel:[parent level]];
++            if (!NSEqualRects(screenRect, appliedFrame))
++                [child setFrame:screenRect display:NO];
++            appliedFrame = screenRect;
++        }
++
++        /* Order above this parent (and its in-front GL/Metal content) when
++         * first attaching or reappearing, not on every frame. */
++        if (!ordered)
++        {
++            if ([child parentWindow] != parent)
++                [parent addChildWindow:child ordered:NSWindowAbove];
++            else
++                [child orderWindow:NSWindowAbove relativeTo:[parent windowNumber]];
++            ordered = YES;
++        }
++    }
++
++@end
++
++
++@implementation WineWindow (WineVMR7VideoSurfaces)
++
++    - (BOOL) wine_presentVideoWithToken:(uint64_t)token image:(CGImageRef)image target:(CGRect)rect
++    {
++        NSNumber* key = [NSNumber numberWithUnsignedLongLong:token];
++        WineVMR7VideoSurface* surface;
++
++        if (!image || CGRectIsEmpty(rect)) return NO;
++        if (!videoSurfaces)
++            videoSurfaces = [[NSMutableDictionary alloc] init];
++        if (!(surface = [videoSurfaces objectForKey:key]) && self.closing) return NO;
++        if (!surface)
++        {
++            surface = [[WineVMR7VideoSurface alloc] initWithParent:self token:token];
++            if (!surface) return NO;
++            [videoSurfaces setObject:surface forKey:key];
++            [surface release];
++            NSLog(@"Wine VMR7 native video surface: token %llu, image %zux%zu, target %@",
++                    (unsigned long long)token, CGImageGetWidth(image), CGImageGetHeight(image),
++                    NSStringFromRect(NSRectFromCGRect(rect)));
++        }
++        [surface setImage:image target:rect];
++        return YES;
++    }
++
++    - (void) wine_clearVideoWithToken:(uint64_t)token
++    {
++        WineVMR7VideoSurface* surface;
++
++        if (!videoSurfaces) return;
++        /* The dictionary owns the surface: keep it alive across removal so
++         * the entry is gone before detach runs. */
++        if ((surface = [[videoSurfaces objectForKey:[NSNumber numberWithUnsignedLongLong:token]] retain]))
++        {
++            NSLog(@"Wine VMR7 native video surface released: token %llu",
++                    (unsigned long long)token);
++            [videoSurfaces removeObjectForKey:[NSNumber numberWithUnsignedLongLong:token]];
++            [surface detach];
++            [surface release];
++        }
++    }
++
++    - (void) wine_updateVideoSurfaces
++    {
++        NSArray* surfaces;
++
++        if (!videoSurfaces || !videoSurfaces.count) return;
++        surfaces = [videoSurfaces allValues];
++        for (WineVMR7VideoSurface* surface in surfaces)
++            [surface updateLayout];
++    }
++
++    - (void) wine_clearVideoSurfaces
++    {
++        NSArray* surfaces;
++
++        if (!videoSurfaces) return;
++        surfaces = [videoSurfaces allValues];
++        [videoSurfaces removeAllObjects];
++        for (WineVMR7VideoSurface* surface in surfaces)
++            [surface detach];
++    }
++
++@end
++
++
++/* Display a video frame for a presenter token inside the given rect
++ * (top-down Wine coordinates relative to the window's content area).
++ * Runs synchronously on the main thread. */
++bool macdrv_window_present_video(macdrv_window w, uint64_t token, CGImageRef image, CGRect rect)
++{
++    __block BOOL presented = FALSE;
++
++    OnMainThread(^{
++        @autoreleasepool
++        {
++            WineWindow* window = (WineWindow*)w;
++            if ([window isKindOfClass:[WineWindow class]])
++                presented = [window wine_presentVideoWithToken:token image:image
++                        target:cgrect_mac_from_win(rect)];
++        }
++    });
++    return presented;
++}
++
++/* Remove the native video surface for the given presenter token, if any. */
++void macdrv_window_clear_video(macdrv_window w, uint64_t token)
++{
++    OnMainThread(^{
++        @autoreleasepool
++        {
++            WineWindow* window = (WineWindow*)w;
++            if ([window isKindOfClass:[WineWindow class]])
++                [window wine_clearVideoWithToken:token];
++        }
++    });
++}
++
++#endif  /* __WINE_MACDRV_COCOA_VMR7_H */

@@ -129,6 +129,27 @@ IDL 生成的 `IWMPPlayer2` 接口、播放器属性与状态、暂停和关闭�
 macOS 内嵌播放优先使用 VMR9 独立视频表面；其他驱动沿用 DirectShow 默认选择。
 补丁按宿主模式和驱动选择行为，可用于采用相同 WMP 接口的应用。
 
+`patches/crossover/winedmo-seek-read-flushing.patch` 记录解复用线程 ID，
+并仅在读取回调运行于解复用线程时让 Flush 期间的读取返回零字节数据；
+关闭读取器/解复用器时仍无条件中止读取，seek/工作线程的正常读取不受影响。
+
+`patches/crossover/quartz-vmr7-native-presentation.patch` 为 macOS 的
+VMR7 呈现增加私有 ExtEscape：presenter 将 32bpp BGRX 帧按行复制后经
+winemac.drv 转为 CGImage，放入按 presenter 生存期管理、无边框且不抢焦
+的子 NSWindow，绘制在本窗口前置 OpenGL/Metal 表面之上；任一步骤失败
+均回退原 GDI StretchBlt 路径。native VMR7 路径本身不要求 3D 渲染器；
+对于需要 3D 的应用，请保留正常 3D 渲染器，不要以 `renderer=gdi` 作为
+视频兼容回退；该选项会禁用所需的 3D 功能。用户实机测试已确认视频播放
+恢复正常；全屏、缩放、遮挡及其他应用场景尚未逐一验证。
+
+以下测试均为无 Wine/GUI 的独立 headless 断言：
+
+```sh
+python3 tools/tests/test_vmr7_native_video.py
+python3 tools/tests/test_vmr7_native_lifecycle.py
+python3 tools/tests/test_winedmo_seek_flushing.py
+```
+
 `full` 和 `media` 构建均包含 `wmp.dll`。通过以下探针检查接口、ATL 内嵌窗口和
 静音播放；视频参数由调用者提供，建议使用超过 5 秒的文件：
 
