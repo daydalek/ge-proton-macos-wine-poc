@@ -34,6 +34,7 @@ patches/wine-ge/macos-gdi-upscalers.patch
 patches/wine-ge/macos-wined3d-temporal.patch
 patches/wine-ge/macos-gdi-metal-presentation-exclusion.patch
 patches/crossover/mfreadwrite-d3d11-allocator-attributes.patch
+patches/crossover/mfreadwrite-preserve-nonzero-seek.patch
 patches/crossover/winedmo-decoder-output-allocator-attributes.patch
 patches/crossover/win32u-vulkan-wow64-mach-vm-remap.patch
 patches/crossover/winedmo-seek-read-flushing.patch

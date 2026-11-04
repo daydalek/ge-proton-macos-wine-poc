@@ -1,0 +1,40 @@
+Subject: mfreadwrite: preserve timestamps after nonzero seeks
+License: LGPL-2.1-or-later
+Modification date: 2026-11-04
+
+A nonzero absolute seek starts a new segment on the original media timeline.
+Keep that timeline when the first sample arrives, while retaining startup
+rebasing for initial playback and discontinuity handling for subsequent frames.
+
+diff --git a/dlls/mfreadwrite/reader.c b/dlls/mfreadwrite/reader.c
+index d0539d8..e014b9a 100644
+--- a/dlls/mfreadwrite/reader.c
++++ b/dlls/mfreadwrite/reader.c
+@@ -192,6 +192,7 @@ struct source_reader
+     DWORD stream_count;
+     unsigned int flags;
+     BOOL unthrottled_audio_output;
++    BOOL preserve_seek_timestamps;
+     unsigned int seek_serial;
+     unsigned int completed_seek_serial;
+     DWORD queue;
+@@ -616,7 +617,8 @@ static HRESULT source_reader_queue_sample(struct source_reader *reader, struct m
+ 
+     if (stream->is_new_stream)
+     {
+-        if (!(reader->flags & SOURCE_READER_PRESERVE_SOURCE_TIMESTAMPS) && timestamp > startup_threshold)
++        if (!(reader->flags & SOURCE_READER_PRESERVE_SOURCE_TIMESTAMPS)
++                && !reader->preserve_seek_timestamps && timestamp > startup_threshold)
+         {
+             stream->timestamp_adjust = -timestamp;
+             source_reader_adjust_queued_stream_timestamps(reader, stream, stream->timestamp_adjust);
+@@ -3432,6 +3434,9 @@ static HRESULT WINAPI src_reader_SetCurrentPosition(IMFSourceReaderEx *iface, RE
+         }
+     }
+ 
++    if (SUCCEEDED(hr))
++        reader->preserve_seek_timestamps = position->vt == VT_I8 && position->hVal.QuadPart != 0;
++
+     LeaveCriticalSection(&reader->cs);
+ 
+     return hr;
