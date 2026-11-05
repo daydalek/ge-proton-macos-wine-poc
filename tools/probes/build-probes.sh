@@ -56,3 +56,6 @@ for target in i686 x86_64; do
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode "$kit/dwarf-divisor-probe.c" -o "$kit/dwarf-divisor-probe-$bits.exe" -ldbghelp
     "$toolchain/$target-w64-mingw32-clang" -shared -nostdlib -Wl,--entry,fixture "$kit/dwarf-divisor-fixture.S" -o "$kit/dwarf-divisor-fixture-$bits.dll"
 done
+"$toolchain/x86_64-w64-mingw32-clang" -Wall -Wextra -Werror -O2 -municode \
+  "$kit/mf-video-frame-probe.c" -o "$kit/mf-video-frame-probe-x64.exe" \
+  -lmfreadwrite -lmfplat -lmfuuid -lole32 -luuid -ld3d11 -ldxguid
