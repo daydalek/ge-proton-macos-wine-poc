@@ -1,0 +1,6 @@
+LIBRARY d3d11
+EXPORTS
+ D3D11CreateDevice
+ D3D11CreateDeviceAndSwapChain
+ D3D11CoreCreateDevice=d3d11_original.D3D11CoreCreateDevice
+ D3D11On12CreateDevice=d3d11_original.D3D11On12CreateDevice
