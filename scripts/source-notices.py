@@ -48,7 +48,8 @@ for name in sorted(paths):
     if marker not in text:
         if file.suffix in ('.c', '.h', '.m', '.mm', '.idl', '.rc'):
             prefix = '/* ' + notice + ' */\n'
-            if text.split('\n', 1)[0].find('SPDX-License-Identifier:') >= 0:
+            first = text.split('\n', 1)[0]
+            if first.find('SPDX-License-Identifier:') >= 0 and '*/' in first:
                 first, remaining = text.split('\n', 1)
                 text = first + '\n' + prefix + remaining
             else:

@@ -2763,6 +2763,15 @@
     },
     {
       "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
+      "source_file": "include/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "aea9adf6ff8b65b256f44bfeb1c16ea0112dcd9a2bc44b22d4270c14a9217f35",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/quartz-vmr7-native-presentation.patch",
       "source_file": "include/wine/macdrv_video.h",
       "license": "LGPL-2.1-or-later",
       "evidence": "file header",
@@ -2783,7 +2792,7 @@
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 245,
+    "LGPL-2.1-or-later": 246,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2832,7 +2841,7 @@
     "patches/wine-ge/macos-gdi-metal-presentation-exclusion.patch": "9afafd2f211dd1fbd7a396d32e9a10a4bef5f8acf0bc401714133309e07eeede",
     "patches/wine-ge/macos-wined3d-temporal.patch": "2e11b96aa99c4a9508082a84410e5acf552d90483e7551f6e4c8b27fc3dc931e",
     "patches/crossover/winedmo-seek-read-flushing.patch": "7c4ea59c7510e97bf07b1e0e4cf99c82b91ccff80b517e0d28310802c064655d",
-    "patches/crossover/quartz-vmr7-native-presentation.patch": "c86265965642be30a05619e7d1ff34b534c26ed16dc63c5877327ad3f3e39112",
+    "patches/crossover/quartz-vmr7-native-presentation.patch": "48874edb03407b19af73c3b1b4490479cd87e5c7f90ca4f7fedd26ae03e0e9b5",
     "patches/crossover/mfreadwrite-preserve-nonzero-seek.patch": "6bbc19c3e1d82f5057462e04b857695556becc5d1627f0c2b1f1cd996430107c"
   }
 }

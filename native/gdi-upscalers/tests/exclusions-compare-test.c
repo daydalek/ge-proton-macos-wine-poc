@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
+#define _DEFAULT_SOURCE
 #include "../include/wine_gdi_exclusions.h"
 #include <assert.h>
 #include <stdio.h>

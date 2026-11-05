@@ -9,6 +9,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#ifdef __APPLE__
+#define WGDI_STAT_MTIME(s) ((s).st_mtimespec)
+#define WGDI_STAT_CTIME(s) ((s).st_ctimespec)
+#else
+#define WGDI_STAT_MTIME(s) ((s).st_mtim)
+#define WGDI_STAT_CTIME(s) ((s).st_ctim)
+#endif
+
 #define WGDI_EXCLUSION_LIMIT 16
 struct wgdi_exclusion { unsigned x, y, width, height; };
 struct wgdi_exclusions { unsigned count, relative; struct wgdi_exclusion rects[WGDI_EXCLUSION_LIMIT]; };
@@ -87,10 +95,10 @@ static inline int wgdi_load_exclusions(struct wgdi_exclusions *mask, unsigned wi
             pthread_mutex_lock(&cache_lock);
             if (cached && !strcmp(cache_path, path) && cache_dev == info.st_dev &&
                 cache_ino == info.st_ino && cache_size == info.st_size &&
-                cache_mtime.tv_sec == info.st_mtimespec.tv_sec &&
-                cache_mtime.tv_nsec == info.st_mtimespec.tv_nsec &&
-                cache_ctime.tv_sec == info.st_ctimespec.tv_sec &&
-                cache_ctime.tv_nsec == info.st_ctimespec.tv_nsec)
+                cache_mtime.tv_sec == WGDI_STAT_MTIME(info).tv_sec &&
+                cache_mtime.tv_nsec == WGDI_STAT_MTIME(info).tv_nsec &&
+                cache_ctime.tv_sec == WGDI_STAT_CTIME(info).tv_sec &&
+                cache_ctime.tv_nsec == WGDI_STAT_CTIME(info).tv_nsec)
             {
                 *mask = cache_raw;
                 valid = cache_valid;
@@ -121,7 +129,7 @@ static inline int wgdi_load_exclusions(struct wgdi_exclusions *mask, unsigned wi
                         cache_path = copy;
                         cache_dev = opened_info.st_dev; cache_ino = opened_info.st_ino;
                         cache_size = opened_info.st_size;
-                        cache_mtime = opened_info.st_mtimespec; cache_ctime = opened_info.st_ctimespec;
+                        cache_mtime = WGDI_STAT_MTIME(opened_info); cache_ctime = WGDI_STAT_CTIME(opened_info);
                         cache_raw = raw; cache_valid = valid; cached = 1;
                         pthread_mutex_unlock(&cache_lock);
                     }
