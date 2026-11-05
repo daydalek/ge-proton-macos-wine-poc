@@ -40,6 +40,17 @@ points at a build output tree (default `$POC_WORK/d3d11-video-shim`),
 `--dll` at a specific shim file, and `--original` supplies a `d3d11.dll`
 to wrap when the target directory has none.
 
+## Shipped DXVK payload
+
+`scripts/ci/assemble-libraries.py` and `scripts/whisky/install-runtime.py`
+weave the shim into the DXVK payload at packaging/install time via
+`poc_common.weave_d3d11_video_shim`: each arch's `d3d11.dll` becomes the
+shim and the payload's own DLL is kept as `d3d11_original.dll`.  Whisky
+copies every `.dll` in `Libraries/DXVK/<arch>` into `system32`/`syswow64`
+on each DXVK-enabled launch, so bottles pick the shim up automatically;
+the per-app install above is only needed to wrap a different d3d11.dll
+placed next to a specific executable.
+
 ## Environment
 
 | Variable | Effect |

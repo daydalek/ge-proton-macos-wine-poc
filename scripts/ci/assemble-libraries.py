@@ -14,7 +14,8 @@ import sys
 import tarfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
-from poc_common import DXVK_VERSION, WORK, resolve_pinned_dxvk
+from poc_common import (DXVK_VERSION, WORK, build_d3d11_video_shim,
+                        resolve_pinned_dxvk, weave_d3d11_video_shim)
 from wined3d_builtins import preserve_wined3d_builtins
 
 
@@ -72,6 +73,9 @@ def main():
     wine64.symlink_to('wine')
     print('Copying pinned DXVK payload', flush=True)
     shutil.copytree(dxvk, lib / 'DXVK', symlinks=True)
+    print('Weaving d3d11 video shim into DXVK payload', flush=True)
+    shim_root = build_d3d11_video_shim(work=WORK, poc=poc)
+    woven_arches = weave_d3d11_video_shim(lib / 'DXVK', shim_root)
     notices = lib / 'GE-Media'
     notices.mkdir()
     shadow_notices = stage / 'deps-x64/share/whisky'
@@ -87,6 +91,7 @@ def main():
                  'vulkan-generation-lock.json', 'crossover-source-lock.json', 'crossover-patch-series.txt', 'build.env'):
         shutil.copy2(poc / 'configs' / name, notices / 'configs' / name)
     shutil.copy2(poc / 'native/gdi-upscalers/dependencies.json', notices / 'configs/gdi-upscalers-dependencies.json')
+    shutil.copytree(poc / 'native/d3d11-video-shim', notices / 'd3d11-video-shim')
     gdi_manifest = wine_stage / '.gdi-upscalers-build.json'
     if gdi_manifest.is_file():
         shutil.copy2(gdi_manifest, notices / 'gdi-upscalers-build.json')
@@ -150,7 +155,8 @@ def main():
                 'core': args.core, 'poc_commit': run('git', '-C', str(poc), 'rev-parse', 'HEAD').strip(),
                 'poc_dirty': bool(run('git', '-C', str(poc), 'status', '--porcelain').strip()),
                 'minimum_macos': '.'.join(map(str, minimum)), 'architecture': 'x86_64 / Rosetta 2',
-                'graphics': ['DXVK', 'wined3d'], 'target_device_acceptance': 'pending', 'mach_o': audit}
+                'graphics': ['DXVK', 'wined3d'], 'd3d11_video_shim': woven_arches,
+                'target_device_acceptance': 'pending', 'mach_o': audit}
     (notices / 'runtime-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(f'Checked and signed {len(audit)} Mach-O files; macOS >= {manifest["minimum_macos"]}', flush=True)
     archive = out / 'Libraries.tar.gz'

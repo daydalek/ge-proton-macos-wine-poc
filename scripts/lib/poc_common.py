@@ -241,3 +241,45 @@ def resolve_pinned_dxvk(work=WORK, archive=None):
             if not (dxvk / arch / name).is_file():
                 raise ValueError(f'incomplete DXVK payload: {dxvk / arch / name}')
     return dxvk
+
+
+# The d3d11 video-device shim repairs Unity-style Media Foundation playback on
+# DXVK (no VK_KHR_external_memory_win32): woven into the shipped DXVK payload it
+# reaches every bottle, because Whisky's enableDXVK copies all payload DLLs into
+# the prefix on each DXVK-enabled launch.
+D3D11_SHIM_MARKER = b'd3d11_original'
+D3D11_SHIM_ARCHES = ('x64', 'x32')
+
+
+def build_d3d11_video_shim(work=WORK, poc=PROJECT):
+    """Build the d3d11 video shim for both architectures; returns the output dir."""
+    out = Path(work) / 'd3d11-video-shim'
+    subprocess.run(['bash', str(Path(poc) / 'native/d3d11-video-shim/build.sh'), str(out)],
+                   check=True, cwd=poc)
+    return out
+
+
+def weave_d3d11_video_shim(dxvk_dir, shim_root):
+    """Install the shim as each arch's ``d3d11.dll``, wrapping the payload's own
+    DLL renamed to ``d3d11_original.dll``. Idempotent: refreshes the shim on an
+    already-woven payload. Returns the list of woven arch directories."""
+    dxvk_dir = Path(dxvk_dir)
+    woven = []
+    for arch in D3D11_SHIM_ARCHES:
+        target = dxvk_dir / arch / 'd3d11.dll'
+        original = dxvk_dir / arch / 'd3d11_original.dll'
+        shim = Path(shim_root) / arch / 'd3d11.dll'
+        if not target.is_file():
+            continue
+        if not shim.is_file():
+            raise ValueError(f'missing shim binary: {shim} (run native/d3d11-video-shim/build.sh)')
+        if D3D11_SHIM_MARKER not in shim.read_bytes():
+            raise ValueError(f'{shim} is not a d3d11 video shim')
+        if D3D11_SHIM_MARKER in target.read_bytes():
+            if not original.is_file():
+                raise ValueError(f'{target} is already a shim but {original} is missing')
+        elif not original.is_file():
+            target.rename(original)
+        shutil.copy2(shim, target)
+        woven.append(arch)
+    return woven
