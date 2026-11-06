@@ -1,0 +1,39 @@
+Subject: winedmo: announce H.264 coded output size to the reader
+License: LGPL-2.1-or-later
+Modification date: 2026-11-07
+
+H.264 streams are commonly coded at a macroblock-aligned size larger than
+the visible frame (e.g. 1920x1088 storage for 1920x1080 content). The decoder
+output type only carries the negotiated visible size, so when the real output
+differs, signal a one-shot format change carrying the coded-size type (with
+the visible apertures). Without this, the downstream converter converts only
+the visible aperture and misplaces the chroma planes, painting the leading
+padding rows bright green.
+
+diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
+index 0d6c14f..1ab0342 100644
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -1401,6 +1474,22 @@ NTSTATUS transform_get_output( void *arg )
+                 return STATUS_SUCCESS;
+             }
+         }
++
++        /* Decoders may output the coded size (e.g. 1088 for 1080 H.264) while
++         * the negotiated output type only carries the visible size. Signal a
++         * format change once so the caller picks up the coded-size type with
++         * the visible apertures; out_width/out_height track what was announced
++         * to avoid signalling repeatedly. */
++        if (!t->is_raw_video && t->out_width > 0 && t->out_height > 0
++                && should_use_coded_video_output_size( t, width, height )
++                && (t->out_width != t->avctx->coded_width || t->out_height != t->avctx->coded_height))
++        {
++            t->out_width = t->avctx->coded_width;
++            t->out_height = t->avctx->coded_height;
++            params->flags |= WINEDMO_SAMPLE_FLAG_FORMAT_CHANGED;
++            params->size   = 0;
++            return STATUS_SUCCESS; /* frame_pending stays true */
++        }
+     }
+ 
+     /* ---- Output the frame ---- */

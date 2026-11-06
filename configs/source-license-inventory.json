@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-04",
+  "date": "2026-11-07",
   "scope": "Every file referenced by distributed patches. Component archives retain their own LICENSE/COPYING/AUTHORS.",
   "files": [
     {
@@ -2789,10 +2789,65 @@
       "copyright_notices": [
         "Copyright 2014 Austin English"
       ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-coded-size-notify.patch",
+      "source_file": "dlls/winedmo/unix_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "3d63e2c111320aa95a12cd74006adb5d6dcaa51b30248d33fad485aa44d8cd0e",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-threaded-video-convert.patch",
+      "source_file": "dlls/winedmo/unix_transform.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "3d63e2c111320aa95a12cd74006adb5d6dcaa51b30248d33fad485aa44d8cd0e",
+      "copyright_notices": [
+        "Copyright 2024 GloriousEggroll",
+        "Copyright 2022 Rémi Bernon for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/mfreadwrite-downstream-format-propagation.patch",
+      "source_file": "dlls/mfreadwrite/reader.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 prepared source after preserve-nonzero-seek patch",
+      "source_sha256": "26495295ccf5540fab79063d3b8101c2a300efe654825d2d14cab5eeb94107f5",
+      "copyright_notices": [
+        "Copyright 2014 Austin English"
+      ]
+    },
+    {
+      "patch": "patches/crossover/mf-file-scheme-url-to-path.patch",
+      "source_file": "dlls/mf/Makefile.in",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "Wine root LICENSE; build metadata/registration declarations",
+      "source_origin": "prepared source",
+      "source_sha256": "3fa6dd51802592f326d9c8a61773a9c46d1c2ffb2423069022183f1909175c44",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/mf-file-scheme-url-to-path.patch",
+      "source_file": "dlls/mf/scheme_handler.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "3da956f4f2f0e1bcc79ae4a967a0e489e3d52285ab9d86a4f06e8cdf109b744d",
+      "copyright_notices": [
+        "Copyright 2022 Nikolay Sivov for CodeWeavers"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 246,
+    "LGPL-2.1-or-later": 251,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2842,6 +2897,10 @@
     "patches/wine-ge/macos-wined3d-temporal.patch": "2e11b96aa99c4a9508082a84410e5acf552d90483e7551f6e4c8b27fc3dc931e",
     "patches/crossover/winedmo-seek-read-flushing.patch": "7c4ea59c7510e97bf07b1e0e4cf99c82b91ccff80b517e0d28310802c064655d",
     "patches/crossover/quartz-vmr7-native-presentation.patch": "48874edb03407b19af73c3b1b4490479cd87e5c7f90ca4f7fedd26ae03e0e9b5",
-    "patches/crossover/mfreadwrite-preserve-nonzero-seek.patch": "6bbc19c3e1d82f5057462e04b857695556becc5d1627f0c2b1f1cd996430107c"
+    "patches/crossover/mfreadwrite-preserve-nonzero-seek.patch": "6bbc19c3e1d82f5057462e04b857695556becc5d1627f0c2b1f1cd996430107c",
+    "patches/crossover/winedmo-coded-size-notify.patch": "d8d35fe3cf844d545491393543c300716a6a3188c024c021c8f439cd20cd3bf3",
+    "patches/crossover/winedmo-threaded-video-convert.patch": "cdc70cd92ddd6aeb2c432c4d37564ca32a6a828d69352f709b47514287133cd7",
+    "patches/crossover/mfreadwrite-downstream-format-propagation.patch": "6b2868aba005d6dbceb7db2c2721bb04b46046105251e137d0b914ca855c115a",
+    "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1"
   }
 }

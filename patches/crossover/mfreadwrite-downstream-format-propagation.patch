@@ -1,0 +1,86 @@
+Subject: mfreadwrite: propagate transform format changes to the consumer
+License: LGPL-2.1-or-later
+Modification date: 2026-11-07
+
+transform_entry_update_output_type() compared the transform's new output type
+against the previously announced output type, so a coded-size change that the
+decoder adopts verbatim (e.g. 1080 -> 1088 NV12) was silently swallowed and
+the downstream converter kept the stale format. Compare against the media type
+the downstream consumer actually uses - the next transform's input type, or
+the stream's current type at the end of the chain - and only raise
+CURRENTMEDIATYPECHANGED when the consumer-visible format data really differs.
+This propagates real changes once without re-signalling on every seek.
+
+diff --git a/dlls/mfreadwrite/reader.c b/dlls/mfreadwrite/reader.c
+index d0539d8..b9aed3f 100644
+--- a/dlls/mfreadwrite/reader.c
++++ b/dlls/mfreadwrite/reader.c
+@@ -1256,7 +1258,8 @@ static HRESULT set_matching_transform_output_type(IMFTransform *transform, IMFMe
+ }
+ 
+ /* update the transform output type while keeping subtype which matches the old output type */
+-static HRESULT transform_entry_update_output_type(struct transform_entry *entry, IMFMediaType *old_output_type)
++static HRESULT transform_entry_update_output_type(struct transform_entry *entry, IMFMediaType *old_output_type,
++        IMFMediaType *downstream_type)
+ {
+     IMFMediaType *new_output_type = NULL;
+     DWORD flags = 0;
+@@ -1267,14 +1270,16 @@ static HRESULT transform_entry_update_output_type(struct transform_entry *entry,
+     transform_entry_release_allocator(entry);
+ 
+     /* Only signal a format change to the consumer if the output format data actually
+-     * differs from what it was before. This avoids spurious CURRENTMEDIATYPECHANGED
+-     * notifications when the decoder normalizes its output (e.g. mono→stereo, upsample)
+-     * and the effective consumer-visible format did not change. */
++     * differs from what the downstream consumer currently uses. This avoids spurious
++     * CURRENTMEDIATYPECHANGED notifications when the decoder normalizes its output
++     * (e.g. mono→stereo, upsample) and the effective consumer-visible format did not
++     * change. */
+     {
+         HRESULT get_hr = IMFTransform_GetOutputCurrentType(entry->transform, 0, &new_output_type);
+-        HRESULT eq_hr = new_output_type ? IMFMediaType_IsEqual(old_output_type, new_output_type, &flags) : E_FAIL;
++        HRESULT eq_hr = (new_output_type && downstream_type)
++                ? IMFMediaType_IsEqual(downstream_type, new_output_type, &flags) : E_FAIL;
+ 
+-        if (FAILED(get_hr) || FAILED(eq_hr) || !(flags & MF_MEDIATYPE_EQUAL_FORMAT_DATA))
++        if (!downstream_type || FAILED(get_hr) || FAILED(eq_hr) || !(flags & MF_MEDIATYPE_EQUAL_FORMAT_DATA))
+             entry->pending_flags |= MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED;
+     }
+ 
+@@ -1295,9 +1300,10 @@ static HRESULT transform_entry_update_input_type(struct transform_entry *entry,
+         return hr;
+     transform_entry_release_allocator(entry);
+ 
+-    /* check if transform output type is still valid or if we need to update it as well */
++    /* check if transform output type is still valid or if we need to update it as well;
++     * the downstream of this entry is not known here, so the flag is always set */
+     if (FAILED(hr = IMFTransform_GetOutputCurrentType(entry->transform, 0, &new_output_type)))
+-        hr = transform_entry_update_output_type(entry, old_output_type);
++        hr = transform_entry_update_output_type(entry, old_output_type, NULL);
+     else
+         IMFMediaType_Release(new_output_type);
+ 
+@@ -1414,7 +1420,22 @@ static HRESULT source_reader_pull_transform_samples(struct source_reader *reader
+ 
+         if (hr == MF_E_TRANSFORM_STREAM_CHANGE && SUCCEEDED(hr = IMFTransform_GetOutputCurrentType(entry->transform, 0, &media_type)))
+         {
+-            hr = transform_entry_update_output_type(entry, media_type);
++            IMFMediaType *downstream_type = NULL;
++
++            /* Compare the new output type with what the downstream consumer
++             * currently uses, so changes that only re-announce the effective
++             * format (e.g. a coded 1920x1088 NV12 size) are propagated once and
++             * not re-signalled. */
++            if (next && FAILED(IMFTransform_GetInputCurrentType(next->transform, 0, &downstream_type)))
++                downstream_type = NULL;
++            if (!next && stream->current)
++            {
++                downstream_type = stream->current;
++                IMFMediaType_AddRef(downstream_type);
++            }
++            hr = transform_entry_update_output_type(entry, media_type, downstream_type);
++            if (downstream_type)
++                IMFMediaType_Release(downstream_type);
+             IMFMediaType_Release(media_type);
+ 
+             if (SUCCEEDED(hr))

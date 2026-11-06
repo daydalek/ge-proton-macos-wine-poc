@@ -1,0 +1,51 @@
+Subject: mf: convert file URLs to paths in the file scheme handler
+License: LGPL-2.1-or-later
+Modification date: 2026-11-07
+
+The resolver normalises bare paths to file: URLs (e.g. file:C:\\a.mp4), but
+file_stream_create() only stripped a literal "file://" prefix, so the URL
+string itself was passed to MFCreateFile() and every file open failed. Follow
+upstream Wine and resolve the URL to a local path with PathCreateFromUrlW()
+before opening it; link shlwapi for it.
+
+diff --git a/dlls/mf/Makefile.in b/dlls/mf/Makefile.in
+index d9f0123..927ff74 100644
+--- a/dlls/mf/Makefile.in
++++ b/dlls/mf/Makefile.in
+@@ -1,6 +1,6 @@
+ MODULE    = mf.dll
+ IMPORTLIB = mf
+-IMPORTS   = advapi32 mfplat ole32 uuid mfuuid strmiids
++IMPORTS   = advapi32 mfplat ole32 shlwapi uuid mfuuid strmiids
+ DELAYIMPORTS = evr urlmon user32
+ 
+ EXTRADLLFLAGS = -Wb,--prefer-native
+diff --git a/dlls/mf/scheme_handler.c b/dlls/mf/scheme_handler.c
+index 7e92748..d049060 100644
+--- a/dlls/mf/scheme_handler.c
++++ b/dlls/mf/scheme_handler.c
+@@ -23,6 +23,8 @@
+ #include "windef.h"
+ #include "winbase.h"
+ 
++#include "shlwapi.h"
++
+ #include "evr.h"
+ #include "mfidl.h"
+ #include "mf_private.h"
+@@ -454,8 +456,13 @@ static const IMFAsyncCallbackVtbl scheme_handler_callback_vtbl =
+ 
+ static HRESULT file_stream_create(const WCHAR *url, DWORD flags, IMFByteStream **out)
+ {
+-    if (!wcsnicmp(url, L"file://", 7))
+-        url += 7;
++    WCHAR path[MAX_PATH];
++    DWORD len;
++
++    len = ARRAY_SIZE(path);
++    if (SUCCEEDED(PathCreateFromUrlW(url, path, &len, 0)))
++        url = path;
++
+     return MFCreateFile(flags & MF_RESOLUTION_WRITE ? MF_ACCESSMODE_READWRITE : MF_ACCESSMODE_READ,
+             MF_OPENMODE_FAIL_IF_NOT_EXIST, MF_FILEFLAGS_NONE, url, out);
+ }

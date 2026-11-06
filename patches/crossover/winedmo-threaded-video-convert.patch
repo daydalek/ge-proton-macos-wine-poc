@@ -1,0 +1,146 @@
+Subject: winedmo: multithread H.264 decode and swscale conversion
+License: LGPL-2.1-or-later
+Modification date: 2026-11-07
+
+1080p60 video decode plus NV12 to RGB conversion exceeded the 16.7 ms frame
+budget on a single thread (22-24 ms/frame), causing severe stutter. Enable
+frame+slice threading for the H.264 decoder, and run the pixel format
+conversion through sws_scale_frame() with a threaded, parameter-cached
+SwsContext (up to 8 threads). The destination buffers are caller-owned, so
+wrap them with a no-op free callback instead of letting av_buffer_unref()
+release them; source frames on the raw-video path lack refcounted buffers,
+so fill the wrapper frame manually rather than using av_frame_ref().
+
+diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
+index 0d6c14f..1ab0342 100644
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -32,7 +32,9 @@
+ 
+ #include <stdbool.h>
+ #include <inttypes.h>
++#include <unistd.h>
+ #include <libavutil/imgutils.h>
++#include <libavutil/opt.h>
+ #include <libavutil/samplefmt.h>
+ #include <libswscale/swscale.h>
+ #include <libswresample/swresample.h>
+@@ -85,6 +87,8 @@ struct unix_transform
+ 
+     /* Video output conversion */
+     SwsContext         *sws;
++    int                 sws_src_w, sws_src_h, sws_dst_w, sws_dst_h;
++    int                 sws_src_fmt, sws_dst_fmt, sws_flags;
+     enum AVPixelFormat  out_pix_fmt;     /* AV_PIX_FMT_NONE = native */
+     DWORD               out_video_fourcc;
+     enum AVPixelFormat  in_pix_fmt;
+@@ -640,6 +644,10 @@ static int fill_output_image_arrays( struct unix_transform *t, uint8_t *data[4],
+     return ret;
+ }
+ 
++/* dst buffers wrapped for sws_scale_frame() are owned by the caller and must
++ * not be freed when the AVBufferRef is unreferenced. */
++static void noop_buffer_free( void *opaque, uint8_t *data ) {}
++
+ static NTSTATUS copy_video_frame( struct unix_transform *t, const AVFrame *frame,
+                                   BYTE *dst, UINT32 dst_size, int out_width, int out_height )
+ {
+@@ -680,18 +688,78 @@ static NTSTATUS copy_video_frame( struct unix_transform *t, const AVFrame *frame
+         int dst_linesize[4];
+         int sws_flags = (out_width == src_width && out_height == src_height) ? SWS_POINT : SWS_BILINEAR;
+ 
+-        t->sws = sws_getCachedContext( t->sws,
+-                                       src_width, src_height, frame->format,
+-                                       out_width, out_height, out_fmt,
+-                                       sws_flags, NULL, NULL, NULL );
+-        if (!t->sws) return STATUS_UNSUCCESSFUL;
++        if (!t->sws || t->sws_src_w != src_width || t->sws_src_h != src_height
++                || t->sws_dst_w != out_width || t->sws_dst_h != out_height
++                || t->sws_src_fmt != frame->format || t->sws_dst_fmt != out_fmt
++                || t->sws_flags != sws_flags)
++        {
++            long ncpu = sysconf( _SC_NPROCESSORS_ONLN );
++            int threads = ncpu > 0 ? min( (int)ncpu, 8 ) : 1;
++
++            if (t->sws) { sws_freeContext( t->sws ); t->sws = NULL; }
++            if (!(t->sws = sws_alloc_context())) return STATUS_UNSUCCESSFUL;
++            av_opt_set_int( t->sws, "srcw", src_width, 0 );
++            av_opt_set_int( t->sws, "srch", src_height, 0 );
++            av_opt_set_int( t->sws, "src_format", frame->format, 0 );
++            av_opt_set_int( t->sws, "dstw", out_width, 0 );
++            av_opt_set_int( t->sws, "dsth", out_height, 0 );
++            av_opt_set_int( t->sws, "dst_format", out_fmt, 0 );
++            av_opt_set_int( t->sws, "sws_flags", sws_flags, 0 );
++            av_opt_set_int( t->sws, "threads", threads, 0 );
++            if (sws_init_context( t->sws, NULL, NULL ) < 0)
++            {
++                sws_freeContext( t->sws );
++                t->sws = NULL;
++                return STATUS_UNSUCCESSFUL;
++            }
++            t->sws_src_w = src_width;
++            t->sws_src_h = src_height;
++            t->sws_dst_w = out_width;
++            t->sws_dst_h = out_height;
++            t->sws_src_fmt = frame->format;
++            t->sws_dst_fmt = out_fmt;
++            t->sws_flags = sws_flags;
++        }
+ 
+         if (fill_output_image_arrays( t, dst_data, dst_linesize, dst, out_fmt, out_width, out_height ) < 0)
+             return STATUS_UNSUCCESSFUL;
+ 
+-        sws_scale( t->sws,
+-                   (const uint8_t *const *)frame->data, frame->linesize,
+-                   0, src_height, dst_data, dst_linesize );
++        {
++            /* sws_scale_frame() dispatches through the slice thread pool;
++             * legacy sws_scale() always runs on the calling thread. */
++            AVFrame *src_frame = NULL, *dst_frame = NULL;
++            int ret = STATUS_UNSUCCESSFUL;
++
++            if ((src_frame = av_frame_alloc()) && (dst_frame = av_frame_alloc())
++                    && (dst_frame->buf[0] = av_buffer_create( dst, dst_size, noop_buffer_free, NULL, 0 )))
++            {
++                /* The frame may be a stack object without refcounted buffers
++                 * (raw-video path); fill the src frame manually instead of
++                 * av_frame_ref(), which would deep-copy the picture. */
++                memcpy( src_frame->data, frame->data, sizeof(frame->data) );
++                memcpy( src_frame->linesize, frame->linesize, sizeof(frame->linesize) );
++                src_frame->width  = src_width;
++                src_frame->height = src_height;
++                src_frame->format = frame->format;
++                src_frame->color_range     = frame->color_range;
++                src_frame->colorspace      = frame->colorspace;
++                src_frame->color_primaries = frame->color_primaries;
++                src_frame->color_trc       = frame->color_trc;
++                src_frame->chroma_location = frame->chroma_location;
++
++                memcpy( dst_frame->data, dst_data, sizeof(dst_data) );
++                memcpy( dst_frame->linesize, dst_linesize, sizeof(dst_linesize) );
++                dst_frame->width  = out_width;
++                dst_frame->height = out_height;
++                dst_frame->format = out_fmt;
++
++                if (sws_scale_frame( t->sws, dst_frame, src_frame ) >= 0)
++                    ret = STATUS_SUCCESS;
++            }
++            av_frame_free( &src_frame );
++            av_frame_free( &dst_frame );
++            return ret;
++        }
+     }
+     else if (t->out_bottom_up && is_packed_rgb_format( out_fmt ))
+     {
+@@ -900,6 +968,11 @@ NTSTATUS transform_create( void *arg )
+             t->avctx->thread_count = 1;
+             t->avctx->thread_type = 0;
+         }
++        else if (codec_id == AV_CODEC_ID_H264)
++        {
++            t->avctx->thread_count = 0; /* auto */
++            t->avctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
++        }
+     }
+ 
+     /* ---- Set extradata ---- */
