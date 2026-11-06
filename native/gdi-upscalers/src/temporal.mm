@@ -36,6 +36,13 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     id spatialScaler;
     id<MTLTexture> spatialIn, spatialOut;
     NSUInteger spatialInW, spatialInH, spatialOutW, spatialOutH;
+    /* Anime4K fast path (WINE_GDI_ADAPTIVE_FAST=anime4k): fixed 2x CNN output
+     * replaces the MetalFX Spatial result bound at fragment texture 4. */
+    BOOL anime4kFast, a4kFailed;
+    CGSize a4kAttemptIn, a4kAttemptOut;
+    id<MTLComputePipelineState> a4kPS[5];
+    id<MTLTexture> a4kIn, a4kFeatures[2], a4kOut;
+    NSUInteger a4kInW, a4kInH, a4kOutW, a4kOutH;
     struct { id<MTLBuffer> buffer; id<MTLTexture> texture; CGContextRef bitmap;
         unsigned busy; } sourceSlots[3];
     unsigned sourceSlotCount;
@@ -172,12 +179,34 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     displayLayer.colorspace = space; CGColorSpaceRelease(space);
     displayLayer.actions = @{@"contents":NSNull.null, @"bounds":NSNull.null,
         @"position":NSNull.null, @"hidden":NSNull.null};
+    const char *adaptiveFast=getenv("WINE_GDI_ADAPTIVE_FAST");
+    if (adaptive && adaptiveFast && !strcmp(adaptiveFast,"anime4k")) {
+        NSString *a4kPath=[resources stringByAppendingPathComponent:@"anime4k.metallib"];
+        id<MTLLibrary> a4kLibrary=a4kPath ?
+            [device newLibraryWithURL:[NSURL fileURLWithPath:a4kPath] error:&error] : nil;
+        static const char *names[5]={"convolution0","convolution1","convolution2",
+            "convolution3","depth_to_space"};
+        BOOL loaded=a4kLibrary!=nil;
+        for (unsigned i=0;i<5 && loaded;++i) {
+            a4kPS[i]=[self pipeline:[NSString stringWithUTF8String:names[i]] library:a4kLibrary];
+            loaded=a4kPS[i]!=nil;
+        }
+        [a4kLibrary release];
+        if (loaded) {
+            anime4kFast=YES;
+            NSLog(@"Wine temporal: adaptive fast path Anime4K");
+        } else {
+            for (unsigned i=0;i<5;++i) { [a4kPS[i] release]; a4kPS[i]=nil; }
+            NSLog(@"Wine temporal: Anime4K fast path unavailable, using MetalFX Spatial");
+        }
+    }
     return self;
 }
 - (void)clearGeometry
 {
     wgdi_temporal_clear(&schedule);
     [self clearSpatial]; spatialFailed=NO; attemptIn=attemptOut=CGSizeZero;
+    a4kFailed=NO; a4kAttemptIn=a4kAttemptOut=CGSizeZero;
     [self clearPools];
     [referenceTexture release]; referenceTexture = nil;
     [residualTexture release]; residualTexture = nil;
@@ -232,7 +261,15 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     [validPS release]; [indexPS release]; [hashPS release]; [probePS release];
     [applyResidualPS release]; [applyInputPS release]; [fixupPS release];
     [invalidatePS release];
+    for (unsigned i=0;i<5;++i) { [a4kPS[i] release]; a4kPS[i]=nil; }
     [queue release]; [device release]; [super dealloc];
+}
+- (void)clearAnime4k
+{
+    [a4kIn release]; a4kIn=nil;
+    for (unsigned i=0;i<2;++i) { [a4kFeatures[i] release]; a4kFeatures[i]=nil; }
+    [a4kOut release]; a4kOut=nil;
+    a4kInW=a4kInH=a4kOutW=a4kOutH=0;
 }
 - (void)clearSpatial
 {
@@ -240,6 +277,7 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     [spatialIn release]; spatialIn=nil;
     [spatialOut release]; spatialOut=nil;
     spatialInW=spatialInH=spatialOutW=spatialOutH=0;
+    [self clearAnime4k];
 }
 - (void)dropDeferredSurface
 {
@@ -387,17 +425,89 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     }
 }
 #endif
-- (BOOL)ensureSpatial:(id<MTLTexture>)source drawable:(id<CAMetalDrawable>)drawable
+- (BOOL)anime4kBind:(id<MTLTexture>)source drawable:(id<CAMetalDrawable>)drawable
+{
+    (void)source;
+    if (!adaptive || !anime4kFast || !drawable) return NO;
+    const CGSize inSize = CGSizeMake(inputWidth, inputHeight);
+    const CGSize outSize = CGSizeMake(drawable.texture.width, drawable.texture.height);
+    if (outSize.width <= inSize.width || outSize.height <= inSize.height ||
+        outSize.width > 8192 || outSize.height > 8192 ||
+        inSize.width * 2 > 16384 || inSize.height * 2 > 16384) return NO;
+    if (a4kIn && a4kOut &&
+        CGSizeEqualToSize(a4kAttemptIn, inSize) && CGSizeEqualToSize(a4kAttemptOut, outSize)) return YES;
+    if (a4kFailed && CGSizeEqualToSize(a4kAttemptIn, inSize) &&
+        CGSizeEqualToSize(a4kAttemptOut, outSize)) return NO;
+    [self clearAnime4k];
+    a4kAttemptIn = inSize; a4kAttemptOut = outSize; a4kFailed = YES;
+    MTLTextureDescriptor *inDesc = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+        width:inputWidth height:inputHeight mipmapped:NO];
+    inDesc.usage = MTLTextureUsageShaderRead; inDesc.storageMode = MTLStorageModePrivate;
+    a4kIn = [device newTextureWithDescriptor:inDesc];
+    MTLTextureDescriptor *featureDesc = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA32Float
+        width:inputWidth height:inputHeight mipmapped:NO];
+    featureDesc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+    featureDesc.storageMode = MTLStorageModePrivate;
+    for (unsigned i = 0; i < 2; ++i) a4kFeatures[i] = [device newTextureWithDescriptor:featureDesc];
+    MTLTextureDescriptor *outDesc = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+        width:inputWidth * 2 height:inputHeight * 2 mipmapped:NO];
+    outDesc.usage = MTLTextureUsageShaderWrite | MTLTextureUsageShaderRead;
+    outDesc.storageMode = MTLStorageModePrivate;
+    a4kOut = [device newTextureWithDescriptor:outDesc];
+    if (!a4kIn || !a4kFeatures[0] || !a4kFeatures[1] || !a4kOut) { [self clearAnime4k]; return NO; }
+    a4kInW = inputWidth; a4kInH = inputHeight;
+    a4kOutW = inputWidth * 2; a4kOutH = inputHeight * 2;
+    a4kFailed = NO;
+    if (trace) NSLog(@"Wine temporal: Anime4K fast %lux%lu -> %lux%lu",
+        (unsigned long)a4kInW, (unsigned long)a4kInH,
+        (unsigned long)a4kOutW, (unsigned long)a4kOutH);
+    return YES;
+}
+- (void)anime4kEncode:(id<MTLTexture>)source command:(id<MTLCommandBuffer>)command
+{
+    id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
+    [blit copyFromTexture:source sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)
+        sourceSize:MTLSizeMake(inputWidth, inputHeight, 1) toTexture:a4kIn
+        destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];
+    [blit endEncoding];
+    id<MTLTexture> current = a4kIn;
+    for (unsigned i = 0; i < 5; ++i)
+    {
+        id<MTLTexture> destination = i < 4 ? a4kFeatures[i % 2] : a4kOut;
+        id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
+        [encoder setComputePipelineState:a4kPS[i]];
+        [encoder setTexture:current atIndex:0];
+        if (i < 4) [encoder setTexture:destination atIndex:1];
+        else
+        {
+            [encoder setTexture:a4kIn atIndex:1];
+            [encoder setTexture:destination atIndex:2];
+        }
+        [encoder dispatchThreads:MTLSizeMake(destination.width, destination.height, 1)
+            threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+        [encoder endEncoding];
+        current = destination;
+    }
+}
+- (id<MTLTexture>)ensureSpatial:(id<MTLTexture>)source drawable:(id<CAMetalDrawable>)drawable
     command:(id<MTLCommandBuffer>)command
 {
+    if ([self anime4kBind:source drawable:drawable]) {
+        [self anime4kEncode:source command:command];
+        return a4kOut;
+    }
 #if WGDI_TEMPORAL_METALFX
-    if (![self spatialBind:source drawable:drawable]) return NO;
-    [self spatialEncode:source command:command];
-    return YES;
+    if ([self spatialBind:source drawable:drawable]) {
+        [self spatialEncode:source command:command];
+        return spatialOut;
+    }
 #else
     (void)source; (void)drawable; (void)command;
-    return NO;
 #endif
+    return nil;
 }
 - (id<MTLTexture>)texture:(MTLPixelFormat)format width:(NSUInteger)width height:(NSUInteger)height
 {
@@ -932,8 +1042,8 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     [compute setBuffer:referenceTimes offset:0 atIndex:0];
     [compute setBytes:&p length:sizeof(p) atIndex:1];
     [self dispatch:compute width:iw height:ih]; [compute endEncoding];
-    const BOOL useSpatial=[self ensureSpatial:texture drawable:drawable command:command];
-    p.use_spatial = useSpatial ? 1u : 0u;
+    id<MTLTexture> fastTexture=[self ensureSpatial:texture drawable:drawable command:command];
+    p.use_spatial = fastTexture ? 1u : 0u;
     MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];
     pass.colorAttachments[0].texture=drawable.texture;
     pass.colorAttachments[0].loadAction=MTLLoadActionDontCare; pass.colorAttachments[0].storeAction=MTLStoreActionStore;
@@ -941,7 +1051,7 @@ static_assert(sizeof(wgdi_temporal_library_parameters) == 104, "Metal library pa
     [render setRenderPipelineState:renderPS]; [render setFragmentTexture:texture atIndex:0];
     [render setFragmentTexture:residualTexture atIndex:1]; [render setFragmentTexture:weightsTexture atIndex:2];
     [render setFragmentTexture:exclusionWeightTexture atIndex:3];
-    [render setFragmentTexture:useSpatial ? spatialOut : texture atIndex:4];
+    [render setFragmentTexture:fastTexture ? fastTexture : texture atIndex:4];
     [render setFragmentBytes:&p length:sizeof(p) atIndex:0];
     [render drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3]; [render endEncoding];
     uint64_t epoch=schedule.epoch, sequence=++frameSequence;

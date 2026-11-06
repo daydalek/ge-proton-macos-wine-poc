@@ -43,6 +43,7 @@ POC_LLVM_MINGW="$POC_TOOLS/$POC_LLVM_MINGW_DIR"
 POC_SOURCE_ROOT="${POC_SOURCE_ROOT:-$POC_WORK/repro}"
 case "$POC_SOURCE_ROOT" in /*) ;; *) POC_SOURCE_ROOT="$PWD/$POC_SOURCE_ROOT" ;; esac
 POC_CROSSOVER_PORT="$POC_WORK/crossover-port"
+POC_COREML_PYTHON="${POC_COREML_PYTHON:-${WGDI_COREML_PYTHON:-$POC_PROJECT/work/coreml/venv/bin/python}}"
 
 POC_JOBS="${POC_JOBS:-$(/usr/sbin/sysctl -n hw.logicalcpu 2>/dev/null || echo 4)}"
 case "$POC_JOBS" in ''|*[!0-9]*|0) poc_die "POC_JOBS must be a positive integer" ;; esac

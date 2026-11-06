@@ -37,8 +37,10 @@ case "$mode" in
   full)
     make -j"$POC_JOBS" > "$port/build-full.log" 2>&1
     make install > "$port/install.log" 2>&1
+    test -x "$POC_COREML_PYTHON" || poc_die "Core ML Python missing: $POC_COREML_PYTHON (create it with: python3 -m venv work/coreml/venv && work/coreml/venv/bin/pip install -r scripts/requirements-coreml.txt)"
     python3 "$POC_PROJECT/scripts/build-gdi-upscalers.py" --stage "$port/stage" \
-      --work "$port/gdi-upscalers" --jobs "$POC_JOBS" > "$port/build-gdi-upscalers.log" 2>&1
+      --work "$port/gdi-upscalers" --jobs "$POC_JOBS" \
+      --coreml-python "$POC_COREML_PYTHON" > "$port/build-gdi-upscalers.log" 2>&1
     PYTHONPATH="$POC_PROJECT/scripts/lib" python3 - "$port/stage" <<'PY_GRAPHICS'
 import sys
 from wined3d_builtins import preserve_wined3d_builtins
@@ -60,7 +62,9 @@ modules = ['bin/wine', 'bin/wineserver', 'lib/wine/x86_64-unix/win32u.so',
             'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.param',
             'lib/wine/x86_64-unix/gdi-upscalers/models-se/up2x-no-denoise.bin',
             'lib/wine/x86_64-unix/gdi-upscalers/models-animevideov3/realesr-animevideov3-x2.param',
-            'lib/wine/x86_64-unix/gdi-upscalers/models-animevideov3/realesr-animevideov3-x2.bin']
+            'lib/wine/x86_64-unix/gdi-upscalers/models-animevideov3/realesr-animevideov3-x2.bin',
+            'lib/wine/x86_64-unix/gdi-upscalers/winegdi-coreml-helper',
+            'lib/wine/x86_64-unix/gdi-upscalers/coreml/manifest.json']
 record = {'core': 'crossover-ge-media', 'baseline': 'CrossOver ' + lock['cross_over_version'],
           'source_archive_sha256': lock['source_sha256'],
           'source_commit': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),

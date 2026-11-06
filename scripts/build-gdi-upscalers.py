@@ -105,11 +105,20 @@ def main():
     parser.add_argument('--coreml-python', type=Path, default=os.environ.get('WGDI_COREML_PYTHON'),
                         help='Arm64 Python with requirements-coreml.txt; enables optional Core ML bundle')
     parser.add_argument('--coreml-size', action='append', help='Core ML source WxH; repeat to customize sizes')
+    parser.add_argument('--no-coreml', action='store_true',
+                        help='Deliberately build without the Core ML bundle (CPU-only neural refinement)')
     args = parser.parse_args()
     if platform.system() != 'Darwin':
         parser.error('macOS build host required')
     if args.jobs < 1:
         parser.error('--jobs must be positive')
+    if args.coreml_python and args.no_coreml:
+        parser.error('--coreml-python and --no-coreml are mutually exclusive')
+    if not args.coreml_python and not args.no_coreml:
+        parser.error('Core ML models are required for usable neural refinement; '
+                     'provide an arm64 Python with scripts/requirements-coreml.txt installed '
+                     'via --coreml-python or WGDI_COREML_PYTHON, or pass --no-coreml to '
+                     'deliberately build CPU-only')
     # Resolve the optional Xcode Metal toolchain before fetching dependencies.
     subprocess.run(['xcrun', '--sdk', 'macosx', '--find', 'metal'], check=True, stdout=subprocess.DEVNULL)
     work, stage = args.work.resolve(), args.stage.resolve()
@@ -174,6 +183,7 @@ def main():
                      PROJECT / 'scripts/build-realcugan-coreml.py', PROJECT / 'scripts/convert-realcugan-coreml.py',
                      PROJECT / 'scripts/convert-realesrgan-coreml.py', PROJECT / 'scripts/requirements-coreml.txt']
     manifest = {'abi_version': 1, 'architecture': args.arch, 'algorithms': lock['algorithms'],
+                'coreml': bool(coreml_bundle),
                 'temporal_presenter': {'abi': 1, 'block': 16, 'tile': 256, 'quiet_ms': 200, 'fade_ms': 100,
                                        'shader': str((resource_dir / 'temporal.metallib').relative_to(stage))},
                 'dependency_archives': lock['archives'],

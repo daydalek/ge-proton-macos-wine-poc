@@ -192,6 +192,9 @@ static NSUInteger halfDiff(const uint8_t *a, NSUInteger aOff, const uint8_t *b,
 - (id<MTLTexture>)testSpatialOut { return spatialOut; }
 - (BOOL)testSpatialFailed { return spatialFailed; }
 - (void)testForceSpatialFailure { [self clearSpatial]; spatialFailed = YES; }
+- (BOOL)testAnime4kFast { return anime4kFast; }
+- (id<MTLTexture>)testAnime4kOut { return a4kOut; }
+- (BOOL)testAnime4kFailed { return a4kFailed; }
 - (NSUInteger)testSourceSlotCount { return sourceSlotCount; }
 - (NSUInteger)testMetadataSlotCount { return metaSlotCount; }
 - (NSUInteger)testFrameSequence { return frameSequence; }
@@ -1160,6 +1163,49 @@ int main(int argc, char **argv)
             }
             [r cancel]; [r release]; r = nil;
             unsetenv("WINE_GDI_UPSCALER");
+        }
+        {
+            setenv("WINE_GDI_UPSCALER", "adaptive", 1);
+            setenv("WINE_GDI_ADAPTIVE_FAST", "anime4k", 1);
+            base = wine_gdi_temporal_create(WGDI_TEMPORAL_PRESENTER_ABI,
+                resources.fileSystemRepresentation);
+            r = (WGDITemporalRenderer *)base;
+            CHECK(r != nil, "a4k adaptive presenter created");
+            CHECK(r.testAnime4kFast, "a4k pipelines loaded");
+            CHECK(r.testAnime4kOut == nil, "a4k output lazy");
+            TestDriver *da4k = [[[TestDriver alloc] initWithRenderer:r parent:parent
+                width:FW height:FH] autorelease];
+            requestCount = requestToken = 0;
+            [da4k setOutputWidth:FW * 2 height:FH * 2];
+            CHECK([da4k present:(const uint8_t *)background.bytes], "a4k present");
+            ok = waitFor(r, ^{ return r.testFramesInFlight == 0; }, 10.0);
+            CHECK(ok, "a4k frame completed");
+            CHECK(r.testAnime4kOut != nil, "a4k fast path engaged");
+            if (r.testAnime4kOut) {
+                CHECK(r.testAnime4kOut.width == FW * 2 && r.testAnime4kOut.height == FH * 2,
+                      "a4k output is 2x input");
+                id<MTLTexture> out0 = r.testAnime4kOut;
+                CHECK([da4k present:(const uint8_t *)background.bytes], "a4k present2");
+                ok = waitFor(r, ^{ return r.testFramesInFlight == 0; }, 10.0);
+                CHECK(ok && !r.testFailed && !r.testAnime4kFailed &&
+                      r.testAnime4kOut == out0, "a4k same geometry reuses");
+                ((uint8_t *)background.mutableBytes)[0] ^= 1;
+                [da4k setOutputWidth:800 height:600];
+                CHECK([da4k present:(const uint8_t *)background.bytes], "a4k resized present");
+                ok = waitFor(r, ^{ return r.testFramesInFlight == 0; }, 10.0);
+                CHECK(ok && r.testAnime4kOut != nil &&
+                      r.testAnime4kOut.width == FW * 2 && r.testAnime4kOut.height == FH * 2,
+                      "a4k resize keeps 2x output");
+                ((uint8_t *)background.mutableBytes)[0] ^= 1;
+                [da4k setOutputWidth:FW height:FH];
+                CHECK([da4k present:(const uint8_t *)background.bytes], "a4k 1x present");
+                ok = waitFor(r, ^{ return r.testFramesInFlight == 0; }, 10.0);
+                CHECK(ok && !r.testAnime4kFailed && !r.testFailed,
+                      "a4k 1x skips fast path without latching failure");
+            }
+            [r cancel]; [r release]; r = nil;
+            unsetenv("WINE_GDI_UPSCALER");
+            unsetenv("WINE_GDI_ADAPTIVE_FAST");
         }
         {
             setenv("WINE_GDI_UPSCALER", "realcugan", 1);

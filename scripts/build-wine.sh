@@ -53,7 +53,9 @@ cd "$root/build/$variant"
 make -j"$POC_JOBS" > "$root/logs/$variant/build.log" 2>&1
 make install > "$root/logs/$variant/install.log" 2>&1
 if test "$variant" = media; then
+  test -x "$POC_COREML_PYTHON" || poc_die "Core ML Python missing: $POC_COREML_PYTHON (create it with: python3 -m venv work/coreml/venv && work/coreml/venv/bin/pip install -r scripts/requirements-coreml.txt)"
   "$POC_PYTHON" "$POC_PROJECT/scripts/build-gdi-upscalers.py" --stage "$root/stage/$variant" \
-    --work "$root/gdi-upscalers" --jobs "$POC_JOBS" > "$root/logs/$variant/gdi-upscalers.log" 2>&1
+    --work "$root/gdi-upscalers" --jobs "$POC_JOBS" \
+    --coreml-python "$POC_COREML_PYTHON" > "$root/logs/$variant/gdi-upscalers.log" 2>&1
 fi
 echo "Installed: $root/stage/$variant"
