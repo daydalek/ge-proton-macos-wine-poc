@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
+import ast
 import hashlib
 import json
 import importlib.util
+import re
 from pathlib import Path
 import plistlib
 import tarfile
@@ -131,6 +133,15 @@ class LibrariesTests(unittest.TestCase):
             marker.write_text(json.dumps(record))
             with self.assertRaises(ValueError):
                 libraries.validate_compiled_provenance(stage, project)
+
+    def test_crossover_build_records_every_required_module(self):
+        text = (ROOT / 'scripts/crossover/build.sh').read_text()
+        match = re.search(r'modules = (\[[^\]]*\])', text)
+        self.assertIsNotNone(match, 'modules list not found in build.sh PY_BUILD heredoc')
+        modules = ast.literal_eval(match.group(1))
+        missing = sorted(set(libraries.REQUIRED_MODULES) - set(modules))
+        self.assertFalse(missing,
+                         'build.sh provenance omits required modules: ' + ', '.join(missing))
 
     def test_archive_header_contains_anonymous_metadata(self):
         info = tarfile.TarInfo('Libraries/Wine/bin/wine')
