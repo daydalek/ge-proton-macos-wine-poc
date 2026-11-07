@@ -15,7 +15,7 @@ test "$(dpkg --print-architecture)" = amd64
 if [ "${GITHUB_ACTIONS:-}" = true ]; then
   sudo -n python3 - <<'PY'
 from pathlib import Path
-paths = [Path('/etc/apt/sources.list')]
+paths = [Path('/etc/apt/sources.list'), Path('/etc/apt/apt-mirrors.txt')]
 paths += list(Path('/etc/apt/sources.list.d').glob('*.list'))
 paths += list(Path('/etc/apt/sources.list.d').glob('*.sources'))
 for path in paths:

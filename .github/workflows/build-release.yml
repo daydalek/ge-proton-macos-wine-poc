@@ -82,6 +82,14 @@ jobs:
           if ! /usr/bin/arch -x86_64 /usr/bin/true; then
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
           fi
+      - name: Set up Python for Core ML model conversion
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - name: Create the Core ML build environment
+        run: |
+          python3 -m venv work/coreml/venv
+          work/coreml/venv/bin/pip install --disable-pip-version-check --no-input -r scripts/requirements-coreml.txt
       - name: Build macOS 27 Whisky Libraries and verify FFmpeg capabilities
         env:
           POC_WORK_DIR: ${{ runner.temp }}/wine-build-${{ github.run_id }}-${{ github.run_attempt }}

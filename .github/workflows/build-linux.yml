@@ -35,7 +35,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install build and selected validation dependencies
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           if [ "$COMPILE_ONLY" = 1 ]; then
             bash scripts/linux/install-deps.sh --compile-only
