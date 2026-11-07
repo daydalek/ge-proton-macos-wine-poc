@@ -151,7 +151,9 @@ def main():
         checked += 1
     print(f'Audited {checked} files; stripped {stripped}; remapped {rewritten}', flush=True)
     archive = out / 'Libraries.tar.gz'
-    with tarfile.open(archive, 'w:gz', compresslevel=6) as tf:
+    # GNU format stores >100-byte names as longname entries instead of pax
+    # records, keeping the anonymous-header audit below intact.
+    with tarfile.open(archive, 'w:gz', compresslevel=6, format=tarfile.GNU_FORMAT) as tf:
         tf.add(root, arcname='Libraries', filter=safe_header)
     hasher = hashlib.sha256()
     with archive.open('rb') as stream:
