@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,9 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vmr7_native_sources import NATIVE_PATCH, new_file  # noqa: E402
 
 
-def mingw_clang(name):
-    found = shutil.which(name)
-    return Path(found) if found else MINGW / name
+def mingw_compiler(triple):
+    for name in (triple + '-clang', triple + '-gcc'):
+        found = shutil.which(name)
+        if found:
+            return Path(found)
+    return MINGW / (triple + '-clang')
 
 HARNESS = r'''
 #include <stdint.h>
@@ -251,24 +255,45 @@ class MacdrvVideoProtocolTests(unittest.TestCase):
         self.assertIn('ALL PASS', result.stdout)
 
     def test_pe_abi_i686(self):
-        clang = mingw_clang('i686-w64-mingw32-clang')
-        if not clang.is_file():
+        compiler = mingw_compiler('i686-w64-mingw32')
+        if not compiler.is_file():
             self.skipTest('i686-w64-mingw32-clang not found')
         source = Path(self.temp.name) / 'abi_i686.c'
         source.write_text(ABI_CHECK)
-        subprocess.run([str(clang), '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsyntax-only',
+        subprocess.run([str(compiler), '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsyntax-only',
                         '-I', str(self.include), str(source)],
                        check=True, capture_output=True)
 
     def test_pe_abi_x86_64(self):
-        clang = mingw_clang('x86_64-w64-mingw32-clang')
-        if not clang.is_file():
+        compiler = mingw_compiler('x86_64-w64-mingw32')
+        if not compiler.is_file():
             self.skipTest('x86_64-w64-mingw32-clang not found')
         source = Path(self.temp.name) / 'abi_x86_64.c'
         source.write_text(ABI_CHECK)
-        subprocess.run([str(clang), '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsyntax-only',
+        subprocess.run([str(compiler), '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsyntax-only',
                         '-I', str(self.include), str(source)],
                        check=True, capture_output=True)
+
+
+class MingwCompilerSelectionTests(unittest.TestCase):
+    def test_prefers_clang_on_path(self):
+        def which(name):
+            return '/usr/bin/' + name if name.endswith('-clang') else None
+        with patch('shutil.which', side_effect=which):
+            self.assertEqual(mingw_compiler('i686-w64-mingw32'),
+                             Path('/usr/bin/i686-w64-mingw32-clang'))
+
+    def test_falls_back_to_gcc_on_path(self):
+        def which(name):
+            return '/usr/bin/' + name if name.endswith('-gcc') else None
+        with patch('shutil.which', side_effect=which):
+            self.assertEqual(mingw_compiler('x86_64-w64-mingw32'),
+                             Path('/usr/bin/x86_64-w64-mingw32-gcc'))
+
+    def test_local_llvm_mingw_is_last_resort(self):
+        with patch('shutil.which', return_value=None):
+            self.assertEqual(mingw_compiler('i686-w64-mingw32'),
+                             MINGW / 'i686-w64-mingw32-clang')
 
 
 if __name__ == '__main__':

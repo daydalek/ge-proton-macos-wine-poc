@@ -37,6 +37,7 @@ apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=45
 packages=(
   build-essential clang lld libclang-rt-18-dev git cmake ninja-build pkg-config bison flex
   autoconf automake libtool gettext curl ca-certificates xz-utils file patchelf
+  gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
   libx11-dev libxext-dev libxrender-dev libxrandr-dev libxi-dev libxcursor-dev
   libxinerama-dev libxcomposite-dev libxfixes-dev libxxf86vm-dev
   libfreetype-dev libfontconfig-dev libgnutls28-dev libasound2-dev libpulse-dev

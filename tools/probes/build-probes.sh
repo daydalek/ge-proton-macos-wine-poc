@@ -18,6 +18,9 @@ for target in i686 x86_64; do
       "$kit/fullscreen-state-probe.c" -o "$kit/fullscreen-state-probe-$bits.exe" -luser32
     "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -Werror -O2 \
       "$kit/ddraw-mode-loss-probe.c" -o "$kit/ddraw-mode-loss-probe-$bits.exe" -lddraw -ldxguid -luser32
+    "$toolchain/$target-w64-mingw32-clang" -Wall -Wextra -Werror -O2 \
+      "$kit/ddraw-windowed-restore-probe.c" -o "$kit/ddraw-windowed-restore-probe-$bits.exe" \
+      -lddraw -ldxguid -luser32 -lgdi32
     "$toolchain/$target-w64-mingw32-clang" -Wall -O2 -municode \
       "$kit/media-probe.c" -o "$kit/media-probe-$bits.exe" \
       -lole32 -loleaut32 -lstrmiids -luuid

@@ -32,7 +32,7 @@ class FrameAndShaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             binary = Path(temp) / 'exclusions'
             subprocess.run(['clang', '-std=c11', '-Wall', '-Wextra', '-Werror',
-                            '-fsanitize=address,undefined',
+                            '-fsanitize=address,undefined', '-fno-sanitize-recover=all',
                             str(NATIVE / 'tests/exclusions-compare-test.c'), '-o', str(binary)],
                            check=True, capture_output=True)
             subprocess.run([str(binary)], check=True, capture_output=True, timeout=15)
@@ -44,7 +44,8 @@ class FrameAndShaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             binary = Path(temp) / 'frame-diff'
             subprocess.run([compiler, '-std=c11', '-Wall', '-Wextra', '-Werror',
-                            '-fsanitize=address,undefined', '-I' + str(NATIVE / 'include'),
+                            '-fsanitize=address,undefined', '-fno-sanitize-recover=all',
+                            '-I' + str(NATIVE / 'include'),
                             str(NATIVE / 'tests/frame-diff-test.c'), '-o', str(binary)],
                            check=True, capture_output=True)
             subprocess.run([str(binary)], check=True, capture_output=True, timeout=15)

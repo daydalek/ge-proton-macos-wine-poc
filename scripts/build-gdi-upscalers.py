@@ -171,7 +171,7 @@ def main():
                     '-DBUILD_TESTING=' + ('ON' if args.test else 'OFF')], check=True)
     subprocess.run(['cmake', '--build', str(build), '--parallel', str(args.jobs)], check=True)
     if args.test:
-        subprocess.run(['ctest', '--test-dir', str(build), '--output-on-failure'], check=True)
+        subprocess.run(['ctest', '--test-dir', str(build), '--output-on-failure', '--no-tests=error'], check=True)
     subprocess.run(['cmake', '--install', str(build)], check=True)
     library = stage / unix_dir / 'libwinegdiupscalers.dylib'
     subprocess.run(['codesign', '--force', '--sign', '-', str(library)], check=True)

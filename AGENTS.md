@@ -92,3 +92,76 @@ The isolated-resources path in `gdi-upscalers-test` accepts a second argument:
 directory holds only the helper plus compiled `.mlmodelc` bundles (no ncnn CPU
 models), exercising the real CoreMLBackend regions/full paths without CPU
 fallback.
+
+## CI source tests and dependency-free native tests
+
+`scripts/ci/run-source-tests.py` runs `tools/tests` through unittest
+discovery, writes a JSON report (default `outputs/checks/source-tests.json`),
+and fails on failures, errors, unexpected successes, skips whose reason is
+not listed via `--allow-skip REASON` (exact match, repeatable), an empty
+suite, or a suite where every discovered test was skipped:
+
+```sh
+python3 scripts/ci/run-source-tests.py --output outputs/checks/source-tests.json \
+    --allow-skip 'Linux audio tools are required' \
+    --allow-skip 'Build native library and set WGDI_TEST_NATIVE_LIBRARY' \
+    --allow-skip 'Optional window-free GPU/reference comparison' \
+    --allow-skip 'i686-w64-mingw32-clang not found' \
+    --allow-skip 'x86_64-w64-mingw32-clang not found'
+```
+
+The allowed-skip set above is the macOS CI leg; the Linux leg's exact
+reasons live beside it in `.github/workflows/build-release.yml`. Those sets
+are the intentional skip scope per platform: every other test must execute,
+so a missing host compiler, patch, or audio tool fails instead of silently
+greening. On Linux the `i686/x86_64-w64-mingw32` ABI checks resolve
+`<triple>-clang` on PATH, then `<triple>-gcc` (gcc-mingw-w64 packages), then
+the pinned local llvm-mingw toolchain.
+
+Two neural-free native tests (frame-diff, exclusion compare) build on any
+host without models, ncnn, xcrun, or Objective-C; the CommonCrypto
+content-cache and coreml-client tests are Apple-only:
+
+```sh
+cmake -S native/gdi-upscalers -B outputs/checks/native-build \
+    -DWGDI_TESTS_ONLY=ON -DWGDI_TEST_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build outputs/checks/native-build --parallel 2
+ctest --test-dir outputs/checks/native-build --output-on-failure --no-tests=error
+```
+
+`WGDI_TESTS_ONLY=ON` requires `BUILD_TESTING=ON` and returns before the
+Apple/ncnn/model/Python checks; the normal build stays macOS-only and keeps
+`gdi-upscalers-test` in the full configure. Test executables always build
+with `-UNDEBUG`, so Release keeps assertions live; `WGDI_TEST_SANITIZERS=ON`
+adds target-scoped `-fsanitize=address,undefined -fno-sanitize-recover=all`
+(Clang/GNU compilers only). Run the suite as a non-root user: the exclusions
+test relies on `chmod 000` denying reads, which root bypasses.
+
+## DirectDraw windowed/exclusive probes and single-module rebuilds
+
+`tools/probes/ddraw-windowed-restore-probe.c` covers the black window after
+leaving a smaller exclusive mode (exit 0 pass, 1 fail, 2 mode unavailable).
+It needs a prefix where 800x600 can be set, so on Retina hosts set
+`HKCU\Software\Wine\X11 Driver\EmulateModeset=Y` in a scratch prefix first;
+the window readback assertion only engages with `WINE_D3D_CONFIG=renderer=gdi`
+(other renderers still assert the blit result):
+
+```sh
+work/poc/tools/llvm-mingw-*/bin/i686-w64-mingw32-clang -Wall -Wextra -Werror -O2 \
+    tools/probes/ddraw-windowed-restore-probe.c -o /tmp/ddraw-windowed-restore-probe-x86.exe \
+    -lddraw -ldxguid -luser32 -lgdi32
+WINE_D3D_CONFIG=renderer=gdi wine /tmp/ddraw-windowed-restore-probe-x86.exe
+```
+
+A single PE module can be rebuilt without the full build from a configured
+out-of-tree build directory of the prepared CrossOver source:
+
+```sh
+source scripts/lib/common.sh && poc_setup_wine_build_env
+make -C work/crossover-port/region-deploy-1793638787/build dlls/ddraw/all
+```
+
+The prepared tree is owned by `scripts/apply-patch-series.py`; when its
+`.ge-patch-series.json` stamp predates the current series, re-prepare it
+instead of editing files in place.

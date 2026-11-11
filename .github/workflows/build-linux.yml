@@ -43,6 +43,7 @@ jobs:
             bash scripts/linux/install-deps.sh
           fi
       - name: Build shared Wine patch stack for Linux
+        shell: bash
         env:
           POC_LINUX_WORK_DIR: ${{ runner.temp }}/wine-linux
         run: |
@@ -52,7 +53,13 @@ jobs:
             python3 tools/tests/test_winedmo_seek_generation.py --compile-only
             python3 tools/tests/test_quartz_no_position.py --compile-only
           else
-            python3 -m unittest discover -s tools/tests
+            mkdir -p "$POC_LINUX_WORK_DIR/logs"
+            python3 scripts/ci/run-source-tests.py \
+              --output "$POC_LINUX_WORK_DIR/logs/source-tests.json" \
+              --allow-skip 'macOS Objective-C adapter' \
+              --allow-skip 'Objective-C Foundation harness is macOS-only' \
+              --allow-skip 'Optional window-free GPU/reference comparison' \
+              2>&1 | tee "$POC_LINUX_WORK_DIR/logs/source-tests.log"
           fi
           python3 scripts/linux/build.py all
           python3 scripts/linux/build-probes.py --work-dir "$POC_LINUX_WORK_DIR"

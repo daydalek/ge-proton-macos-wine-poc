@@ -2397,6 +2397,21 @@
       ]
     },
     {
+      "patch": "patches/wine-ge/ddraw-windowed-swapchain-mode-size.patch",
+      "source_file": "dlls/ddraw/surface.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "prepared source",
+      "source_sha256": "b174cdfe1bc1088fb935b1484f074db4c0850695b705d3d38bc322e0129f4533",
+      "copyright_notices": [
+        "Copyright (c) 1997-2000 Marcus Meissner",
+        "Copyright (c) 1998-2000 Lionel Ulmer",
+        "Copyright (c) 2000-2001 TransGaming Technologies Inc.",
+        "Copyright (c) 2006 Stefan Dösinger",
+        "Copyright (c) 2011 Ričardas Barkauskas for CodeWeavers"
+      ]
+    },
+    {
       "patch": "patches/wine-ge/macos-metalfx-spatial.patch",
       "source_file": "dlls/winemac.drv/Makefile.in",
       "license": "LGPL-2.1-or-later",
@@ -2887,6 +2902,7 @@
     "patches/crossover/quartz-filesource-vfs-fallback.patch": "702cdf5126848ec33b55c791785c9d1b7969be25b8debcdce1367ccd61f72a14",
     "patches/wine-ge/macos-gdi-fullscreen-centering.patch": "e00b0a4609c2a1f0a96e9c41eb0d01635bcc18eda6b85883a0b87831bede6db6",
     "patches/wine-ge/ddraw-external-mode-loss.patch": "3fa1bea92474b7d277dfb2d35d6899c1aad2b99a21da48438b0b45aee4dee8bc",
+    "patches/wine-ge/ddraw-windowed-swapchain-mode-size.patch": "fe0fc0de1ff0b07ddfaaa29bfc047e95c76c1c26831fdec5702cf70bd050c686",
     "patches/wine-ge/macos-metalfx-spatial.patch": "2601c79bd715d5e4833271838961410f7292376fe6527aacfb94a122b6fb56b3",
     "patches/wine-ge/macos-gdi-upscalers.patch": "3552a2e696ac133198f5d19119f213053709856ff79330718761a59dbc07d0d0",
     "patches/crossover/mfreadwrite-d3d11-allocator-attributes.patch": "0e5264ebd573ffd6f05fbc4d6f91c7c0391335b9fc3f9f715615ee04b44ef46f",
