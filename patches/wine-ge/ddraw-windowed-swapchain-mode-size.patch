@@ -1,0 +1,37 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-11-10
+Scope: Resize the windowed DirectDraw swapchain to the display mode when a primary surface is created, so screen-coordinate blits stay inside the front buffer after leaving a smaller exclusive mode.
+Original authors and LGPL-2.1-or-later licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/ddraw/surface.c
++++ b/dlls/ddraw/surface.c
+@@ -6805,9 +6805,29 @@
+             if (FAILED(hr = wined3d_device_reset(ddraw->wined3d_device,
+                     &swapchain_desc, NULL, ddraw_reset_enum_callback, FALSE)))
+             {
+                 ERR("Failed to reset device.\n");
+                 free(texture);
+                 return hr_ddraw_from_wined3d(hr);
+             }
+         }
++        else if (ddraw->wined3d_swapchain)
++        {
++            struct wined3d_swapchain_desc swapchain_desc;
++
++            /* Windowed blits address the swapchain front buffer in screen
++             * coordinates. SetCooperativeLevel() recreates the swapchain
++             * before it restores the display mode, so a swapchain created
++             * while leaving exclusive mode keeps that mode's size and
++             * rejects blits outside of it. */
++            wined3d_swapchain_get_desc(ddraw->wined3d_swapchain, &swapchain_desc);
++            if ((swapchain_desc.backbuffer_width != mode.width || swapchain_desc.backbuffer_height != mode.height)
++                    && FAILED(hr = wined3d_swapchain_resize_buffers(ddraw->wined3d_swapchain, 0,
++                    mode.width, mode.height, swapchain_desc.backbuffer_format,
++                    swapchain_desc.multisample_type, swapchain_desc.multisample_quality)))
++            {
++                ERR("Failed to resize swapchain buffers, hr %#lx.\n", hr);
++                free(texture);
++                return hr_ddraw_from_wined3d(hr);
++            }
++        }
+     }
