@@ -2859,10 +2859,21 @@
       "copyright_notices": [
         "Copyright 2022 Nikolay Sivov for CodeWeavers"
       ]
+    },
+    {
+      "patch": "patches/crossover/winedmo-asf-startup-timestamp-base.patch",
+      "source_file": "dlls/winedmo/unix_demuxer.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "d6568d9c29989eca44be60b692766b05a59e1adca3b8635c220d63fe0bce661a",
+      "copyright_notices": [
+        "Copyright 2024 Rémi Bernon for CodeWeavers"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 251,
+    "LGPL-2.1-or-later": 252,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2917,6 +2928,7 @@
     "patches/crossover/winedmo-coded-size-notify.patch": "d8d35fe3cf844d545491393543c300716a6a3188c024c021c8f439cd20cd3bf3",
     "patches/crossover/winedmo-threaded-video-convert.patch": "cdc70cd92ddd6aeb2c432c4d37564ca32a6a828d69352f709b47514287133cd7",
     "patches/crossover/mfreadwrite-downstream-format-propagation.patch": "6b2868aba005d6dbceb7db2c2721bb04b46046105251e137d0b914ca855c115a",
-    "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1"
+    "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1",
+    "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "6519a7248bab30c538ed5fc64f0bb16f3df237be90fca310f269e66a2e42d8aa"
   }
 }

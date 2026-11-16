@@ -1,0 +1,37 @@
+Subject: winedmo: lock ASF startup timestamp base on the first timestamped packet
+License: LGPL-2.1-or-later
+Modification date: 2026-11-17
+
+normalize_stream_timestamps() only set stream->timestamp_base_set when
+base > 2000000 (200 ms), leaving normal ASF/WMV streams starting at
+pts = 0 unlatched until a frame around 233 ms crossed the threshold.
+Subtracting that mid-stream base jumped pts back to 0, causing
+video_decoder.c to flush FFmpeg reference frames before a P-frame and
+corrupt the picture as gray macroblock residuals.
+
+Lock stream->timestamp_base_set on the first packet that carries a
+timestamp (keeping timestamp_base = 0 when base <= 2000000) and skip
+rebasing when timestamp_base is 0.
+
+diff --git a/dlls/winedmo/unix_demuxer.c b/dlls/winedmo/unix_demuxer.c
+index aa8fe07..a7a3ed8 100644
+--- a/dlls/winedmo/unix_demuxer.c
++++ b/dlls/winedmo/unix_demuxer.c
+@@ -188,14 +188,14 @@ static void normalize_stream_timestamps( struct stream *stream, struct sample *s
+          * timestamp even though the clip itself starts at zero. Preserve normal
+          * small startup offsets, but rebase obviously late first samples so MF does
+          * not hold video for the first second or more of the clip. */
+-        if (base != INT64_MIN && base > 2000000)
++        if (base != INT64_MIN)
+         {
+-            stream->timestamp_base = base;
++            stream->timestamp_base = base > 2000000 ? base : 0;
+             stream->timestamp_base_set = TRUE;
+         }
+     }
+ 
+-    if (!stream->timestamp_base_set)
++    if (!stream->timestamp_base_set || !stream->timestamp_base)
+         return;
+ 
+     if (sample->pts != AV_NOPTS_VALUE)

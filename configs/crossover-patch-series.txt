@@ -44,3 +44,4 @@ patches/crossover/winedmo-threaded-video-convert.patch
 patches/crossover/mfreadwrite-downstream-format-propagation.patch
 patches/crossover/mf-file-scheme-url-to-path.patch
 patches/wine-ge/ddraw-windowed-swapchain-mode-size.patch
+patches/crossover/winedmo-asf-startup-timestamp-base.patch
