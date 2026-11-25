@@ -1,0 +1,28 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-11-24
+Scope: Fill window surface allocation padding black when the surface covers its monitor, so padding presented at fullscreen frame edges blends into letterboxing rather than showing as a bright border.
+Original authors and LGPL-2.1-or-later licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/dce.c
++++ b/dlls/win32u/dce.c
+@@ -548,7 +548,19 @@
+ 
+     pthread_mutex_init( &surface->mutex, NULL );
+ 
+-    memset( window_surface_get_color( surface, info ), 0xff, info->bmiHeader.biSizeImage );
++    /* A fullscreen window's surface allocation padding can be presented at
++     * the frame edges; black blends into letterboxing instead of reading as
++     * a bright border. */
++    {
++        MONITORINFO monitor_info = {.cbSize = sizeof(monitor_info)};
++        BYTE fill = 0xff;
++
++        if (NtUserGetMonitorInfo( NtUserMonitorFromWindow( hwnd, MONITOR_DEFAULTTOPRIMARY ), &monitor_info ) &&
++            rect->right - rect->left >= monitor_info.rcMonitor.right - monitor_info.rcMonitor.left &&
++            rect->bottom - rect->top >= monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top)
++            fill = 0;
++        memset( window_surface_get_color( surface, info ), fill, info->bmiHeader.biSizeImage );
++    }
+ 
+     TRACE( "created surface %p for hwnd %p rect %s\n", surface, hwnd, wine_dbgstr_rect( &surface->rect ) );
+     return surface;

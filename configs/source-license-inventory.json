@@ -3080,10 +3080,22 @@
         "Copyright 2019 Zhiyi Zhang for CodeWeavers",
         "Copyright 2021 Jacek Caban for CodeWeavers"
       ]
+    },
+    {
+      "patch": "patches/wine-ge/macos-fullscreen-surface-black-padding.patch",
+      "source_file": "dlls/win32u/dce.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "original file header retained",
+      "source_origin": "prepared source before this modification",
+      "source_sha256": "c19a9794f76a1eb3525a7990d92a9c9d2eb4ac953ca8b77197987361d4e9a9cb",
+      "copyright_notices": [
+        "Copyright 1993, 1994, 1995, 2001, 2004, 2005, 2008 Alexandre Julliard",
+        "Copyright 1996, 1997, 1999 Alex Korobka"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 270,
+    "LGPL-2.1-or-later": 271,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -3142,6 +3154,7 @@
     "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "bda436b77e1085944b032374c6fe844ad3a3f03cfea358c6d10dd910d42be8c4",
     "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff",
     "patches/crossover/macos-style-frame-sync.patch": "66ef82fdd6dcf74e4ea0cc2423f69e4733c61823409f26908f289d66e1954fdc",
-    "patches/crossover/macos-emulate-modeset-resolution.patch": "8bbdb7b38a7536f95bbc92100b85f19e89b51703664ff67f8eea33f560b65bf8"
+    "patches/crossover/macos-emulate-modeset-resolution.patch": "8bbdb7b38a7536f95bbc92100b85f19e89b51703664ff67f8eea33f560b65bf8",
+    "patches/wine-ge/macos-fullscreen-surface-black-padding.patch": "8e5e67e09ad267213ded39ce7360a19d1bd0b20461db463f0321aefa56033157"
   }
 }

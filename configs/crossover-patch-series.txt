@@ -48,3 +48,4 @@ patches/crossover/winedmo-asf-startup-timestamp-base.patch
 patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch
 patches/crossover/macos-style-frame-sync.patch
 patches/crossover/macos-emulate-modeset-resolution.patch
+patches/wine-ge/macos-fullscreen-surface-black-padding.patch
