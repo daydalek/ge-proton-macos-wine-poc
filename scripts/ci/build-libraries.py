@@ -146,7 +146,7 @@ def main():
     crypto_checks = [] if 'validation_scope' in release_context else ['--require-crypto', '--require-shadow-moltenvk']
     subprocess.run([sys.executable, str(PROJECT / 'scripts/static-check.py'),
                     '--libraries', '--package', str(public / 'Libraries'),
-                    '--max-minimum-macos', '27.0', *crypto_checks], check=True)
+                    '--max-minimum-macos', '15.0', *crypto_checks], check=True)
     # Check the final stripped/relocated libraries, not the build host's ffmpeg.
     # The legacy packaging-only job intentionally reuses an older released core.
     ffmpeg = None

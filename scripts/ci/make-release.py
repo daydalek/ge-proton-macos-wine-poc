@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 output = args.output.resolve()
-assert version_tuple(DEPLOYMENT_TARGET) == version_tuple('27.0'), 'Expected macOS 27.0 build configuration'
+assert version_tuple(DEPLOYMENT_TARGET) == version_tuple('15.0'), 'Expected macOS 15.0 build configuration'
 assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'Requires Apple Silicon host'
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=project, text=True).strip()
 source_dirs = [CROSSOVER_PORT / 'sources/wine']
@@ -74,7 +74,7 @@ with tarfile.open(sources, 'w:gz') as tf:
     tf.add(shadow_dir / 'shadow-import.patch', arcname='patches/moltenvk-shadow-import.patch', filter=source_filter)
     tf.add(shadow_dir / 'src', arcname='prepared/moltenvk-shadow', filter=source_filter)
 project_archive.unlink()
-manifest = {'commit': commit, 'target': 'macOS 27+ Apple Silicon', 'host_architecture': platform.machine(),
+manifest = {'commit': commit, 'target': 'macOS 15+ Apple Silicon', 'host_architecture': platform.machine(),
             'wine_core_architecture': 'x86_64', 'windows_architectures': ['i386', 'x86_64'],
             'execution': 'Rosetta 2', 'signing': 'ad-hoc; Apple notarization not performed',
              'runtime_tests': 'Wine/game playback not run; file architectures, signatures, dependencies and native FFmpeg capabilities checked by the release pipeline',
@@ -86,7 +86,7 @@ manifest = {'commit': commit, 'target': 'macOS 27+ Apple Silicon', 'host_archite
                                         'default_enabled': False},
             'source_archives': archives, 'github_run_id': os.environ.get('GITHUB_RUN_ID')}
 (output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-(output / 'RELEASE-NOTES.md').write_text('Whisky Libraries runtime for macOS 27+ Apple Silicon. Requires Rosetta 2; Wine core is x86_64.\n\nIncludes CrossOver 26.3 Wine with GE media and fullscreen fixes, DXVK, corresponding prepared sources, locked source archives, recipes and license notices. Game playback requires target-device acceptance. Binaries use local ad-hoc signatures and have no Apple notarization.\n')
+(output / 'RELEASE-NOTES.md').write_text('Whisky Libraries runtime for macOS 15+ Apple Silicon. Requires Rosetta 2; Wine core is x86_64.\n\nIncludes CrossOver 26.3 Wine with GE media and fullscreen fixes, DXVK, corresponding prepared sources, locked source archives, recipes and license notices. Game playback requires target-device acceptance. Binaries use local ad-hoc signatures and have no Apple notarization.\n')
 checks = [(sha256_file(path), path.name) for path in sorted(output.iterdir())]
 (output / 'SHA256SUMS').write_text(''.join(f'{digest}  {name}\n' for digest, name in checks))
 print(output)
