@@ -71,6 +71,19 @@ class FrameAndShaderTests(unittest.TestCase):
         for name in ('wine_gdi_upscaler.h', 'wine_gdi_frame_diff.h', 'wine_gdi_upscale_policy.h'):
             self.assertEqual(files[name], (NATIVE / 'include' / name).read_text(), name)
 
+    def test_frontbuffer_temporal_patch_follows_opengl_temporal_dependencies(self):
+        entries = [line.strip() for line in (ROOT / 'configs/crossover-patch-series.txt').read_text().splitlines()
+                   if line.strip() and not line.lstrip().startswith('#')]
+        frontbuffer = 'patches/crossover/macos-gdi-upscale-frontbuffer-present.patch'
+        self.assertIn(frontbuffer, entries)
+        self.assertGreater(entries.index(frontbuffer), entries.index('patches/wine-ge/opengl-flush-flags.patch'))
+        self.assertGreater(entries.index(frontbuffer), entries.index('patches/wine-ge/macos-wined3d-temporal.patch'))
+        patch = (ROOT / frontbuffer).read_text()
+        self.assertIn('glReadBuffer(front ? GL_FRONT : (doubleBuffered ? GL_BACK : GL_FRONT))', patch)
+        self.assertIn('macdrv_present_front_temporal', patch)
+        self.assertIn('flags & GL_FLUSH_PRESENT', patch)
+        self.assertIn('WINE_GDI_GL_TRACE', patch)
+
     def test_metal_port_preserves_every_official_weight_in_column_order(self):
         spec = importlib.util.spec_from_file_location('anime4k_generator', ROOT / 'scripts/generate-anime4k-metal.py')
         module = importlib.util.module_from_spec(spec)

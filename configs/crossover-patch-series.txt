@@ -49,3 +49,4 @@ patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch
 patches/crossover/macos-style-frame-sync.patch
 patches/crossover/macos-emulate-modeset-resolution.patch
 patches/wine-ge/macos-fullscreen-surface-black-padding.patch
+patches/crossover/macos-gdi-upscale-frontbuffer-present.patch

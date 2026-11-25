@@ -1,0 +1,223 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-11-24
+Scope: Capture OpenGL front-buffer presents into the temporal GDI presenter without swapping in a stale back buffer, with opt-in WINE_GDI_GL_TRACE diagnostics.
+Original authors and LGPL-2.1-or-later licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+diff --git a/dlls/winemac.drv/cocoa_gl_temporal.h b/dlls/winemac.drv/cocoa_gl_temporal.h
+index c844803..fb29a3c 100644
+--- a/dlls/winemac.drv/cocoa_gl_temporal.h
++++ b/dlls/winemac.drv/cocoa_gl_temporal.h
+@@ -45,19 +47,35 @@ @interface WineOpenGLTemporalBridge : NSObject
+ - (id)initWithView:(NSView *)view;
+ - (BOOL)matchesView:(NSView *)view;
+ - (void)captureContext:(CGLContextObj)context;
++- (void)captureContextFront:(CGLContextObj)context;
++- (void)captureContext:(CGLContextObj)context front:(BOOL)front;
+ - (void)destroyGLResources:(CGLContextObj)context;
+ - (void)retire;
+ @end
+ 
+ @implementation WineOpenGLTemporalBridge
++static int wgdiGLTrace(void)
++{
++    static int trace=-1;
++    if (trace<0) trace=getenv("WINE_GDI_GL_TRACE")?1:0;
++    return trace;
++}
++
+ - (id)initWithView:(NSView *)view
+ {
+     self=[super init]; if (!self) return nil;
+     pendingSlot=-1;
+-    if (![WineGDIUpscaler temporalEnabled] || !view.window || !view.window.isVisible) { [self release]; return nil; }
++    if (![WineGDIUpscaler temporalEnabled] || !view.window || !view.window.isVisible) {
++        if (wgdiGLTrace()) NSLog(@"WineGLTemporal: init bail temporal=%d view=%@ window=%@ visible=%d",
++            (int)[WineGDIUpscaler temporalEnabled], view, view.window, (int)view.window.isVisible);
++        [self release]; return nil;
++    }
+     targetView=[view retain];
+     upscaler=[WineGDIUpscaler new];
+-    if (![upscaler supportsTemporalSurfaces]) { [self release]; return nil; }
++    if (![upscaler supportsTemporalSurfaces]) {
++        if (wgdiGLTrace()) NSLog(@"WineGLTemporal: init bail, supportsTemporalSurfaces=NO (temporal=%@)", upscaler?@"created":@"nil");
++        [self release]; return nil;
++    }
+     [upscaler setPresentationView:view];
+     overlay=[[WineTemporalGLView alloc] initWithFrame:view.bounds];
+     overlay.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
+@@ -188,26 +206,43 @@ - (void)destroyGLResources:(CGLContextObj)context
+         CGLSetCurrentContext(previous);
+     }
+ }
+-- (void)captureContext:(CGLContextObj)context
++- (void)captureContext:(CGLContextObj)context { [self captureContext:context front:NO]; }
++- (void)captureContextFront:(CGLContextObj)context { [self captureContext:context front:YES]; }
++- (void)captureContext:(CGLContextObj)context front:(BOOL)front
+ {
+-    @synchronized(self) { if (retired || disabled) return; }
+-    if (!context || CGLGetCurrentContext()!=context) return;
+-    if (![self loadFunctions:context]) { @synchronized(self) { disabled=YES; } return; }
++    @synchronized(self) { if (retired || disabled) {
++        if (wgdiGLTrace()) { static int o0; if(!o0++) NSLog(@"WineGLTemporal: capture bail retired=%d disabled=%d",(int)retired,(int)disabled); }
++        return; } }
++    if (!context || CGLGetCurrentContext()!=context) {
++        if (wgdiGLTrace()) { static int o1; if(!o1++) NSLog(@"WineGLTemporal: capture bail context=%p current=%p",context,CGLGetCurrentContext()); }
++        return;
++    }
++    if (![self loadFunctions:context]) { @synchronized(self) { disabled=YES; }
++        if (wgdiGLTrace()) NSLog(@"WineGLTemporal: capture bail loadFunctions failed, disabled=YES");
++        return;
++    }
+     GLint size[2]={0,0},viewport[4]={0,0,0,0},enabled=0;
+     CGLIsEnabled(context,kCGLCESurfaceBackingSize,&enabled);
+     if (enabled) CGLGetParameter(context,kCGLCPSurfaceBackingSize,size);
+     if (size[0]<=0 || size[1]<=0) {
+         glGetIntegerv(GL_VIEWPORT,viewport); size[0]=viewport[0]+viewport[2]; size[1]=viewport[1]+viewport[3];
+-    }
++        if (wgdiGLTrace()) { static int o2; if(!o2++) NSLog(@"WineGLTemporal: size via viewport %dx%d (backingSize enabled=%d)",size[0],size[1],(int)enabled); }
++    } else if (wgdiGLTrace()) { static int o3; if(!o3++) NSLog(@"WineGLTemporal: size via surface backing %dx%d",size[0],size[1]); }
+     if (size[0]<=0 || size[1]<=0 || size[0]>4096 || size[1]>4096 ||
+-        (uint64_t)size[0]*size[1]>2u*1024u*1024u) return;
++        (uint64_t)size[0]*size[1]>2u*1024u*1024u) {
++        if (wgdiGLTrace()) { static int o4; if(!o4++) NSLog(@"WineGLTemporal: capture bail size %dx%d (cap 4096/2MP)",size[0],size[1]); }
++        return;
++    }
+     unsigned index=WGDI_GL_TEMPORAL_SLOTS; uint64_t value;
+     @synchronized(self) {
+         if (sourceWidth!=(NSUInteger)size[0] || sourceHeight!=(NSUInteger)size[1]) {
+             [self clearGL]; sourceWidth=size[0]; sourceHeight=size[1];
+         }
+         for (unsigned i=0;i<WGDI_GL_TEMPORAL_SLOTS;++i) if (!slots[i].busy) { index=i; break; }
+-        if (index==WGDI_GL_TEMPORAL_SLOTS) return;
++        if (index==WGDI_GL_TEMPORAL_SLOTS) {
++            if (wgdiGLTrace()) { static int o5; if(!o5++) NSLog(@"WineGLTemporal: capture bail, all %d slots busy",(int)WGDI_GL_TEMPORAL_SLOTS); }
++            return;
++        }
+         slots[index].busy=YES; slots[index].generation=generation; value=generation;
+     }
+     struct WineTemporalGLSlot *slot=&slots[index];
+@@ -237,7 +272,9 @@ - (void)captureContext:(CGLContextObj)context
+     bindFramebuffer(GL_READ_FRAMEBUFFER_EXT,0);
+     GLint oldReadBuffer=0; GLboolean doubleBuffered=GL_FALSE;
+     glGetIntegerv(GL_READ_BUFFER,&oldReadBuffer); glGetBooleanv(GL_DOUBLEBUFFER,&doubleBuffered);
+-    glReadBuffer(doubleBuffered ? GL_BACK : GL_FRONT);
++    /* Front-buffer presents (GL_FLUSH_PRESENT) must read GL_FRONT even on
++       double-buffered drawables: the back buffer holds stale content. */
++    glReadBuffer(front ? GL_FRONT : (doubleBuffered ? GL_BACK : GL_FRONT));
+     bindFramebuffer(GL_DRAW_FRAMEBUFFER_EXT,slot->framebuffer);
+     if (checkFramebuffer(GL_READ_FRAMEBUFFER_EXT)!=GL_FRAMEBUFFER_COMPLETE_EXT) ok=NO;
+     GLboolean scissor=glIsEnabled(GL_SCISSOR_TEST);
+diff --git a/dlls/winemac.drv/cocoa_opengl.m b/dlls/winemac.drv/cocoa_opengl.m
+index cd54e2d..accb432 100644
+--- a/dlls/winemac.drv/cocoa_opengl.m
++++ b/dlls/winemac.drv/cocoa_opengl.m
+@@ -37,6 +39,7 @@ @interface WineOpenGLContext ()
+     + (NSView*) dummyView;
+     - (void) wine_updateBackingSize:(const CGSize*)size;
+     - (void)wine_presentTemporal;
++    - (void)wine_presentTemporalFront;
+     - (void)wine_destroyTemporal;
+ 
+ @end
+@@ -53,17 +56,34 @@ - (void)wine_destroyTemporal
+         [bridge destroyGLResources:self.CGLContextObj];
+         [bridge retire]; [bridge release];
+     }
+-    - (void)wine_presentTemporal
++    - (void)wine_presentTemporalImpl:(BOOL)front
+     {
+-        if (![WineGDIUpscaler temporalEnabled]) return;
++        static int wgdiTrace=-1;
++        if (wgdiTrace<0) wgdiTrace=getenv("WINE_GDI_GL_TRACE")?1:0;
++        if (![WineGDIUpscaler temporalEnabled]) {
++            if (wgdiTrace) { static int once1; if(!once1++){NSLog(@"WineGLTemporal: present skipped, temporalEnabled=NO");} }
++            return;
++        }
+         /* The GL producer owns this field; all view operations stay on main. */
+         __block BOOL changed=NO;
+         OnMainThread(^{ changed=temporalBridge && ![temporalBridge matchesView:self.view]; });
+         if (changed) [self wine_destroyTemporal];
+         if (!temporalBridge) OnMainThread(^{
+-            temporalBridge=[[WineOpenGLTemporalBridge alloc] initWithView:self.view];
++            NSView *v=self.view;
++            temporalBridge=[[WineOpenGLTemporalBridge alloc] initWithView:v];
++            if (wgdiTrace) NSLog(@"WineGLTemporal: bridge init %@ view=%@ cls=%@ window=%@ visible=%d",
++                temporalBridge?@"ok":@"FAILED", v, NSStringFromClass([v class]), v.window, (int)v.window.isVisible);
+         });
+-        [temporalBridge captureContext:self.CGLContextObj];
++        if (front) [temporalBridge captureContextFront:self.CGLContextObj];
++        else [temporalBridge captureContext:self.CGLContextObj];
++    }
++    - (void)wine_presentTemporal
++    {
++        [self wine_presentTemporalImpl:NO];
++    }
++    - (void)wine_presentTemporalFront
++    {
++        [self wine_presentTemporalImpl:YES];
+     }
+     - (void) dealloc
+     {
+@@ -369,3 +389,22 @@ void macdrv_flush_opengl_context(macdrv_opengl_context c)
+     [context flushBuffer];
+ }
+ }
++
++/***********************************************************************
++ *              macdrv_present_front_temporal
++ *
++ * Captures the front buffer after a front-buffer present flush
++ * (GL_FLUSH_PRESENT). No flushBuffer: the producer's own glFlush
++ * already pushed the frame to the surface; swapping here would
++ * clobber it with the stale back buffer.
++ */
++void macdrv_present_front_temporal(macdrv_opengl_context c)
++{
++@autoreleasepool
++{
++    WineOpenGLContext *context = (WineOpenGLContext*)c;
++
++    macdrv_update_opengl_context(c);
++    [context wine_presentTemporalFront];
++}
++}
+diff --git a/dlls/winemac.drv/macdrv_cocoa.h b/dlls/winemac.drv/macdrv_cocoa.h
+index b5554dc..56bfe26 100644
+--- a/dlls/winemac.drv/macdrv_cocoa.h
++++ b/dlls/winemac.drv/macdrv_cocoa.h
+@@ -593,6 +598,7 @@ extern void macdrv_get_input_source_info(CFDataRef* uchr,CGEventSourceKeyboardTy
+ extern void macdrv_make_context_current(macdrv_opengl_context c, macdrv_view v, CGRect r);
+ extern void macdrv_update_opengl_context(macdrv_opengl_context c);
+ extern void macdrv_flush_opengl_context(macdrv_opengl_context c);
++extern void macdrv_present_front_temporal(macdrv_opengl_context c);
+ 
+ 
+ /* systray / status item */
+diff --git a/dlls/winemac.drv/opengl.c b/dlls/winemac.drv/opengl.c
+index cf866e4..874e976 100644
+--- a/dlls/winemac.drv/opengl.c
++++ b/dlls/winemac.drv/opengl.c
+@@ -72,6 +74,7 @@ struct macdrv_context
+     macdrv_view             read_view;
+     CGLPBufferObj           read_pbuffer;
+     int                     swap_interval;
++    ULONGLONG               last_front_present;
+ };
+ 
+ struct gl_drawable
+@@ -2026,6 +2029,15 @@ static void macdrv_surface_flush(struct opengl_drawable *base, UINT flags)
+     if (!context) return;
+     if (flags & GL_FLUSH_INTERVAL) set_swap_interval(context, base->interval);
+     if (flags & GL_FLUSH_UPDATED) make_context_current(context, context->read_view == client->cocoa_view);
++    if (flags & GL_FLUSH_PRESENT && context->context)
++    {
++        ULONGLONG now = NtGetTickCount();
++        if (now - context->last_front_present >= 33)
++        {
++            context->last_front_present = now;
++            macdrv_present_front_temporal(context->context);
++        }
++    }
+ }
+ 
+ 

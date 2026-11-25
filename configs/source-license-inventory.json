@@ -3092,10 +3092,53 @@
         "Copyright 1993, 1994, 1995, 2001, 2004, 2005, 2008 Alexandre Julliard",
         "Copyright 1996, 1997, 1999 Alex Korobka"
       ]
+    },
+    {
+      "patch": "patches/crossover/macos-gdi-upscale-frontbuffer-present.patch",
+      "source_file": "dlls/winemac.drv/cocoa_gl_temporal.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "GE-Proton macOS Wine PoC new source",
+      "source_sha256": "d4b4b70b5823c7ac5698e298b295182b656cc0d013a3e0c34d026b1902fcae99",
+      "copyright_notices": []
+    },
+    {
+      "patch": "patches/crossover/macos-gdi-upscale-frontbuffer-present.patch",
+      "source_file": "dlls/winemac.drv/cocoa_opengl.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "6165cf27e6b11eb4fc066021aa70de41a9535583588b1e96edc3b99fe2a90fa1",
+      "copyright_notices": [
+        "Copyright 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-gdi-upscale-frontbuffer-present.patch",
+      "source_file": "dlls/winemac.drv/macdrv_cocoa.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "64c9c50976f4e61a637c6e1d5e932541d4052aa09f6cdb330689d133df52e647",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-gdi-upscale-frontbuffer-present.patch",
+      "source_file": "dlls/winemac.drv/opengl.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "7c451a7524468197afea558a3189d091752492da37ee17d2328b0a97e4e384db",
+      "copyright_notices": [
+        "Copyright 2012 Alexandre Julliard",
+        "Copyright 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 271,
+    "LGPL-2.1-or-later": 275,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -3155,6 +3198,7 @@
     "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff",
     "patches/crossover/macos-style-frame-sync.patch": "66ef82fdd6dcf74e4ea0cc2423f69e4733c61823409f26908f289d66e1954fdc",
     "patches/crossover/macos-emulate-modeset-resolution.patch": "8bbdb7b38a7536f95bbc92100b85f19e89b51703664ff67f8eea33f560b65bf8",
-    "patches/wine-ge/macos-fullscreen-surface-black-padding.patch": "8e5e67e09ad267213ded39ce7360a19d1bd0b20461db463f0321aefa56033157"
+    "patches/wine-ge/macos-fullscreen-surface-black-padding.patch": "8e5e67e09ad267213ded39ce7360a19d1bd0b20461db463f0321aefa56033157",
+    "patches/crossover/macos-gdi-upscale-frontbuffer-present.patch": "c806db61f9868a166b3f9c31566eab94bbdf4fd970cee4935008255ce92ee2d3"
   }
 }
