@@ -237,7 +237,7 @@ export POC_WORK_DIR="$PWD/work"
 
 ## CI 构建与发布
 
-GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 27+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心；同时在 `ubuntu-24.04` 节点上并行构建 Linux amd64 运行时（见 [README.linux.md](README.linux.md)）。分支 push 和 PR 执行源码与语法检查；手动运行执行两平台完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
+GitHub Actions 默认使用 `xcode-27` 托管预览节点，构建 macOS 15+ Apple Silicon＋Rosetta 2 的 x86_64 Wine 核心；同时在 `ubuntu-24.04` 节点上并行构建 Linux amd64 运行时（见 [README.linux.md](README.linux.md)）。分支 push 和 PR 执行源码与语法检查；手动运行执行两平台完整构建并上传产物；推送 `v*` 标签在构建成功后自动创建预发布 Release。
 
 每次发布提供 Whisky 的 `Libraries.tar.gz`、`Libraries-sources.tar.gz`、版本 plist、隐私和静态检查报告、构建来源及 SHA256 校验摘要；Linux 侧统一添加 `-linux-amd64` 后缀，提供 `wine-linux-amd64.tar.gz`、`wine-linux-amd64-sources.tar.gz`、`linux-release-manifest.json` 等资产与 `SHA256SUMS-linux-amd64` 校验。Wine 与编译依赖从锁定归档开始，在独立工作目录构建；MoltenVK 1.4.2 从固定源码和校验过的补丁构建，shadow-import 修复默认关闭。CI 编译 CrossOver 26.3 Wine＋GE 多媒体与全屏修复核心，Libraries 包含 x86_64 MoltenVK，并启用 Vulkan。本地双核心便携打包脚本保留用于开发验证。完整远端构建与目标设备播放验收状态以实际结果为准。
 
@@ -319,7 +319,7 @@ as downloadable Actions artifacts named `whisky-libraries`.
 The `libraries_only` manual check currently repackages the pinned v0.1.0 Valve-based Libraries core and compiles
 x86/x64 launch probes using the locked toolchain.
 
-The current payload requires macOS 27+ Apple Silicon with Rosetta 2. DXMT and the licensed
+The current payload requires macOS 15+ Apple Silicon with Rosetta 2. DXMT and the licensed
 GPTK payload retain their separate runtime capability gates in Whisky.
 
 完整 CI 构建会读取最终 Libraries 中的 FFmpeg 动态库，检查常见游戏格式及 LGPL 许可，并发布 `Libraries-ffmpeg-capabilities.json` 格式清单（同时纳入 `release-manifest.json` 和 `SHA256SUMS`）。检查不启动 Wine 或游戏，也不代表实际播放验收；缺少 WMA Lossless、AAC 等关键解码器时构建失败。`libraries_only` 仅检查旧版发布核心的打包与启动，不重编 FFmpeg，也不验证当前格式覆盖；要发布新解码库，请使用默认完整构建。

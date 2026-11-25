@@ -5,9 +5,9 @@ project="$(cd "$(dirname "$0")/../.." && pwd -P)"
 cd "$project"
 test "$(uname -s)" = Darwin && test "$(uname -m)" = arm64 || { echo 'Requires an arm64 macOS runner.' >&2; exit 1; }
 major="$(sw_vers -productVersion | cut -d. -f1)"
-test "$major" -ge 27 || { echo 'Requires a macOS 27+ runner.' >&2; exit 1; }
+test "$major" -ge 26 || { echo 'Requires a macOS 26+ runner.' >&2; exit 1; }
 /usr/bin/arch -x86_64 /usr/bin/true || { echo 'Install Rosetta 2 before running this workflow.' >&2; exit 1; }
-export POC_MACOSX_DEPLOYMENT_TARGET=27.0
+export POC_MACOSX_DEPLOYMENT_TARGET=15.0
 : "${POC_WORK_DIR:?Set a fresh isolated POC_WORK_DIR}"
 test ! -e "$POC_WORK_DIR" || { echo 'Build work directory must be fresh.' >&2; exit 1; }
 command -v cmake >/dev/null
