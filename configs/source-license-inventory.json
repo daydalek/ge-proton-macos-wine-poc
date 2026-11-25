@@ -2870,10 +2870,159 @@
       "copyright_notices": [
         "Copyright 2024 Rémi Bernon for CodeWeavers"
       ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/win32u/win32u_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "e4534dbc6d95e57187fe95bb7bbe1eb92c6c635f034805e8584ace2fd94516cc",
+      "copyright_notices": [
+        "Copyright 2021 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/win32u/sysparams.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "1c2e1f2a33ae6005e3e96d82213f84237f3759f36f9104184c19a41a772d63c7",
+      "copyright_notices": [
+        "Copyright 1994 Alexandre Julliard",
+        "Copyright 2019 Zhiyi Zhang for CodeWeavers",
+        "Copyright 2021 Jacek Caban for CodeWeavers"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/win32u/input.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "31b047ba89e5b3f0a51ed5d1aff7e42c4ac77461de00ee7e08100249a315ef5b",
+      "copyright_notices": [
+        "Copyright 1993 Bob Amstadt",
+        "Copyright 1993 David Metcalfe",
+        "Copyright 1996 Albrecht Kleine",
+        "Copyright 1996 Frans van Dorsselaer",
+        "Copyright 1997 David Faure",
+        "Copyright 1998 Morten Welinder",
+        "Copyright 1998 Ulrich Weigand",
+        "Copyright 2001 Eric Pouech",
+        "Copyright 2002 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/win32u/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "44540542560f00c3652adc9aad66069e098e64e1113112c75e9fe0008ddb368a",
+      "copyright_notices": [
+        "Copyright 1993, 1994 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/macdrv_cocoa.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "64c9c50976f4e61a637c6e1d5e932541d4052aa09f6cdb330689d133df52e647",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/cocoa_cursorclipping.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "26b0da57d07d296cd7c6697fe0cdf19cbdc857efc2424e36cb01b78b4e7a789e",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc.",
+        "Copyright 2021 Tim Clem for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/cocoa_cursorclipping.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "ffe8b0bd1d060663687cd2778f17efbd6e47c291e4043637fb653931c4df590c",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc.",
+        "Copyright 2021 Tim Clem for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/cocoa_app.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "1dfaecb92345e195c03925a123dea6d6a6faa99d619c84b8c1c6791318447883",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/cocoa_app.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "9c31a0b3ccf62153d873d867927f95af34df89b558f7dfa76c2b1987a80925fb",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "10cea263cff1ca0bf306e319429a458be7303e70826fe1f60a5e8a6a774c719a",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/mouse.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "4feed84e2717225db6eddfc610a1059d22f88f3fa1023c55ab42820ab8dad288",
+      "copyright_notices": [
+        "Copyright 1998 Ulrich Weigand",
+        "Copyright 2007 Henri Verbeet",
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch",
+      "source_file": "dlls/winemac.drv/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "37ea3561a9f8c70adb1f223674b8a1885dd1e67c39a925ea82eb696e334a7225",
+      "copyright_notices": [
+        "Copyright 1993, 1994, 1995, 1996, 2001 Alexandre Julliard",
+        "Copyright 1993 David Metcalfe",
+        "Copyright 1995, 1996 Alex Korobka",
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 252,
+    "LGPL-2.1-or-later": 265,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -2929,6 +3078,7 @@
     "patches/crossover/winedmo-threaded-video-convert.patch": "cdc70cd92ddd6aeb2c432c4d37564ca32a6a828d69352f709b47514287133cd7",
     "patches/crossover/mfreadwrite-downstream-format-propagation.patch": "6b2868aba005d6dbceb7db2c2721bb04b46046105251e137d0b914ca855c115a",
     "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1",
-    "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "bda436b77e1085944b032374c6fe844ad3a3f03cfea358c6d10dd910d42be8c4"
+    "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "bda436b77e1085944b032374c6fe844ad3a3f03cfea358c6d10dd910d42be8c4",
+    "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff"
   }
 }

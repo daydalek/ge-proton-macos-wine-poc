@@ -1,0 +1,474 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-11-24
+Scope: Add configurable cursor clip suppression (AllowClipCursor/WINE_CLIP_CURSOR) and WINE_EMULATE_MODESET env override, clear stale server cursor clips and exclusive present rects across fullscreen/windowed transitions, keep macOS window mouseConfinementRect synchronized on resize/fullscreen changes, and support external mouse capture release notifications.
+Original authors and LGPL-2.1-or-later licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -89,6 +89,7 @@
+ extern void unregister_imm_window( HWND hwnd );
+ 
+ /* input.c */
++extern BOOL allow_clip_cursor;
+ extern BOOL grab_pointer;
+ extern BOOL grab_fullscreen;
+ extern BOOL is_mouse_in_pointer_enabled( HWND hwnd );
+@@ -107,6 +108,8 @@
+ extern void update_current_mouse_window( HWND hwnd, INT hittest, POINT pos );
+ extern BOOL process_wine_clipcursor( HWND hwnd, UINT flags, BOOL reset );
+ extern BOOL clip_fullscreen_window( HWND hwnd, BOOL reset );
++extern void sync_window_cursor_clip( HWND hwnd, const struct window_rects *old_rects,
++                                     const struct window_rects *new_rects );
+ extern USHORT map_scan_to_kbd_vkey( USHORT scan, HKL layout );
+ 
+ /* menu.c */
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -5934,6 +5934,8 @@
+ #define IS_OPTION_TRUE(ch) \
+     ((ch) == 'y' || (ch) == 'Y' || (ch) == 't' || (ch) == 'T' || (ch) == '1')
+ 
++    if (!get_config_key( hkey, appkey, "AllowClipCursor", buffer, sizeof(buffer) ))
++        allow_clip_cursor = IS_OPTION_TRUE( buffer[0] );
+     if (!get_config_key( hkey, appkey, "GrabPointer", buffer, sizeof(buffer) ))
+         grab_pointer = IS_OPTION_TRUE( buffer[0] );
+     if (!get_config_key( hkey, appkey, "GrabFullscreen", buffer, sizeof(buffer) ))
+@@ -5942,6 +5944,37 @@
+         decorated_mode = IS_OPTION_TRUE( buffer[0] );
+     if (!get_config_key( hkey, appkey, "EmulateModeset", buffer, sizeof(buffer) ))
+         emulate_modeset = IS_OPTION_TRUE( buffer[0] );
++    {
++        const char *env = getenv( "WINE_CLIP_CURSOR" );
++        if (env && *env)
++        {
++            if (!strcmp( env, "0" ) || !strcmp( env, "n" ) || !strcmp( env, "N" ) ||
++                !strcmp( env, "no" ) || !strcmp( env, "NO" ) ||
++                !strcmp( env, "off" ) || !strcmp( env, "OFF" ) ||
++                !strcmp( env, "false" ) || !strcmp( env, "FALSE" ))
++            {
++                allow_clip_cursor = FALSE;
++                grab_pointer = FALSE;
++                grab_fullscreen = FALSE;
++            }
++            else if (IS_OPTION_TRUE( env[0] ) || !strcmp( env, "on" ) || !strcmp( env, "ON" ) ||
++                     !strcmp( env, "auto" ) || !strcmp( env, "AUTO" ))
++            {
++                allow_clip_cursor = TRUE;
++            }
++        }
++        env = getenv( "WINE_EMULATE_MODESET" );
++        if (env && *env)
++        {
++            if (IS_OPTION_TRUE( env[0] ) || !strcmp( env, "on" ) || !strcmp( env, "ON" ))
++                emulate_modeset = TRUE;
++            else if (!strcmp( env, "0" ) || !strcmp( env, "n" ) || !strcmp( env, "N" ) ||
++                     !strcmp( env, "no" ) || !strcmp( env, "NO" ) ||
++                     !strcmp( env, "off" ) || !strcmp( env, "OFF" ) ||
++                     !strcmp( env, "false" ) || !strcmp( env, "FALSE" ))
++                emulate_modeset = FALSE;
++        }
++    }
+ 
+ #undef IS_OPTION_TRUE
+ 
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -407,6 +407,7 @@
+ static LONG clipping_cursor; /* clipping thread counter */
+ static LONG enable_mouse_in_pointer = -1;
+ 
++BOOL allow_clip_cursor = TRUE;
+ BOOL grab_pointer = TRUE;
+ BOOL grab_fullscreen = FALSE;
+ 
+@@ -2679,6 +2680,7 @@
+     UINT ctx;
+     BOOL ret;
+ 
++    if (!allow_clip_cursor || !grab_pointer) return FALSE;
+     if (hwnd == NtUserGetDesktopWindow()) return FALSE;
+     if (hwnd != NtUserGetForegroundWindow()) return FALSE;
+ 
+@@ -2764,7 +2766,8 @@
+         return user_driver->pClipCursor( NULL, TRUE );
+     }
+ 
+-    if (!grab_pointer) return TRUE;
++    if (!allow_clip_cursor || !grab_pointer)
++        return was_clipping ? user_driver->pClipCursor( NULL, FALSE ) : TRUE;
+ 
+     /* we are clipping if the clip rectangle is smaller than the screen */
+     get_clip_cursor( &rect, 0, MDT_RAW_DPI );
+@@ -2783,6 +2786,40 @@
+     return TRUE;
+ }
+ 
++void sync_window_cursor_clip( HWND hwnd, const struct window_rects *old_rects,
++                              const struct window_rects *new_rects )
++{
++    struct window_rects new_raw;
++    RECT clip_rect, virtual_rect, intersect;
++    HWND foreground;
++
++    if (EqualRect( &old_rects->window, &new_rects->window ) &&
++        EqualRect( &old_rects->client, &new_rects->client ))
++        return;
++    if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return;
++    if (!(NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_VISIBLE)) return;
++
++    foreground = NtUserGetForegroundWindow();
++    if (foreground != hwnd && NtUserGetAncestor( foreground, GA_ROOT ) != hwnd) return;
++
++    virtual_rect = get_virtual_screen_rect( 0, MDT_RAW_DPI );
++    if (!get_clip_cursor( &clip_rect, 0, MDT_RAW_DPI ) || EqualRect( &clip_rect, &virtual_rect ))
++        return;
++
++    new_raw = map_window_rects_virt_to_raw( *new_rects, get_thread_dpi() );
++    if (EqualRect( &clip_rect, &new_raw.client ) || EqualRect( &clip_rect, &new_raw.window ))
++        return;
++
++    if ((clip_rect.right - clip_rect.left > 16 || clip_rect.bottom - clip_rect.top > 16) ||
++        !intersect_rect( &intersect, &clip_rect, &new_raw.client ))
++    {
++        TRACE( "clearing stale cursor clip %s for moved/resized win %p -> %s\n",
++               wine_dbgstr_rect( &clip_rect ), hwnd, wine_dbgstr_rect( &new_raw.client ) );
++        NtUserClipCursor( NULL );
++        clip_fullscreen_window( hwnd, TRUE );
++    }
++}
++
+ /**********************************************************************
+  *       NtUserGetClipCursor (win32u.@)
+  */
+@@ -2811,8 +2848,17 @@
+             rect = &new_rect;
+         }
+         if (rect->left > rect->right || rect->top > rect->bottom) return FALSE;
+-        new_rect = map_rect_virt_to_raw( *rect, dpi );
+-        rect = &new_rect;
++        if (!allow_clip_cursor)
++        {
++            TRACE( "Ignoring cursor clip %s due to AllowClipCursor/WINE_CLIP_CURSOR\n",
++                   wine_dbgstr_rect(rect) );
++            rect = NULL;
++        }
++        else
++        {
++            new_rect = map_rect_virt_to_raw( *rect, dpi );
++            rect = &new_rect;
++        }
+     }
+ 
+     SERVER_START_REQ( set_cursor )
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -4024,7 +4024,10 @@
+         DWORD style = NtUserGetWindowLongW( winpos->hwnd, GWL_STYLE );
+ 
+         if ((style & (WS_CHILD | WS_CAPTION | WS_MINIMIZE | WS_VISIBLE)) == WS_VISIBLE &&
+-            get_present_rect( winpos->hwnd, &present_rect, get_thread_dpi() ))
++            get_present_rect( winpos->hwnd, &present_rect, get_thread_dpi() ) &&
++            ((winpos->flags & SWP_NOZORDER) || winpos->hwndInsertAfter != HWND_NOTOPMOST) &&
++            ((winpos->flags & SWP_NOMOVE) ||
++             (new_rects.window.left <= present_rect.left && new_rects.window.top <= present_rect.top)))
+         {
+             new_rects.window = present_rect;
+             winpos->x = present_rect.left;
+@@ -4059,15 +4062,21 @@
+      * geometry, a visible, restored captioned window smaller than the monitor
+      * indicates a return to windowed mode. Fullscreen setup can use a logical
+      * size smaller than the host monitor and must retain its present rect. */
+-    if ((winpos->flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE))
++    if ((winpos->flags & (SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED)) != (SWP_NOMOVE | SWP_NOSIZE))
+     {
+         MONITORINFO monitor_info = monitor_info_from_rect( new_rects.window, get_thread_dpi() );
+         WND *win = get_win_ptr( winpos->hwnd );
+ 
+         if (win && win != WND_DESKTOP && win != WND_OTHER_PROCESS)
+         {
++            BOOL leaving_fullscreen = (win->dwStyle & WS_CAPTION) == WS_CAPTION ||
++                                      (!(winpos->flags & SWP_NOZORDER) && winpos->hwndInsertAfter == HWND_NOTOPMOST) ||
++                                      (!(winpos->flags & SWP_NOMOVE) &&
++                                       (new_rects.window.left > win->present_rect.left ||
++                                        new_rects.window.top > win->present_rect.top));
++
+             if (!IsRectEmpty( &win->present_rect ) &&
+-                (win->dwStyle & WS_CAPTION) == WS_CAPTION &&
++                leaving_fullscreen &&
+                 (win->dwStyle & (WS_VISIBLE | WS_MINIMIZE)) == WS_VISIBLE &&
+                 !is_fullscreen( &monitor_info, &new_rects.window ))
+             {
+@@ -4139,6 +4148,8 @@
+             erase_now(winpos->hwnd, 0);
+         }
+     }
++
++    sync_window_cursor_clip( winpos->hwnd, &old_rects, &new_rects );
+ 
+       /* And last, send the WM_WINDOWPOSCHANGED message */
+ 
+--- a/dlls/winemac.drv/macdrv_cocoa.h
++++ b/dlls/winemac.drv/macdrv_cocoa.h
+@@ -405,6 +405,9 @@
+         struct {
+             struct macdrv_query *query;
+         }                                           query_event;
++        struct {
++            bool clear_clip;
++        }                                           release_capture;
+         struct {
+             macdrv_status_item  item;
+             int                 button;
+--- a/dlls/winemac.drv/cocoa_cursorclipping.h
++++ b/dlls/winemac.drv/cocoa_cursorclipping.h
+@@ -40,6 +40,8 @@
+      * -clipCursorLocation, and the cursor will be warped normally.
+      */
+     - (BOOL) setCursorPosition:(CGPoint)pos;
++    - (BOOL) isClippingUpToDate;
++    - (void) refreshClipping;
+ 
+ @end
+ 
+@@ -65,6 +67,7 @@
+      * mouseConfinementRect set). Using this rather than a WineWindow* to avoid
+      * tricky retain situations. */
+     NSInteger clippingWindowNumber;
++    NSRect clippingWindowFrame;
+ }
+ 
+     /* Returns true if the API in use by this handler is available. */
+--- a/dlls/winemac.drv/cocoa_cursorclipping.m
++++ b/dlls/winemac.drv/cocoa_cursorclipping.m
+@@ -478,12 +478,54 @@
+         [ownerWindow setMouseConfinementRect:clipRectInWindowCoords];
+ 
+         clippingWindowNumber = ownerWindow.windowNumber;
++        clippingWindowFrame = [ownerWindow frame];
+         cursorClipRect = rect;
+         clippingCursor = TRUE;
+ 
+         return TRUE;
+     }
+ 
++    - (BOOL) isClippingUpToDate
++    {
++        if (!clippingCursor)
++            return FALSE;
++        WineWindow *ownerWindow = [[WineApplicationController sharedController] frontWineWindow];
++        if (!ownerWindow || ownerWindow.windowNumber != clippingWindowNumber)
++            return FALSE;
++        return NSEqualRects([ownerWindow frame], clippingWindowFrame);
++    }
++
++    - (void) refreshClipping
++    {
++        if (!clippingCursor)
++            return;
++
++        NSWindow *oldWindow = [NSApp windowWithWindowNumber:clippingWindowNumber];
++        WineWindow *ownerWindow = [[WineApplicationController sharedController] frontWineWindow];
++        if (!ownerWindow)
++        {
++            [oldWindow setMouseConfinementRect:NSZeroRect];
++            clippingCursor = FALSE;
++            return;
++        }
++
++        NSRect clipRectInWindowCoords = [WineConfinementClipCursorHandler rectForScreenRect:cursorClipRect
++                                                                                   inWindow:ownerWindow];
++        if (oldWindow && oldWindow != ownerWindow)
++            [oldWindow setMouseConfinementRect:NSZeroRect];
++
++        if (NSIsEmptyRect(clipRectInWindowCoords))
++        {
++            [ownerWindow setMouseConfinementRect:NSZeroRect];
++            clippingCursor = FALSE;
++            return;
++        }
++
++        [ownerWindow setMouseConfinementRect:clipRectInWindowCoords];
++        clippingWindowNumber = ownerWindow.windowNumber;
++        clippingWindowFrame = [ownerWindow frame];
++    }
++
+     - (BOOL) stopClippingCursor
+     {
+         NSWindow *ownerWindow = [NSApp windowWithWindowNumber:clippingWindowNumber];
+@@ -502,6 +544,7 @@
+     - (void) setRetinaMode:(BOOL)mode
+     {
+         scale_rect_for_retina_mode(mode, &cursorClipRect);
++        [self refreshClipping];
+     }
+ 
+ @end
+--- a/dlls/winemac.drv/cocoa_app.h
++++ b/dlls/winemac.drv/cocoa_app.h
+@@ -114,6 +114,7 @@
+ 
+     - (void) suspendClippingForRegionPicker;
+     - (void) resumeClippingForRegionPicker:(BOOL)ownerVisible;
++    - (void) refreshCursorClipping;
+ 
+     + (WineApplicationController*) sharedController;
+ 
+--- a/dlls/winemac.drv/cocoa_app.m
++++ b/dlls/winemac.drv/cocoa_app.m
+@@ -54,6 +54,10 @@
+ static NSString* const WineExternalQuitNotificationSourcePIDKey = @"SourcePID";
+ static NSString* const WineExternalQuitNotificationWineConfigDirKey = @"WineConfigDir";
+ static NSString* const WineExternalQuitNotificationWinePrefixKey = @"WinePrefix";
++
++static NSString* const WineExternalReleaseMouseCaptureNotification = @"WineExternalReleaseMouseCaptureNotification";
++static NSString* const WineExternalReleaseMouseCaptureResyncKey = @"ResyncWindow";
++static NSString* const WineExternalReleaseMouseCaptureWinePrefixKey = @"WinePrefix";
+ 
+ static BOOL regionPickerClipSuspended;
+ static CGRect regionPickerPendingClip;
+@@ -1349,7 +1353,9 @@
+                 clipCursorHandler = [[WineEventTapClipCursorHandler alloc] init];
+         }
+ 
+-        if (self.clippingCursor && CGRectEqualToRect(rect, clipCursorHandler.cursorClipRect))
++        if (self.clippingCursor && CGRectEqualToRect(rect, clipCursorHandler.cursorClipRect) &&
++            (![clipCursorHandler respondsToSelector:@selector(isClippingUpToDate)] ||
++             [clipCursorHandler isClippingUpToDate]))
+             return TRUE;
+ 
+         if (![clipCursorHandler startClippingCursor:rect])
+@@ -1382,6 +1388,12 @@
+     - (BOOL) clippingCursor
+     {
+         return clipCursorHandler.clippingCursor;
++    }
++
++    - (void) refreshCursorClipping
++    {
++        if (self.clippingCursor && [clipCursorHandler respondsToSelector:@selector(refreshClipping)])
++            [clipCursorHandler refreshClipping];
+     }
+ 
+     - (void) suspendClippingForRegionPicker
+@@ -2119,6 +2131,12 @@
+                   object:nil
+       suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
+ 
++        [dnc addObserver:self
++                selector:@selector(handleExternalReleaseMouseCapture:)
++                    name:WineExternalReleaseMouseCaptureNotification
++                  object:nil
++      suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
++
+         [nc addObserverForName:WineWillShowPermissionDialogNotification
+                         object:nil
+                          queue:[NSOperationQueue mainQueue]
+@@ -2425,6 +2443,50 @@
+         return ret;
+      }
+ 
++    - (void) handleExternalReleaseMouseCapture:(NSNotification*)note
++    {
++        if (![NSThread isMainThread])
++        {
++            dispatch_async(dispatch_get_main_queue(), ^{ [self handleExternalReleaseMouseCapture:note]; });
++            return;
++        }
++
++        NSString* targetPrefix = note.userInfo[WineExternalReleaseMouseCaptureWinePrefixKey];
++        if ([targetPrefix length])
++        {
++            NSString* myPrefix = [NSProcessInfo processInfo].environment[@"WINEPREFIX"];
++            if ([myPrefix length] && ![myPrefix isEqualToString:targetPrefix])
++                return;
++        }
++
++        BOOL resync = [note.userInfo[WineExternalReleaseMouseCaptureResyncKey] boolValue];
++
++        [self stopClippingCursor];
++        CGAssociateMouseAndMouseCursorPosition(true);
++        [self unhideCursor];
++        forceNextMouseMoveAbsolute = TRUE;
++        [self releaseMouseCapture];
++
++        for (NSWindow* win in [NSApp windows])
++        {
++            if ([win respondsToSelector:@selector(setMouseConfinementRect:)])
++                [(id)win setMouseConfinementRect:NSZeroRect];
++            if ([win isKindOfClass:[WineWindow class]] && [win isVisible])
++            {
++                WineWindow* wineWin = (WineWindow*)win;
++                macdrv_event* event = macdrv_create_event(RELEASE_CAPTURE, wineWin);
++                event->release_capture.clear_clip = true;
++                [wineWin.queue postEvent:event];
++                macdrv_release_event(event);
++                if (resync)
++                    [wineWin windowDidResize:nil];
++            }
++        }
++
++        if (resync)
++            [self sendDisplaysChanged:TRUE];
++    }
++
+     - (void) releaseMouseCapture
+     {
+         // This might be invoked on a background thread by the distributed
+@@ -2526,6 +2588,7 @@
+         primaryScreenHeightValid = FALSE;
+         [self sendDisplaysChanged:FALSE];
+         [self adjustWindowLevels];
++        [self refreshCursorClipping];
+ 
+         // When the display configuration changes, the cursor position may jump.
+         // Accumulated mouse movement deltas are invalidated.  Make sure the next
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -3244,6 +3244,8 @@
+     {
+         enteringFullScreen = FALSE;
+         enteredFullScreenTime = [[NSProcessInfo processInfo] systemUptime];
++        [self windowDidResize:nil];
++        [[WineApplicationController sharedController] refreshCursorClipping];
+         if (pendingOrderOut)
+             [self doOrderOut];
+     }
+@@ -3336,6 +3338,7 @@
+ 
+         [[[self contentView] inputContext] invalidateCharacterCoordinates];
+         [self updateFullscreen];
++        [[WineApplicationController sharedController] refreshCursorClipping];
+     }
+ 
+     - (void)windowDidResize:(NSNotification *)notification
+--- a/dlls/winemac.drv/mouse.c
++++ b/dlls/winemac.drv/mouse.c
+@@ -955,6 +955,13 @@
+     TRACE("win %p/%p thread_data->capture_window %p GetCapture() %p in %p\n", hwnd,
+           event->window, thread_data->capture_window, capture, capture_top);
+ 
++    if (event->release_capture.clear_clip)
++    {
++        NtUserClipCursor(NULL);
++        if (hwnd)
++            NtUserPostMessage(hwnd, WM_WINE_CLIPCURSOR, SET_CURSOR_NOCLIP, TRUE);
++    }
++
+     if (event->window == thread_data->capture_window && hwnd == capture_top)
+     {
+         NtUserReleaseCapture();
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -1735,7 +1735,11 @@
+ 
+     if (fullscreen || fullscreen != data->fullscreen)
+     {
+-        CGRect rect = (fullscreen && !EqualRect(&data->rects.window, &data->rects.visible)) ? cgrect_from_rect(data->rects.window) : CGRectZero;
++        RECT mask_rect = data->rects.window;
++        CGRect rect = CGRectZero;
++        OffsetRect(&mask_rect, -data->rects.visible.left, -data->rects.visible.top);
++        if (fullscreen && !EqualRect(&data->rects.window, &data->rects.visible))
++            rect = cgrect_from_rect(mask_rect);
+         macdrv_set_window_mask(data->cocoa_window, rect);
+         data->fullscreen = fullscreen;
+     }
