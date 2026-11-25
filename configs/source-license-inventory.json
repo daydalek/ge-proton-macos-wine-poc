@@ -3019,10 +3019,58 @@
         "Copyright 1995, 1996 Alex Korobka",
         "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
       ]
+    },
+    {
+      "patch": "patches/crossover/macos-style-frame-sync.patch",
+      "source_file": "dlls/win32u/ntuser_private.h",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "36c7dde548bacbd368e0d7cf556bf1d6e9dec09e67e441578da39bb811b224ae",
+      "copyright_notices": [
+        "Copyright 1993 Alexandre Julliard",
+        "Copyright 2022 Jacek Caban"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-style-frame-sync.patch",
+      "source_file": "dlls/win32u/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "44540542560f00c3652adc9aad66069e098e64e1113112c75e9fe0008ddb368a",
+      "copyright_notices": [
+        "Copyright 1993, 1994 Alexandre Julliard"
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-style-frame-sync.patch",
+      "source_file": "dlls/winemac.drv/window.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "37ea3561a9f8c70adb1f223674b8a1885dd1e67c39a925ea82eb696e334a7225",
+      "copyright_notices": [
+        "Copyright 1993, 1994, 1995, 1996, 2001 Alexandre Julliard",
+        "Copyright 1993 David Metcalfe",
+        "Copyright 1995, 1996 Alex Korobka",
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
+    },
+    {
+      "patch": "patches/crossover/macos-style-frame-sync.patch",
+      "source_file": "dlls/winemac.drv/cocoa_window.m",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "10cea263cff1ca0bf306e319429a458be7303e70826fe1f60a5e8a6a774c719a",
+      "copyright_notices": [
+        "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 265,
+    "LGPL-2.1-or-later": 269,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -3079,6 +3127,7 @@
     "patches/crossover/mfreadwrite-downstream-format-propagation.patch": "6b2868aba005d6dbceb7db2c2721bb04b46046105251e137d0b914ca855c115a",
     "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1",
     "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "bda436b77e1085944b032374c6fe844ad3a3f03cfea358c6d10dd910d42be8c4",
-    "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff"
+    "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff",
+    "patches/crossover/macos-style-frame-sync.patch": "66ef82fdd6dcf74e4ea0cc2423f69e4733c61823409f26908f289d66e1954fdc"
   }
 }

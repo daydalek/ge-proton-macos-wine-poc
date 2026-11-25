@@ -46,3 +46,4 @@ patches/crossover/mf-file-scheme-url-to-path.patch
 patches/wine-ge/ddraw-windowed-swapchain-mode-size.patch
 patches/crossover/winedmo-asf-startup-timestamp-base.patch
 patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch
+patches/crossover/macos-style-frame-sync.patch

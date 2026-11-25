@@ -1,0 +1,87 @@
+Project modification notice: GE-Proton macOS Wine PoC
+Modification date: 2026-11-24
+Scope: Ensure frame-affecting GWL_STYLE/GWL_EXSTYLE changes force WM_NCCALCSIZE on the next sizing SetWindowPos even when outer window dimensions are unchanged, update Cocoa window style properties before syncing window frame in macdrv_WindowPosChanged, and preserve contentRect/wineFrame across NSWindow setStyleMask: title bar toggles.
+Original authors and LGPL-2.1-or-later licenses remain applicable; see UPSTREAMS.md and configs/source-license-inventory.json.
+
+--- a/dlls/win32u/ntuser_private.h
++++ b/dlls/win32u/ntuser_private.h
+@@ -89,6 +89,7 @@
+ #define WIN_NEEDS_SHOW_OWNEDPOPUP 0x0020 /* WM_SHOWWINDOW:SC_SHOW must be sent in the next ShowOwnedPopup call */
+ #define WIN_CHILDREN_MOVED        0x0040 /* children may have moved, ignore stored positions */
+ #define WIN_HAS_IME_WIN           0x0080 /* the window has been registered with imm32 */
++#define WIN_STYLE_FRAME_CHANGED   0x0100 /* frame-affecting style changed, needs WM_NCCALCSIZE */
+ 
+ #define WND_OTHER_PROCESS ((WND *)1)  /* returned by get_win_ptr on unknown window handles */
+ #define WND_DESKTOP       ((WND *)2)  /* returned by get_win_ptr on the desktop window */
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -1521,10 +1521,14 @@
+                 win->dwStyle = newval;
+                 win->dwExStyle = fix_exstyle(win->dwStyle, win->dwExStyle);
+                 retval = reply->old_info;
++                if ((retval ^ newval) & (WS_CAPTION | WS_BORDER | WS_DLGFRAME | WS_THICKFRAME))
++                    win->flags |= WIN_STYLE_FRAME_CHANGED;
+                 break;
+             case GWL_EXSTYLE:
+                 win->dwExStyle = newval;
+                 retval = reply->old_info;
++                if ((retval ^ newval) & (WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_TOOLWINDOW))
++                    win->flags |= WIN_STYLE_FRAME_CHANGED;
+                 break;
+             case GWLP_ID:
+                 win->wIDmenu = newval;
+@@ -4045,6 +4049,12 @@
+     /* Fix redundant flags */
+     if (!fixup_swp_flags( winpos, &old_rects.window, parent_x, parent_y )) goto done;
+ 
++    if (!(orig_flags & SWP_NOSIZE) || (winpos->flags & SWP_FRAMECHANGED))
++    {
++        if (win_set_flags( winpos->hwnd, 0, WIN_STYLE_FRAME_CHANGED ) & WIN_STYLE_FRAME_CHANGED)
++            winpos->flags |= SWP_FRAMECHANGED;
++    }
++
+     if((winpos->flags & (SWP_NOZORDER | SWP_HIDEWINDOW | SWP_SHOWWINDOW)) != SWP_NOZORDER)
+     {
+         if (NtUserGetAncestor( winpos->hwnd, GA_PARENT ) == get_desktop_window())
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -1717,9 +1717,9 @@
+         (thread_data->current_event->type != WINDOW_FRAME_CHANGED &&
+          thread_data->current_event->type != WINDOW_DID_UNMINIMIZE))
+     {
+-        sync_window_position(data, swp_flags, &old_rects);
+         if (data->cocoa_window)
+             set_cocoa_window_properties(data);
++        sync_window_position(data, swp_flags, &old_rects);
+     }
+ 
+     if (new_style & WS_VISIBLE)
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -1336,6 +1336,7 @@
+         if (newStyle != currentStyle)
+         {
+             NSString* title = [[[self title] copy] autorelease];
++            NSRect contentRect = [self contentRectForFrameRect:self.wine_fractionalFrame];
+             BOOL showingButtons = (currentStyle & (NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)) != 0;
+             BOOL shouldShowButtons = (newStyle & (NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)) != 0;
+             if (shouldShowButtons != showingButtons && !((newStyle ^ currentStyle) & NSWindowStyleMaskClosable))
+@@ -1349,6 +1350,18 @@
+             }
+             [self setStyleMask:newStyle];
+ 
++            if ((currentStyle ^ newStyle) & (NSWindowStyleMaskTitled | NSWindowStyleMaskUtilityWindow))
++            {
++                NSRect newFrame = [self frameRectForContentRect:contentRect];
++                if (!NSEqualRects(newFrame, self.wine_fractionalFrame))
++                {
++                    BOOL prevIgnore = ignore_windowResize;
++                    ignore_windowResize = TRUE;
++                    [self setFrameAndWineFrame:newFrame];
++                    ignore_windowResize = prevIgnore;
++                }
++            }
++
+             BOOL isNonActivating = (currentStyle & NSWindowStyleMaskNonactivatingPanel) != 0;
+             BOOL shouldBeNonActivating = (newStyle & NSWindowStyleMaskNonactivatingPanel) != 0;
+             if (isNonActivating != shouldBeNonActivating) {
