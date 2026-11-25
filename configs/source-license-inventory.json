@@ -3067,10 +3067,23 @@
       "copyright_notices": [
         "Copyright 2011, 2012, 2013 Ken Thomases for CodeWeavers Inc."
       ]
+    },
+    {
+      "patch": "patches/crossover/macos-emulate-modeset-resolution.patch",
+      "source_file": "dlls/win32u/sysparams.c",
+      "license": "LGPL-2.1-or-later",
+      "evidence": "file header",
+      "source_origin": "CrossOver 26.3 with ordered project patches",
+      "source_sha256": "1c2e1f2a33ae6005e3e96d82213f84237f3759f36f9104184c19a41a772d63c7",
+      "copyright_notices": [
+        "Copyright 1994 Alexandre Julliard",
+        "Copyright 2019 Zhiyi Zhang for CodeWeavers",
+        "Copyright 2021 Jacek Caban for CodeWeavers"
+      ]
     }
   ],
   "counts": {
-    "LGPL-2.1-or-later": 269,
+    "LGPL-2.1-or-later": 270,
     "LicenseRef-Autoconf-generated-permissive": 1,
     "GPL-2.0-only WITH Linux-syscall-note": 2
   },
@@ -3128,6 +3141,7 @@
     "patches/crossover/mf-file-scheme-url-to-path.patch": "c27ab9b6c8a01e03c6d01a3cd096d4e184b38c5f7cc93790eba63737860b13f1",
     "patches/crossover/winedmo-asf-startup-timestamp-base.patch": "bda436b77e1085944b032374c6fe844ad3a3f03cfea358c6d10dd910d42be8c4",
     "patches/crossover/macos-mouse-capture-and-fullscreen-clip.patch": "dfd5206d991b889ff58b6e98fa633ab45bf0c156d85dd606b31ef9fc56dccbff",
-    "patches/crossover/macos-style-frame-sync.patch": "66ef82fdd6dcf74e4ea0cc2423f69e4733c61823409f26908f289d66e1954fdc"
+    "patches/crossover/macos-style-frame-sync.patch": "66ef82fdd6dcf74e4ea0cc2423f69e4733c61823409f26908f289d66e1954fdc",
+    "patches/crossover/macos-emulate-modeset-resolution.patch": "8bbdb7b38a7536f95bbc92100b85f19e89b51703664ff67f8eea33f560b65bf8"
   }
 }
